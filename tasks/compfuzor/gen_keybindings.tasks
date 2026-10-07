@@ -9,7 +9,7 @@
            KEYBINDING_PRODUCER | default(NAME), ETC, BINS_DIR,
            KEYBINDING_ORDER | default(100), KEYBINDING_CONTEXT | default('user'),
            KEYBINDING_SCOPE | default('user'), (CONFIGS | default({}) | length > 0),
-           ACTION_AUDIENCES | default(None)) }}
+            ACTION_AUDIENCES | default(None), KEYBINDING_REGISTRY_POLICY | default(None) | resolve) }}
   vars:
     # Declared (including empty) producer resources opt into common wiring.
     # A consumer's own resources are its local layer, not a producer install.

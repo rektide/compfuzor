@@ -1,6 +1,7 @@
 /** Owner-side registration material. No declaration copies, pruning, reloads or native publication. */
-import { resolve, join, isAbsolute } from "node:path";
-import { loadOwner } from "../discovery/figments.ts";
+import { resolve, join, isAbsolute, dirname } from "node:path";
+import { captureFile, fileText } from "../../files/config/capture.ts";
+import { verifyRegistryGuard, type RegistryGuard } from "./guard.ts";
 import { inspectDeliveryEntry, linkMatches, replaceWithLink } from "../../files/links/delivery.ts";
 import { inspectRegistry } from "./read.ts";
 import { explicitPolicy } from "./policy.ts";
@@ -38,6 +39,7 @@ export type RegistrationPlan = {
   };
   /** Observation guard, not a lock or a content snapshot. */
   guard: string;
+  expectation: RegistryGuard;
 };
 
 export async function planRegistration<T>(
@@ -51,7 +53,10 @@ export async function planRegistration<T>(
     request.policy.roots,
     request.policy.writeRoot,
   );
-  const payload = request.domain.decode(await loadOwner(source));
+  const owned = await captureFile(source);
+  const text = fileText(owned);
+  if (text === undefined) throw new Error(`missing owner descriptor: ${source}`);
+  const payload = request.domain.decode(JSON.parse(text));
   const id = request.domain.identity(payload);
   assertId(id);
   const scope = request.domain.scope(payload);
@@ -99,6 +104,12 @@ export async function planRegistration<T>(
     destination,
     participation,
     guard,
+    expectation: {
+      roots: [...policy.roots],
+      id,
+      expected: JSON.stringify(effective?.source) ?? "missing",
+      files: [owned.guard],
+    } as RegistryGuard,
     effective: {
       state: effective?.state ?? ("missing" as const),
       winner: effective?.source.winner.path,
@@ -113,6 +124,21 @@ export async function planRegistration<T>(
   // A regular operator declaration (including enabled:false) is never replaced.
   if (slot.kind !== "missing" && !linkMatches(slot, source))
     return blocked(`local slot is not this owner's reference: ${destination}`);
+  for (const observation of effective?.source.observations ?? []) {
+    if (!observation.mask && (observation.kind === "file" || observation.referent === "file"))
+      base.expectation.files!.push((await captureFile(observation.path)).guard);
+  }
+  base.expectation.publication = {
+    source,
+    destination,
+    slots: [
+      { path: activePath, before: active },
+      { path: disabledPath, before: disabled },
+      ...(destination !== activePath && destination !== disabledPath
+        ? [{ path: destination, before: slot }]
+        : []),
+    ],
+  };
   const disposition = slot.kind === "missing" ? "create" : "current";
   return {
     ...base,
@@ -142,11 +168,22 @@ export async function applyRegistration<T>(
   request: RegistrationRequest<T>,
   plan: RegistrationPlan,
 ): Promise<RegistrationPlan> {
-  const current = await planRegistration(request);
-  if (JSON.stringify(current) !== JSON.stringify(plan))
-    throw new Error("registration changed since planning; inspect and plan again");
-  if (current.disposition === "create") await replaceWithLink(current.source, current.destination);
-  return current;
+  if (
+    resolve(request.source) !== plan.source ||
+    (request.policy.scope !== plan.material.links[0]?.scope && plan.disposition !== "blocked") ||
+    dirname(plan.destination) !== resolve(request.policy.writeRoot) ||
+    JSON.stringify(
+      explicitPolicy(request.policy.scope, request.policy.roots, request.policy.writeRoot).roots,
+    ) !== JSON.stringify(plan.expectation.roots)
+  )
+    throw new Error("registration request disagrees with admitted publication");
+  if (plan.disposition === "blocked") return plan;
+  const phase = await verifyRegistryGuard(plan.expectation);
+  if (phase === "before" && plan.disposition === "create")
+    await replaceWithLink(plan.source, plan.destination);
+  // Never bless a newly observed override/mask after delivery as a fresh guard.
+  await verifyRegistryGuard(plan.expectation);
+  return { ...plan, disposition: phase === "published" ? "current" : plan.disposition };
 }
 
 export async function register<T>(request: RegistrationRequest<T>): Promise<RegistrationPlan> {

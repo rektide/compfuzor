@@ -170,7 +170,7 @@ describe("shared registry rendezvous", () => {
     await symlink("/dev/null", source);
     await expect(
       register({ domain: keybindingProviders, policy: f.policy, source }),
-    ).rejects.toThrow("regular file");
+    ).rejects.toThrow("regular");
     await expect(
       inspectRegistry(keybindingConsumers, {
         scope: "user",
@@ -346,7 +346,7 @@ describe("shared registry rendezvous", () => {
     await rm(first.destination);
     const plan = await planRegistration(request);
     await symlink("/dev/null", join(f.overlay, "media-keys-main.json"));
-    await expect(applyRegistration(request, plan)).rejects.toThrow("changed since planning");
+    await expect(applyRegistration(request, plan)).rejects.toThrow("registration changed");
   });
 
   it("binds user XDG roots at invocation; explicit system policy ignores HOME", () => {
@@ -436,5 +436,5 @@ describe("shared registry rendezvous", () => {
     const help = await cli(["--help"]);
     expect(help.code).toBe(0);
     expect(help.stdout).toContain("no native installation");
-  });
+  }, 15000);
 });

@@ -46,6 +46,7 @@ export async function prepareOperation(
         manifest: step.manifest,
         selection: step.selection,
         producer: step.producer,
+        registryPolicy: step.registryPolicy,
         audience,
         defaults: {
           runner: resolve(deploymentDir, "bin/config/run.sh"),
@@ -73,11 +74,20 @@ export async function prepareOperation(
   if (step.profileSelector) args.push("--profile-selector", JSON.stringify(step.profileSelector));
   if (step.manifest) args.push("--manifest", step.manifest);
   if (step.descriptor) args.push("--descriptor", step.descriptor);
+  if (step.registryPolicy) args.push("--registry-policy", step.registryPolicy);
+  // In a combined action, --target names the producer's receiver subset, not
+  // the owned host's native format. Bootstrap remains an explicit owned step.
+  const executionArgs = step.descriptor
+    ? argv.filter(
+        (arg, index) =>
+          arg !== "--target" && !arg.startsWith("--target=") && argv[index - 1] !== "--target",
+      )
+    : argv;
   return {
     domain: "keybindings",
     admitted: await admitKeybindingCommand(
       step.operation as "host" | "install",
-      [...args, ...argv],
+      [...args, ...executionArgs],
       {
         runner: resolve(deploymentDir, "bin/config/run.sh"),
         validatorCommand: [process.execPath, runtimePath, "keybindings", "validate"],

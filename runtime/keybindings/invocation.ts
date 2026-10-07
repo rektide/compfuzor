@@ -1,5 +1,4 @@
 /** Domain batch admission. Receiver IDs are not native formats; membership commits remain per receiver. */
-import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -20,7 +19,6 @@ import {
   pathsSharePhysicalDirectory,
 } from "../../files/links/delivery.ts";
 import { keybindingConsumers, keybindingProviders, resolveConsumerProfile } from "./registry.ts";
-import { registryPolicy } from "../registry/policy.ts";
 import { inspectRegistry, lookup } from "../registry/read.ts";
 import { registryGuard, assertRegistryGuards, type RegistryGuard } from "../registry/guard.ts";
 import type { RegistryPolicy, RegistryRecord, Scope } from "../registry/model.ts";
@@ -31,6 +29,7 @@ import {
   applyRegistration,
   type RegistrationPlan,
 } from "../registry/register.ts";
+import { bindRegistryPolicies, type RegistryPolicyPair } from "./policy.ts";
 
 export type ReceiverRequest = {
   id: string;
@@ -39,7 +38,11 @@ export type ReceiverRequest = {
   scope?: Scope;
   actionContexts?: Partial<Record<Scope, string>>;
 };
-export type SelectionPolicy = { version: 1; receivers: null | ReceiverRequest[] };
+export type SelectionPolicy = {
+  version: 1;
+  receivers: null | ReceiverRequest[];
+  prospectiveConsumers?: Partial<Record<Scope, PathSelector[]>>;
+};
 export type AdmittedReceiver = {
   id: string;
   originalState: RegistryRecord<Consumer>["state"];
@@ -59,7 +62,8 @@ export type AdmittedKeybindingBatch = {
 export type BatchRequest = {
   args: string[];
   defaults: KeybindingRuntimeDefaults;
-  policy?: RegistryPolicy;
+  registries?: RegistryPolicyPair;
+  registryPolicy?: string;
   audience?: Scope;
   manifest?: string;
   selection?: string;
@@ -75,7 +79,23 @@ function selection(value: unknown): SelectionPolicy {
     !("receivers" in value)
   )
     throw new Error("invalid receiver selection policy");
-  if (value.receivers === null) return { version: 1, receivers: null };
+  const prospectiveConsumers: SelectionPolicy["prospectiveConsumers"] = {};
+  if ("prospectiveConsumers" in value && value.prospectiveConsumers !== undefined) {
+    if (
+      !value.prospectiveConsumers ||
+      typeof value.prospectiveConsumers !== "object" ||
+      Array.isArray(value.prospectiveConsumers)
+    )
+      throw new Error("invalid prospective consumer references");
+    for (const [audience, refs] of Object.entries(value.prospectiveConsumers)) {
+      if (!["user", "system"].includes(audience) || !Array.isArray(refs))
+        throw new Error("prospective consumers must be audience-scoped lists");
+      prospectiveConsumers[audience as Scope] = refs.map((ref) =>
+        validatePathSelector(ref, "prospective consumer"),
+      );
+    }
+  }
+  if (value.receivers === null) return { version: 1, receivers: null, prospectiveConsumers };
   if (!Array.isArray(value.receivers))
     throw new Error("selection receivers must be null or a list");
   const seen = new Set<string>();
@@ -110,7 +130,7 @@ function selection(value: unknown): SelectionPolicy {
         : { profile: validatePathSelector(raw.profile, "receiver profile override") }),
     };
   });
-  return { version: 1, receivers };
+  return { version: 1, receivers, prospectiveConsumers };
 }
 
 export async function admitKeybindingBatch(
@@ -131,6 +151,7 @@ export async function admitKeybindingBatch(
       "force-enable": { type: "boolean", default: false },
       mode: { type: "string" },
       runner: { type: "string" },
+      "registry-policy": { type: "string" },
     },
   });
   if (values.scope !== "user" && values.scope !== "system")
@@ -145,7 +166,12 @@ export async function admitKeybindingBatch(
   const manifest = keybindingProviders.decode(JSON.parse(manifestText));
   if (request.producer && manifest.producer !== request.producer)
     throw new Error("producer identity disagrees with declared operation");
-  const providerPolicy = registryPolicy(keybindingProviders.collection, values.scope);
+  const policies = await bindRegistryPolicies(
+    values.scope,
+    values["registry-policy"] ?? request.registryPolicy,
+    request.registries ?? request.defaults.registries,
+  );
+  const providerPolicy = policies.providers;
   const publicationRequest = {
     domain: keybindingProviders,
     policy: providerPolicy,
@@ -163,7 +189,24 @@ export async function admitKeybindingBatch(
     throw new Error(`producer registration is ${publicationPlan.effective.state}`);
   if (publicationPlan.effective.state === "disabled" && !values["force-enable"])
     throw new Error("producer registration is disabled; use --force-enable");
-  const guards: FileGuard[] = [manifestFile.guard];
+  const guards: FileGuard[] = [
+    manifestFile.guard,
+    ...policies.guards,
+    ...(publicationPlan.expectation.files ?? []),
+  ];
+  const providerView = await inspectRegistry(keybindingProviders, providerPolicy);
+  if (!providerView.complete) throw new Error("incomplete provider registry during admission");
+  const effectiveProvider = providerView.records.find((entry) => entry.id === manifest.producer);
+  if (effectiveProvider) {
+    if (!effectiveProvider.payload || !["active", "disabled"].includes(effectiveProvider.state))
+      throw new Error(`producer registration is ${effectiveProvider.state}`);
+    const { enabled: _ownedEnabled, ...ownedOffer } = manifest;
+    const { enabled: _effectiveEnabled, ...effectiveOffer } = effectiveProvider.payload;
+    if (JSON.stringify(ownedOffer) !== JSON.stringify(effectiveOffer))
+      throw new Error("effective producer declaration redirects the owned operative offer");
+    if (effectiveProvider.state === "disabled" && !values["force-enable"])
+      throw new Error("producer registration is disabled; use --force-enable");
+  }
   if (publicationPlan.effective.winner)
     guards.push((await captureFile(publicationPlan.effective.winner)).guard);
   if (manifest.enabled === false && !values["force-enable"])
@@ -173,25 +216,91 @@ export async function admitKeybindingBatch(
   );
   guards.push(...resourceFiles.map((file) => file.guard));
   const policyPath = values.selection ?? request.selection;
-  const declared = policyPath
-    ? selection(JSON.parse(await readFile(policyPath, "utf8")))
+  const selectionFile = policyPath ? await captureFile(resolve(policyPath)) : undefined;
+  const selectionText = selectionFile ? fileText(selectionFile) : undefined;
+  if (selectionFile && selectionText === undefined)
+    throw new Error("missing owner-held selection policy");
+  const declared = selectionText
+    ? selection(JSON.parse(selectionText))
     : { version: 1 as const, receivers: null };
-  if (policyPath) guards.push((await captureFile(resolve(policyPath))).guard);
-  const policy = request.policy ?? registryPolicy(keybindingConsumers.collection, values.scope);
+  if (selectionFile) guards.push(selectionFile.guard);
+  const policy = policies.consumers;
   if (policy.scope !== values.scope) throw new Error("registry scope mismatch");
   const snapshot = await inspectRegistry(keybindingConsumers, policy);
   if (!snapshot.complete) throw new Error("cannot admit receivers from an incomplete registry");
   const requested = values.target;
   if (requested && new Set(requested).size !== requested.length)
     throw new Error("duplicate receiver selection");
+  const eligibleRequests = declared.receivers?.filter((entry) =>
+    entry.actionContexts
+      ? !!entry.actionContexts[values.scope as Scope]
+      : !entry.scope || entry.scope === values.scope,
+  );
+  if (
+    requested &&
+    declared.receivers &&
+    requested.some(
+      (id) =>
+        declared.receivers!.some((entry) => entry.id === id) &&
+        !eligibleRequests!.some((entry) => entry.id === id),
+    )
+  )
+    throw new Error("explicit receiver is outside invocation audience");
   if (
     requested &&
     declared.receivers &&
     requested.some((id) => !declared.receivers!.some((entry) => entry.id === id))
   )
     throw new Error("requested receiver is outside declared selection");
-  const explicit = requested ?? declared.receivers?.map((entry) => entry.id);
-  const candidates = explicit ? explicit.map((id) => lookup(snapshot, id)) : snapshot.records;
+  type Candidate = Omit<RegistryRecord<Consumer>, "source"> & {
+    source?: RegistryRecord<Consumer>["source"];
+    descriptor: string;
+    expectation?: RegistryGuard;
+  };
+  const available = new Map<string, Candidate>(
+    snapshot.records.map((record) => [
+      record.id,
+      { ...record, descriptor: record.source.winner.path },
+    ]),
+  );
+  const prospectiveIds = new Set<string>();
+  for (const selector of declared.prospectiveConsumers?.[values.scope] ?? []) {
+    if (!policyPath)
+      throw new Error("prospective references require an owner-held selection document");
+    const source = await resolveConsumerProfile(
+      selector,
+      resolve(policyPath),
+      "prospective consumer descriptor",
+    );
+    const file = await captureFile(source),
+      text = fileText(file);
+    if (text === undefined) throw new Error("missing prospective consumer descriptor");
+    const payload = keybindingConsumers.decode(JSON.parse(text));
+    if (payload.audience !== values.scope || prospectiveIds.has(payload.id))
+      throw new Error("invalid/duplicate prospective consumer audience/identity");
+    prospectiveIds.add(payload.id);
+    guards.push(file.guard);
+    if (!available.has(payload.id)) {
+      const planned = await planRegistration({ domain: keybindingConsumers, policy, source });
+      if (planned.disposition === "blocked")
+        throw new Error(`prospective consumer publication blocked: ${planned.reason}`);
+      available.set(payload.id, {
+        id: payload.id,
+        state: payload.enabled === false ? "disabled" : "active",
+        payload,
+        descriptor: source,
+        expectation: planned.expectation,
+      });
+    }
+  }
+  const explicit = requested ?? eligibleRequests?.map((entry) => entry.id);
+  const candidates = explicit
+    ? explicit.map((id) => {
+        const candidate = available.get(id);
+        if (!candidate) lookup(snapshot, id);
+        return candidate!;
+      })
+    : [...available.values()].sort((a, b) => a.id.localeCompare(b.id));
   if ((values.profile || values["profile-selector"] || values.context) && candidates.length !== 1)
     throw new Error("profile/context override requires exactly one receiver");
   const members: AdmittedReceiver[] = [];
@@ -208,7 +317,7 @@ export async function admitKeybindingBatch(
       throw new Error(
         `receiver ${record.id} is ${record.state}: ${record.error ?? "unusable registration"}`,
       );
-    const descriptor = await captureFile(record.source.winner.path);
+    const descriptor = await captureFile(record.descriptor);
     const descriptorText = fileText(descriptor);
     if (
       descriptorText === undefined ||
@@ -243,7 +352,7 @@ export async function admitKeybindingBatch(
         values["profile-selector"]
           ? JSON.parse(values["profile-selector"])
           : (override?.profile ?? consumer.profile),
-        record.source.winner.path,
+        record.descriptor,
         `receiver ${record.id} profile`,
       ));
     const args = [
@@ -274,10 +383,10 @@ export async function admitKeybindingBatch(
       resources: manifest.resources.map((entry) => ({ ...entry })),
       targets: [...manifest.targets],
     };
-    const registration = registryGuard(snapshot.policy, record.source);
+    const registration = record.expectation ?? registryGuard(snapshot.policy, record.source!);
     const descriptorGuard = descriptor.guard;
     admitted.options.inputGuards = [...guards, descriptorGuard];
-    admitted.options.registryGuards = [registration];
+    admitted.options.registryGuards = [registration, publicationPlan.expectation];
     members.push({
       id: record.id,
       originalState: record.state,
@@ -339,14 +448,8 @@ export async function runAdmittedKeybindingBatch(batch: AdmittedKeybindingBatch)
     },
     batch.publication.plan,
   );
-  const offered = await inspectRegistry(keybindingProviders, batch.publication.policy);
-  const provider = lookup(offered, batch.publication.plan.id);
-  const providerGuard = registryGuard(batch.publication.policy, provider.source);
+  await assertRegistryGuards([batch.publication.plan.expectation]);
   for (const member of batch.members) {
-    member.admitted.options.registryGuards = [
-      ...(member.admitted.options.registryGuards ?? []),
-      providerGuard,
-    ];
     console.log(
       `receiver ${member.id}: ${member.originalState}${member.forced ? " (forced for this invocation)" : ""}`,
     );

@@ -12,7 +12,7 @@ from config_context_compile import _root as context_root
 from config_compile import config_runtime_bins, config_runtime_packages
 from runtime_bundles import compfuzor_runtime_bins, runtime_alias_bin
 from action_contexts import bind_action_contexts, participating_audiences
-from registry_compile import registration_bins
+from registry_compile import registration_bins, compile_registry_policy
 
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 TARGETS = ("niri", "umbriel")
@@ -109,7 +109,7 @@ def profile(target, raw, own_sources):
     return result
 
 @accept_args_markers
-def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bins_dir, order=100, context="user", scope="user", has_configs=False, audience_policy=None):
+def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bins_dir, order=100, context="user", scope="user", has_configs=False, audience_policy=None, registry_policy=None):
     actions = mapping(raw_copy_template_data(actions), "KEYBINDING_ACTIONS")
     bindings = mapping(raw_copy_template_data(bindings), "KEYBINDINGS")
     consumers = mapping(raw_copy_template_data(consumers), "KEYBINDING_CONSUMERS")
@@ -119,6 +119,10 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
     if scope not in ("user", "system"):
         fail("scope must be user/system")
     files, resources, own_sources, bins, dirs = [], [], [], [], []
+    policy_path = None
+    if registry_policy is not None:
+        policy_path = posixpath.join(etc, "keybindings/registry-policy.json")
+        files.append({"name": "keybindings/registry-policy.json", "json": compile_registry_policy(raw_copy_template_data(registry_policy))})
     for kind, declarations in [("action", actions), ("keybinding", bindings)]:
         for name in sorted(declarations):
             identifier(name, kind + " id")
@@ -155,7 +159,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             name = "keybindings/consumers/" + audience + "/" + target + ".json"
             files.append({"name": name, "json": advertised})
             advertisements[(target, audience)] = posixpath.join(etc, name)
-            bins.extend(registration_bins("keybindings-consumer-" + target + "-" + audience, "keybinding-consumers", posixpath.join(etc, name), audience))
+            bins.extend(registration_bins("keybindings-consumer-" + target + "-" + audience, "keybinding-consumers", posixpath.join(etc, name), audience, policy_path))
     target_map = {} if targets is None and consumers else {target: {} for target in TARGETS} if targets is None else {target: {} for target in targets} if isinstance(targets, list) else mapping(targets, "KEYBINDING_TARGETS")
     for target, value in target_map.items():
         identifier(target, "installer receiver")
@@ -168,7 +172,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
     producer_role = targets is not None or not consumers
     if producer_role:
         files.append({"name": "keybinding-producer.json", "json": {"version": 1, "producer": producer, "order": order, "resources": resources, "targets": list(TARGETS) if target_map else []}})
-        bins.extend(registration_bins("keybindings-provider", "keybinding-providers", posixpath.join(etc, "keybinding-producer.json"), scope))
+        bins.extend(registration_bins("keybindings-provider", "keybinding-providers", posixpath.join(etc, "keybinding-producer.json"), scope, policy_path))
         receivers = None if targets is None else []
         if receivers is not None:
             for receiver, settings in target_map.items():
@@ -186,9 +190,12 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
                     item["profile"] = selector(consumer, "receiver override")
                 receivers.append(item)
         selection_path = posixpath.join(etc, "keybindings/selection.json")
-        files.append({"name": "keybindings/selection.json", "json": {"version": 1, "receivers": receivers}})
+        prospective = {audience: [{"path": source} for (receiver, selected_audience), source in advertisements.items() if selected_audience == audience] for audience in ("user", "system")}
+        files.append({"name": "keybindings/selection.json", "json": {"version": 1, "receivers": receivers, "prospectiveConsumers": prospective}})
         generic = {"name": "install-keybindings.sh", "action": "install", "scope": [scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False,
             "content": 'exec "$DIR/bin/keybindings.mjs" install-offer --manifest ' + shlex.quote(posixpath.join(etc, "keybinding-producer.json")) + ' --selection ' + shlex.quote(selection_path) + ' --scope ' + scope + ' "$@"'}
+        if policy_path:
+            generic["content"] = generic["content"].replace(' "$@"', ' --registry-policy ' + shlex.quote(policy_path) + ' "$@"')
         if audience_policy is not None:
             generic["compose"] = False
             delivery_scopes = set()
@@ -197,8 +204,7 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
                 delivery_scopes.update(value.get("action_contexts", {value.get("scope", scope): context}))
             delivery_scopes = delivery_scopes or {scope}
             eligible = participating_audiences(audience_policy, ["install"]) & delivery_scopes
-            generic["action_operations"] = [{"action": "install", "subsystem": "keybindings", "audiences": {audience: {"kind": "domain", "domain": "keybindings", "operation": "install-offer", "envelope": "bin/install-keybindings.sh", "manifest": posixpath.join(etc, "keybinding-producer.json"), "producer": producer, "selection": selection_path} for audience in eligible}}]
-        bins.append(generic)
+            generic["action_operations"] = [{"action": "install", "subsystem": "keybindings", "audiences": {audience: {"kind": "domain", "domain": "keybindings", "operation": "install-offer", "envelope": "bin/install-keybindings.sh", "manifest": posixpath.join(etc, "keybinding-producer.json"), "producer": producer, "selection": selection_path, **({"registryPolicy": policy_path} if policy_path else {})} for audience in eligible}}]
     # A domain host reuses STOCK CONFIG worker artifacts, without fabricating an
     # empty output recipe or auto-running installers during Ansible rendering.
     if not has_configs:
@@ -215,6 +221,8 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
         adapter = profiles[target]["target"]
         args = ["host", "--target", adapter, "--context", selected_context, "--scope", selected_scope]
         args.extend(["--descriptor", advertisements[(target, selected_scope)]])
+        if policy_path:
+            args.extend(["--registry-policy", policy_path])
         descriptor = {"name": "install-keybindings-" + target + ".sh", "action": "install", "scope": [selected_scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False, "content": 'exec "$DIR/bin/keybindings.mjs" ' + " ".join(shlex.quote(arg) for arg in args) + ' "$@"'}
         if audience_policy is not None:
             descriptor["compose"] = False
@@ -224,10 +232,14 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
                 eligible = participating_audiences(audience_policy, [public_action])
                 selected_bindings = bind_action_contexts(contexts, owned_mapping, "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
                 common = {"kind": "domain", "domain": "keybindings", "operation": "host", "target": adapter,
+                    **({"registryPolicy": policy_path} if policy_path else {}),
                     "envelope": "bin/" + descriptor["name"], **({"mode": "assemble"} if public_action == "assemble" else {})}
                 descriptor["action_operations"].append({"action": public_action, "subsystem": "keybindings-" + target,
                     "audiences": {audience: {**common, "context": name, "descriptor": advertisements[(target, audience)]} for audience, name in selected_bindings.items()}})
         bins.append(descriptor)
+    if producer_role:
+        # Bootstrap/publish owned hosts before applying the frozen producer batch.
+        bins.append(generic)
     return {"files": files, "bins": bins, "dirs": dirs, "pkgs": config_runtime_packages()}
 
 class FilterModule(object):

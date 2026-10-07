@@ -21,9 +21,10 @@ import { keybindingConsumers, keybindingProviders } from "../keybindings/registr
 import { zimProviders } from "../zim/registry.ts";
 import { explicitPolicy, registryPolicy } from "../registry/policy.ts";
 import { inspectRegistry, lookup } from "../registry/read.ts";
-import { planRegistration, register } from "../registry/register.ts";
+import { planRegistration, applyRegistration } from "../registry/register.ts";
 import type { Domain, Scope } from "../registry/model.ts";
 import { shellQuote } from "../../files/config/keybindings/render.ts";
+import { bindRegistryPolicies } from "../keybindings/policy.ts";
 
 const definitions = [
   { name: "keybinding-providers", domain: keybindingProviders },
@@ -43,6 +44,7 @@ const common = () =>
     option(name("scope"), schema(scope)),
     option(name("root"), multiple(), schema(strings)),
     option(name("write-root"), schema(optionalText)),
+    option(name("registry-policy"), schema(optionalText)),
     toggle(name("json")),
   ] as const;
 const verbs = ["list", "explain", "register", "status", "complete"] as const;
@@ -129,13 +131,25 @@ export async function main(
   const audience: Scope = model.scope;
   if (!model.root?.length && model["write-root"] !== undefined)
     throw new Error("--write-root requires explicit --root values");
-  const policy = model.root?.length
-    ? explicitPolicy(audience, model.root, model["write-root"] ?? model.root[0]!)
-    : registryPolicy(domain.collection, audience, env);
+  if (model["registry-policy"] && model.root?.length)
+    throw new Error("choose explicit roots or registry policy pair");
+  const pair = model["registry-policy"]
+    ? await bindRegistryPolicies(audience, model["registry-policy"])
+    : undefined;
+  if (pair && model.collection === "zim-providers")
+    throw new Error("keybinding policy pairs do not select Zim roots");
+  const policy = pair
+    ? model.collection === "keybinding-providers"
+      ? pair.providers
+      : pair.consumers
+    : model.root?.length
+      ? explicitPolicy(audience, model.root, model["write-root"] ?? model.root[0]!)
+      : registryPolicy(domain.collection, audience, env);
   if (parsed.route === "/register" || parsed.route === "/status") {
     const request = { domain, policy, source: parsed.model.source };
-    const plan =
-      parsed.route === "/register" ? await register(request) : await planRegistration(request);
+    const planned = await planRegistration(request);
+    if (pair) planned.expectation.files = [...(planned.expectation.files ?? []), ...pair.guards];
+    const plan = parsed.route === "/register" ? await applyRegistration(request, planned) : planned;
     console.log(
       model.json
         ? JSON.stringify(plan, null, 2)

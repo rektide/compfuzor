@@ -12,9 +12,12 @@ import {
 import { admitKeybindingCommand } from "../../files/config/keybindings/runtime.ts";
 import { verifyPreparedOperation } from "../../files/actions/operations.ts";
 import type { KeybindingBatchStep } from "../../files/actions/model.ts";
+import * as registration from "../../runtime/registry/register.ts";
+import * as capture from "../../files/config/capture.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
@@ -27,6 +30,94 @@ const defaults = {
     "validate",
   ],
 };
+
+it("admits an explicitly packaged prospective receiver without publishing during admission", async () => {
+  const f = await setup();
+  await rm(join(f.policy.writeRoot, "deck-main.json"));
+  const selection = join(f.owner, "selection.json");
+  await writeFile(
+    selection,
+    JSON.stringify({
+      version: 1,
+      receivers: [{ id: "deck-main" }],
+      prospectiveConsumers: { user: [{ relative: "deck-main.json" }] },
+    }),
+  );
+  const batch = await admitKeybindingBatch({ args: [], manifest: f.provider, selection, defaults });
+  expect(batch.members.map((entry) => entry.id)).toEqual(["deck-main"]);
+  await expect(readFile(join(f.policy.writeRoot, "deck-main.json"))).rejects.toThrow();
+  await register({
+    domain: keybindingConsumers,
+    policy: f.policy,
+    source: join(f.owner, "deck-main.json"),
+  });
+  await import("../../runtime/registry/guard.ts").then(({ assertRegistryGuards }) =>
+    assertRegistryGuards([batch.members[0]!.registry]),
+  );
+});
+
+it("filters authored mixed-audience IDs before lookup and rejects explicit outside-audience requests", async () => {
+  const f = await setup(),
+    selection = join(f.owner, "selection.json");
+  await writeFile(
+    selection,
+    JSON.stringify({
+      version: 1,
+      receivers: [
+        { id: "deck-main", scope: "user" },
+        { id: "not-in-user-registry", scope: "system" },
+      ],
+    }),
+  );
+  const request = { args: [], manifest: f.provider, selection, defaults };
+  expect((await admitKeybindingBatch(request)).members.map((entry) => entry.id)).toEqual([
+    "deck-main",
+  ]);
+  await expect(
+    admitKeybindingBatch({ ...request, args: ["--target", "not-in-user-registry"] }),
+  ).rejects.toThrow("outside invocation audience");
+});
+
+it("rejects operative producer redirects and does not bless a mask inserted after publication", async () => {
+  const f = await setup();
+  const providerPolicy = registryPolicy("keybindings/providers.d", "user");
+  const overlay = providerPolicy.roots.at(-1)!;
+  await mkdir(overlay, { recursive: true });
+  const redirected = JSON.parse(await readFile(f.provider, "utf8"));
+  redirected.order += 1;
+  const path = join(overlay, "media-keys-main.json");
+  await writeFile(path, JSON.stringify(redirected));
+  const request = { args: ["--target", "deck-main"], manifest: f.provider, defaults };
+  await expect(admitKeybindingBatch(request)).rejects.toThrow(
+    "redirects the owned operative offer",
+  );
+  await rm(path);
+  const batch = await admitKeybindingBatch(request),
+    original = registration.applyRegistration;
+  vi.spyOn(registration, "applyRegistration").mockImplementation(async (request, plan) => {
+    const result = await original(request, plan);
+    await symlink("/dev/null", path);
+    return result;
+  });
+  await expect(runAdmittedKeybindingBatch(batch)).rejects.toThrow("registration changed");
+  await expect(readFile(batch.members[0]!.admitted.bound.statePath)).rejects.toThrow();
+});
+
+it("selection decoding and its guard refer to the same captured bytes across an intervening edit", async () => {
+  const f = await setup(),
+    selection = join(f.owner, "selection.json");
+  await writeFile(selection, JSON.stringify({ version: 1, receivers: [{ id: "deck-main" }] }));
+  const original = capture.captureFile;
+  vi.spyOn(capture, "captureFile").mockImplementation(async (path) => {
+    const captured = await original(path);
+    if (path === selection)
+      await writeFile(selection, JSON.stringify({ version: 1, receivers: [] }));
+    return captured;
+  });
+  const batch = await admitKeybindingBatch({ args: [], manifest: f.provider, selection, defaults });
+  expect(batch.members.map((entry) => entry.id)).toEqual(["deck-main"]);
+  await expect(runAdmittedKeybindingBatch(batch)).rejects.toThrow("source changed");
+});
 async function setup() {
   const f = await fixtures();
   roots.push(f.root);

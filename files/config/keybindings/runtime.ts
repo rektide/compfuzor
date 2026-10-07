@@ -13,9 +13,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { captureFile, fileText, assertFileGuards, type FileGuard } from "../capture.ts";
-import { registryPolicy } from "../../../runtime/registry/policy.ts";
 import { inspectRegistry } from "../../../runtime/registry/read.ts";
-import { registryGuard, assertRegistryGuards } from "../../../runtime/registry/guard.ts";
+import { assertRegistryGuards } from "../../../runtime/registry/guard.ts";
 import {
   keybindingConsumers,
   resolveConsumerProfile,
@@ -26,6 +25,10 @@ import {
   type RegistrationPlan,
 } from "../../../runtime/registry/register.ts";
 import type { RegistryPolicy } from "../../../runtime/registry/model.ts";
+import {
+  bindRegistryPolicies,
+  type RegistryPolicyPair,
+} from "../../../runtime/keybindings/policy.ts";
 import { parseArgs } from "node:util";
 import { runProcessor } from "./processor.ts";
 import { validateClosure } from "./closure.ts";
@@ -51,6 +54,7 @@ export type KeybindingHostCommand = "install" | "host" | "enable" | "disable";
 export type KeybindingRuntimeDefaults = {
   runner?: string;
   validatorCommand: string[];
+  registries?: RegistryPolicyPair;
 };
 export type KeybindingActionBinding = {
   command: "install" | "host";
@@ -100,6 +104,7 @@ export async function admitKeybindingCommand(
       runner: { type: "string" },
       descriptor: { type: "string" },
       "force-enable": { type: "boolean", default: false },
+      "registry-policy": { type: "string" },
     },
   });
   let receiver: AdmittedKeybindingCommand["registrySelection"];
@@ -115,7 +120,13 @@ export async function admitKeybindingCommand(
     if (text === undefined) throw new Error("missing owned consumer descriptor");
     const own = keybindingConsumers.decode(JSON.parse(text));
     if (own.audience !== values.scope) throw new Error("owned consumer audience mismatch");
-    const policy = registryPolicy(keybindingConsumers.collection, own.audience);
+    const policies = await bindRegistryPolicies(
+      own.audience,
+      values["registry-policy"],
+      defaults.registries,
+    );
+    const policy = policies.consumers;
+    registrationFiles.push(...policies.guards);
     const publicationPlan = await planRegistration({
       domain: keybindingConsumers,
       policy,
@@ -165,9 +176,9 @@ export async function admitKeybindingCommand(
     if (values.target !== own.adapter) throw new Error("host native adapter mismatch");
     registrationFiles.push(file.guard);
     if (record) {
-      registrationGuards.push(registryGuard(policy, record.source));
+      registrationGuards.push(publicationPlan.expectation);
       registrationFiles.push(registered!.guard);
-    } else registrationGuards.push({ roots: [...policy.roots], id: own.id, expected: "missing" });
+    } else registrationGuards.push(publicationPlan.expectation);
     receiver = {
       id: own.id,
       originalState: state,
