@@ -101,7 +101,10 @@ def render_playbook(playbook: str, name: str, extra: dict | None = None, etc_typ
     under the deployment root with the structural DIR/etc exposure link);
     source deployments use DIR with DIR/etc as a real subdirectory.
     """
-    deployment = SCRATCH / name
+    # Every render starts fresh: stale retired launchers intentionally aren't
+    # pruned by Compfuzor, so a previous proof tree cannot prove their absence.
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    deployment = Path(tempfile.mkdtemp(prefix=name + "-", dir=SCRATCH))
     payload = deployment / "payload"
     deployment.mkdir(parents=True, exist_ok=True)
     scenario = {
@@ -135,7 +138,7 @@ def render_playbook(playbook: str, name: str, extra: dict | None = None, etc_typ
         scenario.update(extra)
     scenario_file = deployment / "scenario.json"
     scenario_file.write_text(json.dumps(scenario), encoding="utf-8")
-    env = dict(os.environ, HOME=str(deployment / "home"))
+    env = isolate_xdg(dict(os.environ), deployment / "home")
     result = subprocess.run(
         ["ansible-playbook", "-i", "localhost,", "-c", "local", str(ROOT / playbook), "-e", f"@{scenario_file}"],
         cwd=ROOT,

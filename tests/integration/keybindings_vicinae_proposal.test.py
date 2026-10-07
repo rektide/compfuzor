@@ -6,10 +6,10 @@ Run directly:
     ./tests/integration/keybindings_vicinae_proposal.test.py
 
 Renders niri.etc.pb and umbriel.etc.pb (real consumer hosts) plus
-vicinae.src.pb (real producer, existing profile selector overrides point to
-isolated consumers while source deployment remains separate). Adopts both roots
+vicinae.src.pb (real producer, advertised isolated consumers while source
+deployment remains separate). Adopts both roots
 with the consumer install.mjs, registers the
-producer through its generated target installers, and checks the reviewed
+producer through its generated offer installer, and checks the reviewed
 chord outcomes and toggle policy without launching any application.
 """
 from __future__ import annotations

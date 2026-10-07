@@ -163,7 +163,7 @@ def test_early_errors(payload: Path, env: dict, before: set[Path]):
     trace = Path(env["TRACE"])
     initial = trace.read_bytes()
     rejected = invoke(payload / "bin/install.mjs", env, ["--context", "host"], expected=2)
-    assert "scope" in rejected.stderr and trace.read_bytes() == initial and session_dirs() == before
+    assert ("scope" in rejected.stderr or "not advertised" in rejected.stderr) and trace.read_bytes() == initial and session_dirs() == before, rejected.stderr
     invoke(payload / "bin/install.mjs", {**env, "COMPFUZOR_CONFIG_CONTEXT": "host"}, expected=2)
     assert trace.read_bytes() == initial and session_dirs() == before
     profile = payload / "etc/keybinding-umbriel.json"
@@ -227,6 +227,7 @@ def test_session_lifetime(payload: Path, env: dict, before: set[Path]):
 def test_external_producer(host: Path, env: dict, before: set[Path]):
     area = Path(env["TRACE"]).parent
     producer = render(area / "producer", {
+        "NAME": "external-domain-fixture",
         "KEYBINDING_TARGETS": {"niri": {"consumer": {"env": "CONSUMER_PROFILE"}, "context": "desktop", "scope": "user", "action_contexts": {"user": "desktop", "system": "host"}}},
         "KEYBINDING_ACTIONS": {"external-run": {"exec": ["echo", "external"]}},
         "KEYBINDINGS": {"external-launch": {"action": "external-run", "keys": ["Mod+E"]}},
@@ -237,6 +238,7 @@ def test_external_producer(host: Path, env: dict, before: set[Path]):
     user = Path(env["XDG_CONFIG_HOME"])
     membership = json.loads((user / "niri/.keybindings/membership.json").read_text())
     assert membership["groups"]["action-domain-fixture"]["resources"]
+    assert {resource["id"] for resource in membership["groups"]["external-domain-fixture"]["resources"]} == {"external-run", "external-launch"}
     assert (user / "niri-placement/external-launch.binding.kdl").is_symlink()
     assert Path(prod_env["PRODUCER_TRACE"]).read_text().splitlines() == ["producer-body"]
     system = area / "system"

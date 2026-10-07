@@ -2,7 +2,7 @@
 
 Renders media-keys.etc.pb (declarations only -- no authored target wiring,
 ETC_FILES or installer body) plus the real niri.etc.pb / umbriel.etc.pb consumer hosts,
-adopts fresh roots, registers the producer through its generated per-target
+adopts fresh roots, registers the producer through its generic advertised offer
 installers, and checks the exact media-key chord/action outcomes for both
 compositors: the Surface Dial's Shift+ fine-step chords, plain coarse chords,
 add-keys doubling for mute/transport, niri-only allow-when-locked options,
@@ -56,8 +56,7 @@ def test_media_keys_model_producer() -> None:
         )
 
         # Declarations-only producer: packaged singular YAML, generated
-        # installers, a fully generated aggregate with each target exactly
-        # once, and nothing else authored.
+        # installer, one generated offer aggregate, and nothing else authored.
         manifest = json.loads((producer / "etc/keybinding-producer.json").read_text())
         assert manifest["producer"] == MEDIA_NAME and manifest["targets"] == ["niri", "umbriel"]
         resources = [entry["path"] for entry in manifest["resources"]]

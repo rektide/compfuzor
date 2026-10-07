@@ -52,12 +52,14 @@ def test_keybindings():
     assert [value["action"] for value in operations] == ["install", "assemble"]
     assert operations[1]["audiences"]["system"]["mode"] == "assemble"
     external = keybindings({}, {"niri": {"consumer": {"env": "CONSUMER_PROFILE"}, "context": "desktop", "scope": "user", "action_contexts": {"user": "desktop", "system": "host"}}})
-    descriptor = next(value for value in external["bins"] if value["name"] == "install-keybindings-niri.sh")
+    descriptor = next(value for value in external["bins"] if value["name"] == "install-keybindings.sh")
     assert len(descriptor["action_operations"]) == 1
-    assert descriptor["action_operations"][0]["audiences"]["system"]["context"] == "host"
-    assert descriptor["action_operations"][0]["audiences"]["user"]["profileSelector"] == {"env": "CONSUMER_PROFILE"}
+    assert set(descriptor["action_operations"][0]["audiences"]) == {"user", "system"}
+    assert all(value["operation"] == "install-offer" for value in descriptor["action_operations"][0]["audiences"].values())
+    selection = next(value["json"] for value in external["files"] if value["name"] == "keybindings/selection.json")
+    assert selection["receivers"] == [{"id": "niri", "profile": {"env": "CONSUMER_PROFILE"}, "context": "desktop", "scope": "user", "actionContexts": {"user": "desktop", "system": "host"}}]
     single = keybindings({}, {"niri": {"consumer": {"env": "UNREAD_REMOTE_PROFILE"}, "context": "desktop", "scope": "user"}})
-    descriptor = next(value for value in single["bins"] if value["name"] == "install-keybindings-niri.sh")
+    descriptor = next(value for value in single["bins"] if value["name"] == "install-keybindings.sh")
     assert set(descriptor["action_operations"][0]["audiences"]) == {"user"}
 
 

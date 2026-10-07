@@ -336,7 +336,7 @@ export async function main(argv: string[], defaults: KeybindingRuntimeDefaults):
   if (command === "install-offer") {
     if (args.includes("--help") || args.includes("-h")) {
       console.log(
-        "install-offer --manifest PATH [--selection POLICY] [--target RECEIVER ...] [--scope user|system] [--force-enable]\n--force-enable skips only registration disabled directives for this invocation; masks remain vetoes.",
+        "install-offer --manifest PATH [--selection POLICY] [--registry-policy PATH] [--target RECEIVER ...] [--scope user|system] [--force-enable]\n--registry-policy binds both provider/consumer collections for the selected audience; no missing-side fallback.\n--force-enable skips only registration disabled directives for this invocation; masks remain vetoes.",
       );
       return 0;
     }
@@ -347,7 +347,7 @@ export async function main(argv: string[], defaults: KeybindingRuntimeDefaults):
   if (["install", "host", "enable", "disable"].includes(command)) {
     if (args.includes("--help") || args.includes("-h")) {
       console.log(
-        `${command} --target NATIVE --profile PATH --context ID --scope user|system\nOwned host admission also accepts --descriptor PATH and --force-enable.\n--force-enable overrides only registration disabled directives for this invocation; masks and producer-group state remain authoritative.`,
+        `${command} --target NATIVE --profile PATH --context ID --scope user|system\nOwned host admission also accepts --descriptor PATH, --registry-policy PATH and --force-enable.\n--force-enable overrides only registration disabled directives for this invocation; masks and producer-group state remain authoritative.`,
       );
       return 0;
     }

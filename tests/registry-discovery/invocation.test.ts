@@ -10,6 +10,7 @@ import {
   runAdmittedKeybindingBatch,
 } from "../../runtime/keybindings/invocation.ts";
 import { admitKeybindingCommand } from "../../files/config/keybindings/runtime.ts";
+import * as nativeRuntime from "../../files/config/keybindings/runtime.ts";
 import { verifyPreparedOperation } from "../../files/actions/operations.ts";
 import type { KeybindingBatchStep } from "../../files/actions/model.ts";
 import * as registration from "../../runtime/registry/register.ts";
@@ -304,7 +305,7 @@ it("defaults to all enabled compatible receivers, admits explicit subsets and se
   ).rejects.toThrow("masked");
 });
 
-it("guards admission before effects and does not widen membership for later registrations", async () => {
+it("guards selected registrations before effects", async () => {
   const f = await setup();
   const batch = await admitKeybindingBatch({
     args: ["--target", "deck-main"],
@@ -317,6 +318,37 @@ it("guards admission before effects and does not widen membership for later regi
   await expect(runAdmittedKeybindingBatch(batch)).rejects.toThrow("selected registration changed");
   expect(batch.members.map((entry) => entry.id)).toEqual(["deck-main"]);
   await expect(readFile(batch.publication.plan.destination)).rejects.toThrow();
+});
+
+it("does not collect a newly eligible consumer after default-all admission", async () => {
+  const f = await setup();
+  const batch = await admitKeybindingBatch({ args: [], manifest: f.provider, defaults });
+  const descriptor = join(f.owner, "later.json");
+  const payload = JSON.parse(await readFile(join(f.owner, "deck-main.json"), "utf8"));
+  payload.id = "later";
+  await writeFile(descriptor, JSON.stringify(payload));
+  await register({ domain: keybindingConsumers, policy: f.policy, source: descriptor });
+  const execute = vi.spyOn(nativeRuntime, "runAdmittedKeybindingCommand").mockResolvedValue(0);
+  expect(await runAdmittedKeybindingBatch(batch)).toBe(0);
+  expect(execute.mock.calls.map(([admitted]) => admitted.bound.base)).toEqual(
+    batch.members.map((member) => member.admitted.bound.base),
+  );
+  expect(batch.members.map((member) => member.id)).toEqual(["deck-main", "desk.one"]);
+  expect(execute).toHaveBeenCalledTimes(2);
+});
+
+it("stops on a later receiver failure without pretending to roll back earlier execution", async () => {
+  const f = await setup();
+  const batch = await admitKeybindingBatch({ args: [], manifest: f.provider, defaults });
+  const execute = vi
+    .spyOn(nativeRuntime, "runAdmittedKeybindingCommand")
+    .mockResolvedValueOnce(0)
+    .mockResolvedValueOnce(13);
+  expect(await runAdmittedKeybindingBatch(batch)).toBe(13);
+  expect(execute.mock.calls.map(([admitted]) => admitted)).toEqual(
+    batch.members.map((member) => member.admitted),
+  );
+  expect(await readlink(batch.publication.plan.destination)).toBe(f.provider);
 });
 
 it("admission applies enabled:false only at receiver registration level and retains selectors", async () => {

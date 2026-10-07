@@ -29681,7 +29681,7 @@ async function main$3(argv, defaults) {
 	}
 	if (command === "install-offer") {
 		if (args.includes("--help") || args.includes("-h")) {
-			console.log("install-offer --manifest PATH [--selection POLICY] [--target RECEIVER ...] [--scope user|system] [--force-enable]\n--force-enable skips only registration disabled directives for this invocation; masks remain vetoes.");
+			console.log("install-offer --manifest PATH [--selection POLICY] [--registry-policy PATH] [--target RECEIVER ...] [--scope user|system] [--force-enable]\n--registry-policy binds both provider/consumer collections for the selected audience; no missing-side fallback.\n--force-enable skips only registration disabled directives for this invocation; masks remain vetoes.");
 			return 0;
 		}
 		const { admitKeybindingBatch, runAdmittedKeybindingBatch } = await Promise.resolve().then(() => (init_invocation(), invocation_exports));
@@ -29697,7 +29697,7 @@ async function main$3(argv, defaults) {
 		"disable"
 	].includes(command)) {
 		if (args.includes("--help") || args.includes("-h")) {
-			console.log(`${command} --target NATIVE --profile PATH --context ID --scope user|system\nOwned host admission also accepts --descriptor PATH and --force-enable.\n--force-enable overrides only registration disabled directives for this invocation; masks and producer-group state remain authoritative.`);
+			console.log(`${command} --target NATIVE --profile PATH --context ID --scope user|system\nOwned host admission also accepts --descriptor PATH, --registry-policy PATH and --force-enable.\n--force-enable overrides only registration disabled directives for this invocation; masks and producer-group state remain authoritative.`);
 			return 0;
 		}
 		return runAdmittedKeybindingCommand(await admitKeybindingCommand(command, args, defaults));
@@ -30040,7 +30040,7 @@ async function prepareOperation(step, audience, argv, deploymentDir, runtimePath
 	if (step.operation === "install-offer") {
 		if (argv.includes("--help") || argv.includes("-h")) return {
 			domain: "help",
-			message: "install-offer [--target RECEIVER ...] [--force-enable] [--profile-selector JSON] [--context ID]"
+			message: "install-offer [--target RECEIVER ...] [--force-enable] [--registry-policy PATH] [--profile-selector JSON] [--context ID]"
 		};
 		return {
 			domain: "keybindings-batch",

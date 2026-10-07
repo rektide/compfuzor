@@ -37,7 +37,7 @@ export async function prepareOperation(
       return {
         domain: "help",
         message:
-          "install-offer [--target RECEIVER ...] [--force-enable] [--profile-selector JSON] [--context ID]",
+          "install-offer [--target RECEIVER ...] [--force-enable] [--registry-policy PATH] [--profile-selector JSON] [--context ID]",
       };
     return {
       domain: "keybindings-batch",
