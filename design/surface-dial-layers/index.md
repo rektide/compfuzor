@@ -2,6 +2,7 @@
 
 ## Start here
 
+- [Dial-scoped remap proposal](/design/surface-dial-layers/dial-remap0.gpt61s.md): latest user direction—leave the daemon unchanged, normalize its virtual keyboard through a separate Kanata instance, and put F-key volume policy in media-keys. Includes the verified Linux device-identity boundary.
 - [Synthesis checkpoint](/design/surface-dial-layers/syn0.gpt61s.md): current observability, separate tuning knobs, dedicated-key versus sideways-state paths, and proposed next decisions.
 
 ## Intent and routing
