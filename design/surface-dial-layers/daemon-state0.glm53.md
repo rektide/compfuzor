@@ -7,9 +7,9 @@ status: draft
 generated: { by: model:glm53, at: 2026-10-06 }
 stale_after: 2027-01-06
 sources:
-  - resource: /home/rektide/src/surface-dial-layered
+  - resource: file:///home/rektide/src/surface-dial-layered
     title: Compfuzor-managed daemon workspace (upstream 43dd973 content plus discovery docs)
-  - resource: /home/rektide/src/surface-dial-linux
+  - resource: file:///home/rektide/src/surface-dial-linux
     title: rektide fork carrying four local commits beyond upstream 43dd973
   - resource: /design/surface-dial-layers/brief0.gpt61s.md
     title: Wave brief for precision layers and sideways modifier state
@@ -23,6 +23,12 @@ sources:
     title: Declared daemon deployment (source build, user service)
   - resource: /media-keys.etc.pb
     title: Declared coarse 0.06 / fine 0.02 media actions
+  - resource: /design/surface-dial-layers/unit0.glm53.md
+    title: Unit-G runtime observation report (review context for this revision)
+  - resource: /design/surface-dial-layers/routing0.gpt61s.md
+    title: Parent routing and precision-state boundary report (review context for this revision)
+  - resource: /design/surface-dial-layers/kinefolk0.glm53.md
+    title: Kinefolk learning report covering the brief's Kinefolk item (review context for this revision)
 ---
 
 # Daemon-owned precision state and a sideways control channel
@@ -61,28 +67,37 @@ Three source copies exist and diverge:
   flag threaded through `main.rs`, `config.rs`, and `controller/mod.rs`.
   Local daemon patching is therefore established practice, not a new fork.
 - The declared deployment source is `/usr/local/src/surface-dial-git` per
-  [`diagnosis0`](/design/surface-dial/diagnosis0.glm53.md); which tree feeds
-  the running unit is deployment-G territory.
+  [`diagnosis0`](/design/surface-dial/diagnosis0.glm53.md). The unit-G
+  report has since pinned the running binary to a clean upstream `43dd973`
+  build — the fork is undeployed, and the layered `src/` is byte-identical
+  to the deployed tree ([unit0](/design/surface-dial-layers/unit0.glm53.md)).
 
-Architecture, per [`src/`](/home/rektide/src/surface-dial-layered/src) and
+Architecture, per [`src/`](file:///home/rektide/src/surface-dial-layered/src) and
 the pre-existing
-[`config-control-state-reference.md`](/home/rektide/src/surface-dial-layered/doc/discovery/config-control-state-reference.md):
+[`config-control-state-reference.md`](file:///home/rektide/src/surface-dial-layered/doc/discovery/config-control-state-reference.md):
 
 - **Event pipeline**: a udev-enumerating `EventsWorker` matches
   `Surface Dial System Multi Axis` and streams evdev events over mpsc into
   `DialDevice`, which synthesizes `ButtonLongPress` via a 750 ms timeout
-  ([`dial_device/mod.rs:93-139`](/home/rektide/src/surface-dial-layered/src/dial_device/mod.rs#L93-L139)).
+  ([`dial_device/mod.rs:93-139`](file:///home/rektide/src/surface-dial-layered/src/dial_device/mod.rs#L93-L139)).
   Dial disconnect/reconnect is handled in-process: ENODEV breaks the read
   loop and the worker falls back to the udev monitor
-  ([`events.rs:69-153`](/home/rektide/src/surface-dial-layered/src/dial_device/events.rs#L69-L153)).
+  ([`events.rs:69-153`](file:///home/rektide/src/surface-dial-layered/src/dial_device/events.rs#L69-L153)).
   Reconnect does not require a daemon restart today.
 - **Mode selection**: `DialController` dispatches to one of seven hardcoded
   `ControlMode`s (`main.rs:84-92`). Long-press enters `MetaMode`, a
   notification-backed menu rotated by the dial; selection persists one raw
-  integer to `~/.config/com.prilik.surface-dial-daemon/config.txt`
-  ([`config.rs:45-68`](/home/rektide/src/surface-dial-layered/src/config.rs#L45-L68)),
+  integer to `~/.config/surface-dial-daemon/config.txt`
+  ([`config.rs:45-68`](file:///home/rektide/src/surface-dial-layered/src/config.rs#L45-L68)),
   read exactly once at startup
-  ([`main.rs:77`](/home/rektide/src/surface-dial-layered/src/main.rs#L77)).
+  ([`main.rs:77`](file:///home/rektide/src/surface-dial-layered/src/main.rs#L77)).
+  Path note, distinguishing source inference from runtime observation: the
+  source builds it via `directories::ProjectDirs::from("com", "prilik",
+  "surface-dial-daemon")`, whose Linux convention drops the qualifier —
+  matching the path unit G read at runtime (holding `5`, i.e. the
+  Media+Volume mode). The layered repo's discovery doc infers a
+  `com.prilik.…` segment instead; that inference is wrong and is not
+  repeated here.
 - **Action vocabulary**: each mode emits fixed chords through one shared
   uinput keyboard, `Surface Dial Virtual Keyboard/Mouse`
   ([`fake_input.rs:19-56`](https://github.com/daniel5151/surface-dial-linux/blob/43dd973092871d8ef0c452b0797b519f5a9ddfac/src/fake_input.rs#L19-L56)).
@@ -93,15 +108,16 @@ the pre-existing
   hardwired per mode, not a daemon-wide layer.
 - **Haptics is its own modality**: `set_mode(haptics, steps ≤ 3600)` pushes
   an HID feature report per mode
-  ([`haptics.rs:89-109`](/home/rektide/src/surface-dial-layered/src/dial_device/haptics.rs#L89-L109)).
+  ([`haptics.rs:89-109`](file:///home/rektide/src/surface-dial-layered/src/dial_device/haptics.rs#L89-L109)).
   Volume uses `steps: 36*2`. Tactile detent resolution is daemon-owned and
-  fully independent of action step size — a finer baseline step wants a
-  matching detent change, and that part needs no protocol at all.
+  fully independent of action step size; whether finer steps should also
+  change detent density is an unchosen user preference, and it needs no
+  protocol either way.
 
 A key detail of the virtual keyboard's **fixed capability set**: it
 advertises LEFTSHIFT, LEFTCTRL, the media/transport keys, arrows, SPACE,
-EQUAL, MINUS — and notably `KEY_LEFTCTRL` is advertised but unused by any
-chord, while no F-region keys exist (nothing F13–F24). `key_press` /
+EQUAL, MINUS — LEFTCTRL serving Zoom's Ctrl+Equal/Minus chords — while no
+F-region keys exist (nothing F13–F24). `key_press` /
 `key_release` already handle arbitrary slices of advertised keys
 ([`fake_input.rs:149-183`](https://github.com/daniel5151/surface-dial-linux/blob/43dd973092871d8ef0c452b0797b519f5a9ddfac/src/fake_input.rs#L149-L183)),
 so any chord of currently-advertised keys is encodable today; adding F23/F24
@@ -201,7 +217,7 @@ outside. This is the richer axis and the one the brief most wants explored.
 key emission in Volume mode with direct actuation (`wpctl set-volume
 @DEFAULT_AUDIO_SINK@ <step>±`) using a config-declared step. Session
 ownership works out: the unit is a user service
-([`install/surface-dial.service`](/home/rektide/src/surface-dial-layered/install/surface-dial.service):
+([`install/surface-dial.service`](file:///home/rektide/src/surface-dial-layered/install/surface-dial.service):
 `WantedBy=default.target`, `ExecStart=%h/.cargo/bin/surface-dial-daemon`),
 declared installed via `install-user.sh` in
 [`surface-dial.src.pb`](/surface-dial.src.pb), and the media producer's
@@ -226,13 +242,20 @@ below.
 **Transport and publisher options** (B2 blocked, B4a partial — see
 below):
 
-1. **B1, daemon-owned Unix socket (proposed protocol).** An
-   `AF_UNIX SOCK_DGRAM` (or SEQPACKET if replies are wanted) socket at
+1. **B1, daemon-owned Unix socket (proposed protocol).** A socket at
    `$XDG_RUNTIME_DIR/surface-dial/control.sock`. Same-user scope matches
-   the unit and the producer's user audience; auth is directory
-   permissions plus `SO_PEERCRED` uid checking; provenance is the peer
-   that could only have reached the socket through the user's runtime dir.
-   This is new daemon code but zero new system moving parts.
+   the unit and the producer's user audience; directory permissions bound
+   who can reach it at all. Peer validation is a stated design obligation,
+   not a settled choice: an unconnected datagram socket requires
+   per-message credentials (`SO_PASSCRED` plus `SCM_CREDENTIALS` on
+   Linux), while a deliberately chosen connected transport
+   (SEQPACKET/stream) permits connection-scoped validation and makes peer
+   disconnect observable — datagrams carry no sender-disconnect event, so
+   absence is detectable there only through lease expiry. Whichever
+   transport, state authoritativeness needs source identity, epoch/order
+   (generation counters against stale or duplicated messages), lease
+   semantics, and snapshot/reconciliation when a peer (re)connects. This
+   is new daemon code but zero new system moving parts.
 2. **B3, file-watched state** (`XDG_RUNTIME_DIR/surface-dial/precision`,
    inotify or read-at-dispatch). Simplest possible; weakest liveness and
    provenance; stale-state risk on publisher death unless values carry
@@ -278,42 +301,47 @@ below):
      physical-keyboard events with clean provenance — no dial synthetic
      Shift is merged there. Watching **main's output** on the deployed
      single-instance topology is contaminated today (the dial's synthetic
-     Shift is provenance-free once merged), but becomes provenance-clean
-     **after A2 lands**, because A2 deletes the only synthetic Shift
-     source. That is a real sequencing synergy: A2 first makes the
-     simplest possible publisher — a name-matched udev watcher on main's
-     output — safe regardless of which split is deployed. Watcher costs
-     either way: output nodes churn (`eventN`) so discovery must match by
-     name, default-named outputs are ambiguous across instances (all
-     `kanata`; the renamed `kanata-kinata` candidate or path pinning
-     disambiguates), and reconnect re-enumeration must re-attach. The
-     daemon already owns exactly this machinery — a name-matched udev
-     enumerator plus a reader thread (`events.rs`) — so a second watcher
-     instance is a small, pattern-matching extension.
+     Shift is provenance-free once merged). Removing the dial's synthetic
+     Shift under A2 removes *this* contamination source, but not every
+     one: main may capture other virtual inputs, and remapper macros can
+     emit Shift as well. A watcher is therefore never provenance-clean by
+     topology alone — whichever stream it watches, it must designate
+     which sources it trusts. Watcher costs either way: output nodes
+     churn (`eventN`) so discovery must match by name, default-named
+     outputs are ambiguous across instances (all `kanata`; the renamed
+     `kanata-kinata` candidate or path pinning disambiguates), and
+     reconnect re-enumeration must re-attach. The daemon already owns
+     exactly this machinery — a name-matched udev enumerator plus a
+     reader thread (`events.rs`) — so a second watcher instance is a
+     small, pattern-matching extension.
 
 **Provenance subtlety that decides the publisher**: kanata's merged stream
 is provenance-free (untagged events, coordinate-based state — kanata
 assessment evidence). Any publisher watching the *merged* main output would
 see the dial's own synthetic Shift as indistinguishable from physical
 Shift: the daemon's emissions would echo back and **self-trigger the
-precision bit**, a feedback loop. Three provenance-clean options remain:
-the physical-keyboard-scoped kinata output of the declared split (B4b —
+precision bit**, a feedback loop. Provenance-clean options are the
+physical-keyboard-scoped kinata output of the declared split (B4b —
 conventional and unprivileged, but the deployed topology currently differs
 from that split), `EVIOCGKEY` sampling of the grabbed physical nodes
 (B4a — works despite grabs, at latency/bookkeeping cost), or adopting A2
-first, after which even main's merged output carries no synthetic Shift
-and any watcher becomes clean. If Path B is chosen without A2, the
-publisher must be the scoped instance or the sampling fallback, never the
-merged instance. A complementary encoding exists only under B: physical
-**Right** Shift as the precision bit (distinct coordinate even in a merged
-kanata stream; same mask bit at Umbriel, so useless under A) while the
-dial keeps synthesizing Left Shift.
+first, after which the dial contributes no synthetic Shift to any stream
+it appears in — though other emitters (remapper macros, other virtual
+keyboards main captures) can still emit Shift, so a watcher still needs
+explicit source designation. Without A2, watching the merged instance is
+outright wrong (the self-trigger loop); with A2 it becomes a choice that
+still requires designation. A complementary encoding exists only under B:
+physical **Right** Shift as the precision bit (distinct coordinate even in
+a merged kanata stream; same mask bit at Umbriel, so useless under A)
+while the dial keeps synthesizing Left Shift.
 
 **Integration point inside the daemon** (smallest coherent shape): the
-controller loop already consumes a cross-thread "remote variable" at the
-top of every dispatch — `new_mode: Arc<Mutex<Option<usize>>>`, checked
-before each event ([`controller/mod.rs:78-84`](/home/rektide/src/surface-dial-layered/src/controller/mod.rs#L78-L84)).
-A sideways channel reuses exactly this pattern: a `ControlState` cell
+controller loop already has a shared-state *dispatch seam* — `new_mode:
+Arc<Mutex<Option<usize>>>`, checked at the top of every dispatch
+([`controller/mod.rs:78-84`](file:///home/rektide/src/surface-dial-layered/src/controller/mod.rs#L78-L84)).
+That is internal plumbing, not an existing remote-variable facility; a
+public control channel would be new surface, but it can ride the same
+seam: a `ControlState` cell
 (Arc<Mutex<…>>) written by a small control-socket thread, read at dispatch
 time. Because the main loop blocks on `device.next_event()`, a second
 mpsc would need a select; the shared-cell-plus-lazy-read avoids all
@@ -321,7 +349,7 @@ restructuring. Held-bit expiry needs no timer thread either: evaluate
 leases lazily at dispatch time (if `now > lease_expiry`, treat as
 released). There is also an existing fail-safe precedent to mirror:
 `Paddle::on_end` forces `key_release` of anything the mode had pressed
-([`paddle.rs:68-78, 156-164`](/home/rektide/src/surface-dial-layered/src/controller/controls/paddle.rs#L68-L78));
+([`paddle.rs:68-78, 156-164`](file:///home/rektide/src/surface-dial-layered/src/controller/controls/paddle.rs#L68-L78));
 mode exit and dial `Disconnect` should likewise reset latched precision
 state.
 
@@ -337,8 +365,11 @@ v1 reset                              # clear all held bits and non-default over
 
 Semantics worth deciding up front:
 
-- **Held bits are press/release with leases**, not toggles. Silence beyond
-  the lease decays to released; publisher disconnect resets; daemon
+- **Held bits are press/release with leases**, not toggles. The lease is
+  the base liveness mechanism in any transport: silence beyond it decays
+  to released. Prompt reset on peer death is available only where the
+  transport is connected and its disconnect is observable; datagram
+  transports rely on the lease alone. Daemon
   restart starts clean (only `last_mode` is persisted — precision must not
   become persisted state, or a crash latches "even finer" across sessions).
 - **Unknown variables are rejected and logged**, not ignored silently.
@@ -346,12 +377,15 @@ Semantics worth deciding up front:
   `volume.detents`), preserving the brief's terminology separation between
   baseline synthetic Shift, physical keyboard Shift, selected control
   mode, and precision layer.
-- Failure containment: today any `on_dial` error propagates through
-  `controller.run()` → daemon exit
-  ([`main.rs:41-56`](/home/rektide/src/surface-dial-layered/src/main.rs#L41-L56)),
-  and the unit has **no `Restart=`**. Daemon-owned actuation must make
-  per-event failures log-and-continue, and the unit needs a restart policy
-  — a deployment-G note, but a hard prerequisite for B.
+- Failure posture is an open design choice, not a derived requirement:
+  today any `on_dial` error propagates through `controller.run()` → daemon
+  exit
+  ([`main.rs:41-56`](file:///home/rektide/src/surface-dial-layered/src/main.rs#L41-L56)),
+  and the unit ships `Restart=no` — a deliberate fail-fast stance.
+  Daemon-owned actuation *may* call for per-event error containment or a
+  unit restart policy, and those deserve explicit decisions; but fail-fast
+  remains legitimate, and no broad catch-and-print behavior is proposed by
+  default.
 
 ## Daemon-side actions vs emitting distinct keys
 
@@ -367,8 +401,11 @@ Semantics worth deciding up front:
 
 The brief's modality ambitions — "held precision bit vs toggle/layers vs
 control modes" — map cleanly: control modes already exist (persistent,
-menu-selected, hardware-only switching); the precision modifier should be a
-held bit, not a layer, to inherit fail-safe decay; toggles and per-mode
+menu-selected, hardware-only switching); the precision modifier is
+naturally a held bit for fail-safe decay, and that is not exclusive of
+layering — a momentary precision overlay *within the daemon's mode space*
+can be driven by the held bit, independent of compositor-level submaps.
+Toggles and per-mode
 step overrides are exactly the `set`/`hold` split in the sketch. Haptic
 detents ride along as ordinary per-mode config either way.
 
@@ -388,9 +425,10 @@ split's scoped output watcher (that topology is not currently deployed)
 and `EVIOCGKEY` sampling (latency and bookkeeping costs). The B1 design
 above remains the growth path if per-mode step policy, velocity-scaled
 steps, or a toggle modality is later wanted; note the sequencing synergy
-that after A2 a plain name-matched watcher on main's merged output is
-provenance-clean, making B1+B4b reachable later without the split,
-without kanata rebuilds, and without service security changes.
+that after A2 the dial no longer contaminates main's merged output, so a
+name-matched watcher there needs only explicit source designation —
+making B1+B4b reachable later without the split, without kanata
+rebuilds, and without service security changes.
 
 Concrete smallest slice, in dependency order:
 
@@ -399,8 +437,12 @@ Concrete smallest slice, in dependency order:
 2. Daemon patch: two capability lines, two chord call sites (Volume,
    MediaWithVolume), matching detent `steps` if the smaller baseline
    wants finer tactile feedback.
-3. Parent: media producer gains dial-scoped fine/even-finer bindings and
-   the step values (0.02 / 0.005-class numbers are a user decision).
+3. Bindings: a dial-owned producer declares its own
+    `KEYBINDING_ACTIONS`/`KEYBINDINGS` for the reserved keys — an
+    ownership change from `media-keys`, proposed rather than existing
+    ([routing0](/design/surface-dial-layers/routing0.gpt61s.md) reaches
+    the same placement); step values (0.02 / 0.005-class numbers) are a
+    user decision.
 4. Verification belongs to deployment/input agents: dial-alone and
    Shift-held ticks against explicit expected deltas, plus the
    hold-Shift-rotate-type regression that the old synthetic Shift made
@@ -427,18 +469,25 @@ Concrete smallest slice, in dependency order:
   `kanata-kinata` candidate or path pinning); who owns the watcher
   process — the dial daemon itself, or a sibling that feeds B1?
 - Actual session keymap for the chosen reserved keys (parent's fixture
-  says default works; session-level confirmation pending).
+  says default works, session-level confirmation pending;
+  [routing0](/design/surface-dial-layers/routing0.gpt61s.md) owns the
+  routing caveats).
 - Step values and ratio: "significantly smaller baseline" and "reduced
-  ratio" are still numbers nobody has picked; haptics detent count should
-  move with them.
+  ratio" are still numbers nobody has picked; haptics detent density is an
+  independent preference. Unit G also measured sub-1:1 chord-to-action
+  yield under fast spins (roughly nine daemon chords per fired action) —
+  finer steps multiply events that may not become actions, so the numbers
+  should be chosen against observed yield, not assumed 1:1.
 - Under A2, does anything legitimately want the dial's old synthetic-Shift
   fine chord preserved for other consumers (the
   [`media-keys.etc.pb`](/media-keys.etc.pb) comment says its vocabulary
   mirrors the dial's chords — that comment goes stale under A2 and the
   plain-keyboard Shift bindings keep their existing meaning for real
   keyboards)?
-- Kinefolk background/registration (brief item 3) is not covered here; it
-  was outside this daemon-architecture tasking.
+- Kinefolk background/registration (brief item 3) is covered by
+  [kinefolk0](/design/surface-dial-layers/kinefolk0.glm53.md) elsewhere
+  in this wave, including where a physical-modifier-derived precision bit
+  does and does not fit; not a deployment dependency of anything here.
 
 ## Cross-references
 
@@ -461,6 +510,19 @@ Concrete smallest slice, in dependency order:
   [`media-keys.etc.pb`](/media-keys.etc.pb): declared deployment and
   binding policy these designs would amend.
 - Daemon-local discovery docs:
-  [`config-control-state-reference.md`](/home/rektide/src/surface-dial-layered/doc/discovery/config-control-state-reference.md)
+  [`config-control-state-reference.md`](file:///home/rektide/src/surface-dial-layered/doc/discovery/config-control-state-reference.md)
   (pre-existing full state inventory; this doc's architecture section
-  agrees with it and adds the interface inventory and channel designs).
+  agrees with it and adds the interface inventory and channel designs —
+  its `com.prilik.…` config-path inference is corrected above per runtime
+  observation).
+- [Unit report](/design/surface-dial-layers/unit0.glm53.md): pins the
+  deployed build to clean upstream `43dd973`, the runtime config path and
+  mode, the journal-line inventory, and the sub-1:1 chord-to-action yield
+  observation that constrains step-value choices.
+- [Routing report](/design/surface-dial-layers/routing0.gpt61s.md): the
+  Umbriel IPC/submap boundary, the F23/F24 keymap fixture and dedicated-key
+  table Path A aligns with, and the same dial-owned producer placement.
+- [Kinefolk report](/design/surface-dial-layers/kinefolk0.glm53.md):
+  registers the host-signal idea and delimits where a physical-modifier
+  precision bit fits kinefolk's context model — background, not a
+  dependency.
