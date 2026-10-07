@@ -19,6 +19,12 @@
   what Zim, CONFIG and both catalogs actually do; implemented library capabilities,
   disabled/mask scanner gaps, and verified published Router/tab integration.
 
+## Figments implementation checkpoints
+
+- [Substrate review and loader integration direction](/design/registry-discovery/figments-review0.gpt6a.md)
+  — G's implemented foundation, parent-reviewed edge cases and the next authorized
+  operator/captured-selection slice.
+
 ## Predecessor
 
 - [Receiver-specific implementation plan](/design/runtime-sourcing/receiver-plan0.gpt6a.md)
