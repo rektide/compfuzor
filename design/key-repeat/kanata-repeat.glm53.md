@@ -47,17 +47,18 @@ already demonstrates every protocol technique this design needs.
 
 # Verdict up front
 
-1. **Repeat is not one thing on this host — it is three races.** A held
-   physical key today produces: (a) hardware/kernel EV_REP repeats, which
-   kanata **passes through by default** (`allow-hardware-repeat` defaults true,
-   [defcfg.rs](https://github.com/jtroo/kanata/blob/2f84d17/parser/src/cfg/defcfg.rs));
-   (b) whatever the compositor/wlroots repeat machinery does; and (c)
-   **client-side repeat in Wayland clients** (kitty et al.), driven by the
-   `wl_keyboard.repeat_info` umbriel publishes — currently
-   `repeat_rate = 25, repeat_delay = 600` from
+1. **Repeat as clients experience it is 100% client-side, and nothing else
+   survives to race it.** libinput drops kernel autorepeat outright
+   (`evdev-fallback.c:591` "ignore kernel key repeat" — so hardware repeats
+   kanata passes through die before umbriel), wlroots 0.20 has **no
+   server-side repeat timer for clients** (umbriel's own `m_repeatTimer`
+   repeats *bind actions* only, `keyboard.cpp:402-449`), and the compositor's
+   whole contribution is one keydown plus the `wl_keyboard.repeat_info`
+   (rate, delay) it publishes — currently `repeat_rate = 25,
+   repeat_delay = 600` from
    [`/usr/local/share/umbriel/config.toml`](/usr/local/share/umbriel/config.toml#L219-L225).
-   Effective repeat ≈ whichever of these wins; none of them is per-key, none
-   accelerates.
+   Hardware repeats still matter *inside* kanata (the `rpt_action` replay
+   trap below), but downstream there is exactly one repeat mechanism.
 2. **The immediate, zero-code win is umbriel's config**, not kanata's: raise
    `repeat_rate` / lower `repeat_delay` (valid ranges 0-1000 Hz / 0-10000 ms).
    That is flat and global — exactly what the user asked to move beyond.
@@ -82,33 +83,45 @@ already demonstrates every protocol technique this design needs.
 
 ```mermaid
 flowchart LR
-    K["physical key held<br/>(keyboard fw repeat ~ configurable)"] --> KR["kernel EV_REP<br/>REP_DELAY/REP_PERIOD events"]
+    K["physical key held<br/>(keyboard fw repeat)"] --> KR["kernel EV_REP<br/>value=2 events"]
     KR --> KA["kanata main (2f84d17)<br/>allow-hardware-repeat default TRUE<br/>Repeat → replays saved rpt_action"]
-    KA --> UI["uinput 'kanata'<br/>keydown … value=2 repeats … keyup"]
-    UI --> UM["umbriel (wlroots 0.20)<br/>[input.keyboard] repeat_rate=25 delay=600"]
+    KA -->|"managed keys: replay is a<br/>set-diff no-op (or macro re-run trap)"| KA2["fresh keydown/keyup events only"]
+    KA -->|"passthrough value=2"| UI["uinput 'kanata'"]
+    KA2 --> UI
+    UI --> LI["libinput: kernel key repeat<br/>DROPPED (evdev-fallback.c:591)"]
+    LI --> UM["umbriel (wlroots 0.20)<br/>[input.keyboard] repeat_rate=25 delay=600<br/>set_repeat_info → re-sends repeat_info<br/>to all clients live"]
     UM --> RI["wl_keyboard.repeat_info<br/>→ focused client"]
-    RI --> CL["client-side repeat<br/>(kitty, GTK, Xwayland…)"]
-    UI --> CL
+    RI --> CL["client-side repeat<br/>(kitty, GTK…) — the ONLY repeat"]
+    UM --> CL
 ```
 
 | Layer | Who controls it | Per-key? | Accelerating? | Actionable via |
 |---|---|---|---|---|
 | Keyboard firmware | keyboard itself | no | no | rarely |
-| Kernel EV_REP | udev/hwdb per device | per-device | no | mostly moot (kanata consumes) |
-| kanata passthrough | `allow-hardware-repeat` (default **true**, [defcfg.rs](https://github.com/jtroo/kanata/blob/2f84d17/parser/src/cfg/defcfg.rs)) | per-key (rpt replays outer action) | no | config today |
+| Kernel EV_REP | udev/hwdb per device | per-device | no | moot — dropped by libinput before umbriel (`evdev-fallback.c:591`) |
+| kanata passthrough | `allow-hardware-repeat` (default **true**, [defcfg.rs](https://github.com/jtroo/kanata/blob/2f84d17/parser/src/cfg/defcfg.rs)) | per-key (rpt replays outer action) | no | ingress-side only — see rpt trap |
 | uinput → compositor | kanata output logic | no | no | — |
-| umbriel repeat info | `[input.keyboard]` (+ per-device sections!) | per-keyboard | no | config today |
+| umbriel repeat info | `[input.keyboard]` (+ `[[input.device]]` per-name!) | per-keyboard | no | config today; **re-sent live** to clients on change |
 | client repeat | each client | no | no | via repeat_info only |
 | **synthesized tap streams** | any emitter (kanata TCP vkeys, patched kanata, patched umbriel) | **per-key** | **yes** | the design below |
 
 Notable finds along the trace:
 
-- **umbriel per-keyboard config exists**
-  ([config.toml](/usr/local/share/umbriel/config.toml#L273-L279): `[input.keyboard."Acme Split Keyboard"]`
-  with its own `repeat_rate`). Both kanata instances name their uinput output
-  `kanata` (deliberately, see [pedal.srv.pb](/kinesis/kanata/tcp-control/pedal.srv.pb)
-  output-naming note), so a per-device section for `kanata` ≈ global for
-  kanata-processed keys — usable, but still flat.
+- **umbriel per-keyboard config exists — but the syntax is
+  `[[input.device]] name = "kanata"`** (exact-name match,
+  [config.cpp:2533](https://github.com/noctalia-dev/umbriel/blob/71291ac/src/config/config.cpp#L2533);
+  `Keyboard::applyConfig` → `findDevice(m_deviceName)` → per-device
+  `repeatRate`/`repeatDelay` → `wlr_keyboard_set_repeat_info`,
+  [keyboard.cpp:47-79](https://github.com/noctalia-dev/umbriel/blob/71291ac/src/input/keyboard.cpp#L47)).
+  Note: the shipped default config's commented example
+  `[input.keyboard."Acme Split Keyboard"]` does **not** match the implemented
+  array-of-tables syntax (config.cpp errors on it) — the shipped comment is
+  misleading. Both kanata instances name their uinput output `kanata`
+  (deliberately, see [pedal.srv.pb](/kinesis/kanata/tcp-control/pedal.srv.pb)
+  output-naming note) and neither is a Wayland-virtual keyboard, so **one
+  `[[input.device]]` section covers everything** — usable, but still flat.
+  Validated ranges: rate 0–1000, delay 0–10000
+  ([config.cpp:1561-1562](https://github.com/noctalia-dev/umbriel/blob/71291ac/src/config/config.cpp#L1561)).
 - **kanata TCP protocol is richer than the dial use needed**
   ([tcp_protocol/src/lib.rs](https://github.com/jtroo/kanata/blob/2f84d17/tcp_protocol/src/lib.rs)):
   server pushes `LayerChange` on *every* layer change
@@ -127,9 +140,15 @@ Notable finds along the trace:
 
 Edit the managed default template behind
 [`umbriel.etc.pb`](/umbriel.etc.pb) / user config include: e.g.
-`repeat_rate = 50`, `repeat_delay = 350`. Applies session-wide. Whether it can
-be applied *live* (reload mechanism, repeat_info propagation) is the companion
-[live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) investigation.
+`repeat_rate = 50`, `repeat_delay = 350` (or scope it to the kanata uinput
+keyboards via `[[input.device]] name = "kanata"`). Applies session-wide — and
+per the companion investigation, a repeat_info change **is re-sent live to all
+clients** (`wlr_keyboard_set_repeat_info` → seat listener →
+`wl_keyboard_send_repeat_info` per client resource,
+[wlr_seat_keyboard.c:379-397](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/types/seat/wlr_seat_keyboard.c#L379));
+the open question is only whether *repeating clients* re-read it mid-hold.
+Reload mechanics are the companion
+[live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) lane.
 This satisfies "increase the key repeat rate somehow" but not the per-key ramp.
 
 # Option 1 — kanata-hosted ramp daemon (recommended build)
@@ -248,10 +267,12 @@ release or tap", and Press on an already-pressed vkey is an idempotent no-op):
   `repeat_rate` freely. Costs one ~50-byte loopback message per repeat —
   nothing at 40/s.
 - **B. Switch to a held key.** One final `ActOnFakeKey Press` on the bare-keycode
-  vkey and pgup is genuinely down; repeats now come from the *downstream*
-  machinery (client-side repeat, and/or whatever compositor-side repeat
-  umbriel does — see the companion trace); `Release` on layer exit. Two real
-  catches with today's umbriel config (`repeat_rate = 25`, `repeat_delay = 600`):
+  vkey and pgup is genuinely down; repeats now come from client-side repeat
+  (confirmed: there is **no** compositor-side repeat for clients in this
+  stack — wlroots 0.20 has none, umbriel's timer repeats bind actions only);
+  `Release` on layer exit. X11-via-satellite repeat behavior is uninspected.
+  Two real catches with today's umbriel config (`repeat_rate = 25`,
+  `repeat_delay = 600`):
   1. **Re-arm hitch**: the client's repeat timer starts when it sees the
      keydown, so the switch moment stalls `repeat_delay` (600ms) and then
      repeats at the *flat global* rate — likely slower than the ramp floor.
@@ -269,12 +290,20 @@ release or tap", and Press on an already-pressed vkey is an idempotent no-op):
   (`(multi pgup (layer-while-held rate-ramp))` — no macro-tap, no double-fire
   because the daemon never taps), and the daemon uses the layer edges not to
   tap but to **step umbriel's repeat_rate up over time**, restoring on keyup.
-  All repeats are then native (X11 apps, games, client repeat semantics all
-  just work), acceleration is rate-stepping, and kanata's only job is the
-  edge feed — its most robust role. Feasibility hangs entirely on the
-  companion question: can repeat_rate be mutated live, and does a
-  mid-repeat client honor the new `wl_keyboard.repeat_info`? That is the
-  [live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) lane.
+  All repeats are then native (client repeat semantics just work), and
+  kanata's only job is the edge feed — its most robust role. This now has
+  **strong protocol backing** from the companion investigation: live
+  repeat_info re-sends are protocol-blessed and already wired end-to-end
+  (reload → `applyConfig` → `set_repeat_info` → immediate re-send to all
+  clients). The single remaining unknown is whether a mid-repeat client
+  re-reads the new rate without restarting its delay timer — decidable by
+  the zero-code experiment in
+  [umbriel-repeat](/design/key-repeat/umbriel-repeat.glm53.md) (edit rate +
+  reload while holding a key in kitty). Note the companion also ranks an
+  **umbriel-native alternative** (~60–100 LOC patch, option A″ there: an
+  in-compositor ramp timer re-sending repeat_info) which delivers C without
+  any daemon or TCP — the kanata-edge version matters only if we refuse to
+  patch umbriel.
 
 Recommendation: A now; B never without raised rates (it exists on the menu
 mostly to explain C); C as the end-state if live mutation proves out — the
@@ -298,13 +327,20 @@ graduation path if the daemon proves annoying.
 
 The compositor sees every key before forwarding and owns `repeat_info`; a
 per-key repeat override or synthesized-repeat patch there is arguably the
-"right" layer (no coordination protocol needed at all). That lane — pipeline
-trace, live mutation, patch surface — is exactly what the companion docs
-cover: [umbriel-repeat.glm53.md](/design/key-repeat/umbriel-repeat.glm53.md)
-and [umbriel-live-reload.glm53fx.md](/design/key-repeat/umbriel-live-reload.glm53fx.md).
-Tradeoff vs Option 1: no helper daemon, but a patch to maintain on a
-third-party compositor (or upstreamable feature request), vs kanata's
-already-deployed, already-proven TCP surface.
+"right" layer (no coordination protocol needed at all). That lane is now
+mapped by [umbriel-repeat.glm53.md](/design/key-repeat/umbriel-repeat.glm53.md):
+headline verdicts — repeat is client-side only, live repeat_info re-sends are
+protocol-blessed and already wired through config reload, per-device config
+is `[[input.device]] name = "kanata"` (the shipped dotted-example comment is
+wrong syntax), and patch options rank A′ (two-rate toggle, ~20–40 LOC) /
+A″ (stepped acceleration, ~60–100 LOC) / B (compositor-synthesized taps,
+~150–250 LOC, most uniform) / C (`key-tap` IPC action). One zero-code
+experiment gates the cheap ones: raise `repeat_rate`, reload, and see if a
+key already held in kitty speeds up mid-hold.
+[live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) covers the
+reload/runtime-set mechanics. Tradeoff vs Option 1: no helper daemon, but a
+patch to maintain on a third-party compositor (or upstreamable feature
+request), vs kanata's already-deployed, already-proven TCP surface.
 
 # Not pursued (noted for completeness)
 
@@ -347,8 +383,11 @@ already-deployed, already-proven TCP surface.
   — the producer/consumer TCP pattern (vkey lease guards) this design
   simplifies; [pedal.srv.pb](/kinesis/kanata/tcp-control/pedal.srv.pb) shows
   the ChangeLayer consumer side and uinput output-naming constraint.
-- [umbriel-repeat.glm53.md](/design/key-repeat/umbriel-repeat.glm53.md),
+- [umbriel-repeat.glm53.md](/design/key-repeat/umbriel-repeat.glm53.md)
+  — landed: repeat pipeline trace (client-side only; libinput drops kernel
+  repeats; live repeat_info re-send wired), per-key patch options A′/A″/B/C
+  with the kitty hold-reload experiment gating them.
   [umbriel-live-reload.glm53fx.md](/design/key-repeat/umbriel-live-reload.glm53fx.md)
-  — companion investigations (compositor-side lever).
+  — companion live-reload investigation (fx agent).
 - [config.adoc allow-hardware-repeat](https://github.com/jtroo/kanata/blob/2f84d17/docs/config.adoc#L5021-L5039)
   — upstream's own Wayland guidance this design adopts.
