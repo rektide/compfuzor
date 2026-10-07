@@ -17,6 +17,12 @@ the render must not even regenerate the live config, because /etc/kanata/
 config.kbd symlinks at the ETC_FILES target and a live render would
 overwrite it (the authored body carries the not-yet-adopted Kinesis
 exclusion).
+
+The uinput udev rule is kanata-owned: a byte-exact copy of the vendor
+/usr/lib/udev/rules.d/50-kanata-uinput.rules, staged in ETC and linked
+to the same basename in /etc/udev/rules.d (masking the vendor file while
+the package is installed, surviving its removal). No udev reload happens
+here -- that is cutover territory.
 """
 
 from __future__ import annotations
@@ -37,6 +43,11 @@ SCRATCH = ROOT / ".test-agent" / "kanata-source"
 MAIN = "kanata.srv.pb"
 HELPERS = ("kanata-blueturn.srv.pb", "kinata.srv.pb")
 OWNED = (MAIN, *HELPERS)
+
+UDEV_RULE = "KERNEL==\"uinput\", MODE=\"0660\", GROUP=\"input\", OPTIONS+=\"static_node=uinput\"\n"
+UDEV_RULE_NAME = "50-kanata-uinput.rules"
+VENDOR_RULE = Path("/usr/lib/udev/rules.d") / UDEV_RULE_NAME
+UDEV_DEST = f"/etc/udev/rules.d/{UDEV_RULE_NAME}"
 
 # The retired /usr/lib/systemd/system/kanata.service schema (the helpers
 # already carried it; main adopts it verbatim modulo identity + ExecStart).
@@ -138,6 +149,10 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def stat_mode(path: Path) -> int:
+    return path.stat().st_mode & 0o777
+
+
 def tree_state(path: Path) -> dict[str, str]:
     """path -> sha256 (files) or 'link:target' (symlinks) for a fence snapshot."""
     state: dict[str, str] = {}
@@ -161,9 +176,11 @@ def live_fence_snapshot() -> dict:
                   for p in Path("/etc/systemd/system").glob("kinata*")}
     sysusers = {str(p): f"link:{os.readlink(p)}" if p.is_symlink() else sha(p)
                 for p in Path("/etc/sysusers.d").glob("kanata*")}
+    udev = {str(p): f"link:{os.readlink(p)}" if p.is_symlink() else sha(p)
+            for p in Path("/etc/udev/rules.d").glob("kanata*")}
     passwd = run("getent", "passwd", "_kanata", check=False)
     group = run("getent", "group", "_kanata", check=False)
-    return {"dirs": dirs, "units": unit_glob, "sysusers": sysusers,
+    return {"dirs": dirs, "units": unit_glob, "sysusers": sysusers, "udev": udev,
             "passwd": passwd, "group": group}
 
 
@@ -286,15 +303,29 @@ def main() -> None:
             if (main_bin / script).exists():
                 raise AssertionError(f"apt lane generated without PKGS: {main_bin / script}")
 
-        # link plan: unit + fragment + config records present for the
-        # future handoff; nothing here applies them
+        # link plan: unit + fragment + config + udev rule records present
+        # for the future handoff; nothing here applies them
         plan = json.loads((srv / "kanata-main" / "links.json").read_text())
         dests = {link["dest"] for link in plan["links"]}
         for dest in ("/etc/systemd/system/kanata.service",
                      "/etc/sysusers.d/kanata-main.conf",
-                     "/etc/kanata/config.kbd"):
+                     "/etc/kanata/config.kbd",
+                     UDEV_DEST):
             if dest not in dests:
                 raise AssertionError(f"link record for {dest} missing from plan: {dests}")
+
+        # kanata-owned uinput udev rule: byte-exact vendor copy, 0644,
+        # same-basename /etc link (masks the vendor file until removal)
+        rule = main_etc / UDEV_RULE_NAME
+        if not rule.is_file() or rule.read_text() != UDEV_RULE:
+            raise AssertionError(
+                f"udev rule must be the byte-exact vendor copy:\n{rule}\n"
+                f"expected: {UDEV_RULE!r}\ngot: {rule.read_text() if rule.exists() else '<missing>'}"
+            )
+        if VENDOR_RULE.is_file() and VENDOR_RULE.read_text() != UDEV_RULE:
+            raise AssertionError("vendor rule changed upstream; re-copy the exact content")
+        if stat_mode(rule) != 0o644:
+            raise AssertionError(f"udev rule mode must be 0644, got {oct(stat_mode(rule))}")
 
         # authored config body unchanged (binding + device bodies)
         config = (main_etc / "kanata.kbd").read_text()
@@ -346,7 +377,8 @@ def main() -> None:
         assert_unchanged(fence_before, live_fence_snapshot(), "live fence")
 
     print("ok: kanata source services (canonical unit, one identity declarer, "
-          "no Debian dependency, configs unchanged, live deployment untouched)")
+          "no Debian dependency, owned uinput rule, configs unchanged, "
+          "live deployment untouched)")
 
 
 if __name__ == "__main__":

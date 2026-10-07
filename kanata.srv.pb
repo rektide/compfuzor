@@ -112,6 +112,13 @@
         dest: /etc/kanata/config.kbd
         scope: system
         policy: replace
+      # uinput node permission rule (content below in ETC_FILES); same
+      # basename under /etc/udev/rules.d masks the vendor copy while the
+      # package remains installed, and survives its removal
+      - src: "{{ETC}}/50-kanata-uinput.rules"
+        dest: /etc/udev/rules.d/50-kanata-uinput.rules
+        scope: system
+        policy: replace
     ETC_FILES:
       - name: kanata.kbd
         mode: "0644"
@@ -169,5 +176,22 @@
           ;; always-on rule never parsed, let alone pinned anything);
           ;; zombie links clear with
           ;; a controller power cycle (bluetoothctl power off; on).
+      # /dev/uinput node permissions -- byte-exact copy of the package's
+      # /usr/lib/udev/rules.d/50-kanata-uinput.rules: apt remove deletes
+      # the vendor file, and /dev/uinput keeps its current 0660
+      # root:input only until the next udev reload/reboot -- this rule
+      # is what makes group-input access survive the package (how
+      # _kanata opens uinput alongside the units' DeviceAllow/
+      # BindPaths). ydotool's 80-uinput and sunshine's rules grant the
+      # same access today, but kanata owns its dependency here instead
+      # of relying on discretionary siblings. The links lane applies it
+      # (then udevadm reload/trigger or reboot) at cutover -- not live
+      # yet; modprobe@uinput.service Wants/After above stays the
+      # generic module bootstrap, and no package modules-load file
+      # exists to replace.
+      - name: 50-kanata-uinput.rules
+        mode: "0644"
+        content: |
+          KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
   tasks:
     - import_tasks: tasks/compfuzor.includes
