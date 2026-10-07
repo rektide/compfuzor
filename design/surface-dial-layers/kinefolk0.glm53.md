@@ -72,7 +72,7 @@ key can be authored to emit. Allocation status today:
 |---|---|
 | F13–F20 | Bundled `f` context: hk1–hk8 → F13–F20, "confirmed portion only" |
 | F21–F22 | Earmarked by [`kinata.srv.pb`](/kinata.srv.pb) on-board half (`[hk5]>[f21]`, `[hk6]>[f22]`, then kanata maps f21→lalt/f22→lmet) — declared, not evidenced as applied |
-| F23–F24 | Unallocated; no bundled or declared consumer |
+| F23–F24 | Unallocated and unaccepted — competing candidates: keyboard-held mode signal (registered idea) vs dial direction events ([routing](/design/surface-dial-layers/routing0.gpt61s.md)) |
 
 The registry is explicit that it "invents" no F21–F24 assignment
 ([`context/example/src/lib.rs:38–49`](file:///home/rektide/src/kinefolk-rs/context/example/src/lib.rs)).
@@ -108,10 +108,16 @@ facility that could hold or publish a live mode bit.
 
 1. *Distinct signal keys.* Kinefolk can author a physical key to emit an
    unallocated code (F23/F24) as an external-consumer mode/precision signal.
-   A dedicated keycode is orthogonal to the Shift bit, carries device
-   provenance, and avoids both the modifier-is-a-bit-not-a-count limit and the
-   same-coordinate release collision recorded in the
-   [Kanata assessment](/design/surface-dial-input/kanata-assessment0.gpt61s.md).
+   A dedicated keycode is an orthogonal **vocabulary convention**: it avoids
+   the modifier-is-a-bit-not-a-count limit and never contends with the Shift
+   coordinate (no same-code release collision, per the
+   [Kanata assessment](/design/surface-dial-input/kanata-assessment0.gpt61s.md)).
+   It is not intrinsic device provenance — any producer can emit the same
+   code, and a merged stream still loses original device identity (see the
+   [routing assessment](/design/surface-dial-layers/routing0.gpt61s.md)).
+   The same F23/F24 tail is also a competing candidate for **dial direction
+   events** there; no allocation is accepted, and the two roles require
+   coordination.
 2. *Keyboard-local modifier conditioning exists but is narrow.* Macro
    co-triggers are physical modifier positions on this keyboard
    ([`capabilities.rs:86–130`](file:///home/rektide/src/kinefolk-rs/kinesis/model/src/kb975/capabilities.rs)):
@@ -127,9 +133,13 @@ facility that could hold or publish a live mode bit.
    dial, the compositor, or host state, and kinefolk has no runtime to observe
    or publish anything. Sourcing "is physical Shift held?" is a daemon-side
    (or compositor/IPC-side) responsibility, outside kinefolk entirely.
-2. *Shift-conditioned emission without consuming Shift.* Conditioning a mode
-   signal on Shift via on-board remaps would reinterpret a global typing key —
-   the exact silent redefinition the brief's boundaries exclude.
+2. *Continuous held-Shift state publication.* Conditioning a **separate
+   trigger** on Shift is source-permitted — macro co-triggers do exactly that
+   without consuming Shift — and is distinct from continuous held-state
+   publication. What is absent: the current Kinefolk API provides no
+   transparent global Shift-down/up side-effect hook, and no firmware
+   construction has been demonstrated that preserves typing Shift while
+   continuously publishing its held state.
 3. *Deployment dependency.* None of the dial path may require kinefolk; the
    daemon could equally use its own distinct-key chord or an IPC state with no
    kinefolk involvement.
@@ -145,13 +155,15 @@ document in an appropriate domain grouping plus a minimal index cross-link:
 - Commit: `kkmlvqtq` / git `b335b9541ff4` — "Register host-signal idea for
   external precision consumers" (only those two files).
 
-The registered scope: (a) authoring dedicated key codes as provenance-preserving
-host-consumed signals (F23/F24 named as candidates, F13–F20 and F21/F22
-allocations respected); (b) a future reserved-purpose metadata channel so
-diffs/imports surface consumer dependencies instead of silently repurposing a
-signal key; (c) a possible future external-remapper export seam — explicitly
-noted as nonexistent today. Registration records direction only; no
-implementation is requested.
+The registered scope: (a) authoring dedicated key codes as host-consumed
+signal **vocabulary** (F23/F24 named as unaccepted candidates that also
+compete with the dial direction-event role in the
+[routing assessment](/design/surface-dial-layers/routing0.gpt61s.md);
+F13–F20 and F21/F22 allocations respected); (b) a future reserved-purpose
+metadata channel so diffs/imports surface consumer dependencies instead of
+silently repurposing a signal key; (c) a possible future external-remapper
+export seam — explicitly noted as nonexistent today. Registration records
+direction only; no implementation is requested.
 
 # Current capabilities vs registered future proposals
 
@@ -176,7 +188,9 @@ implementation is requested.
 - **Allocation lives in prose.** F21/F22 are earmarked only in playbook
   comments and F23/F24 nowhere machine-readable; the registered metadata idea
   exists precisely because nothing today would catch a future context
-  repurposing a reserved code.
+  repurposing a reserved code. F23/F24 additionally compete between the
+  keyboard mode-signal role registered in kinefolk-rs and the dial
+  direction-event role in the routing assessment — neither accepted.
 - **Unverified daemon key bitmap.** Whether the dial daemon's virtual keyboard
   advertises F13–F24 is not established by the sources read here (the Kanata
   assessment lists only a partial capability set). Any distinct-key chord
@@ -197,12 +211,33 @@ host-signal idea rather than in another playbook comment.
 
 - [Inquiry brief](/design/surface-dial-layers/brief0.gpt61s.md): direction and
   boundaries this study operated under.
+- [Routing assessment](/design/surface-dial-layers/routing0.gpt61s.md): F23/F24
+  dial direction-event candidacy and the device-provenance limits that bound
+  this study's signal-vocabulary claims.
 - [Input assessment](/design/surface-dial-input/assessment0.gpt61s.md): the
   modifier-is-a-bit limit and cross-keyboard mask aggregation this study's
-  provenance argument builds on.
+  vocabulary argument builds on.
 - [Kanata assessment](/design/surface-dial-input/kanata-assessment0.gpt61s.md):
-  same-coordinate release collision motivating dedicated signal codes.
+  same-coordinate release collision motivating an orthogonal signal vocabulary.
 - [`kinata.srv.pb`](/kinata.srv.pb): declared F21/F22 earmark and the
   kinefolk-on-board division of labor.
 - [Registered idea in kinefolk-rs](file:///home/rektide/src/kinefolk-rs/design/host-signal/idea0.glm53.md):
   the registration artifact referenced above.
+
+# Addendum: precision corrections from parent review
+
+Two claims were narrowed after reading the [routing
+assessment](/design/surface-dial-layers/routing0.gpt61s.md); the original
+stage is preserved in the prior commit and the inline text above reflects both
+corrections. First, a reserved F23/F24 tail is an orthogonal **vocabulary
+convention**, not intrinsic device provenance: any producer can emit the code,
+and merged streams still lose original device identity — provenance is a
+publisher-side designation. F23/F24 also compete between this study's
+keyboard mode-signal framing and the routing assessment's dial direction
+events; no allocation is accepted, and the roles need coordination. Second,
+Shift-conditioned emission was overstated: macro co-triggers permit a separate
+trigger conditioned on Shift without consuming it, distinct from continuous
+held-state publication. The accurate limit is the absence of a transparent
+global Shift-down/up side-effect hook and of any demonstrated firmware
+construction that preserves typing Shift while continuously publishing its
+held state.
