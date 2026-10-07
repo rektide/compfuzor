@@ -235,8 +235,8 @@
 
           - `kanata-blueturn.srv.pb` -- the pedal's kanata instance
           - `bluetooth-justworkrepair.etc.pb` -- BlueZ bonding repair
-          - `kernel-usb-autosuspend.etc.pb` -- btusb idle delays
-            (2 h on the UB500 dongle)
+          - `kernel-usb-autosuspend.etc.pb` -- usb runtime suspend off
+            (the adapter never sleeps)
           - `design/blueturn/` -- research + kernel archaeology
   tasks:
     - import_tasks: tasks/compfuzor.includes

@@ -11,74 +11,53 @@
     BINS:
       - name: setup.sh
         content: |
-          echo $AUTOSUSPEND | sudo tee /sys/module/usbcore/parameters/autosuspend || true
-          # best-effort: some devices reject delay writes (e.g. PM QoS
-          # or in-use interfaces); nothing here may fail the oneshot.
-          # per-device delays are MILLISECONDS while usbcore's autosuspend
-          # param above is SECONDS -- the original loop wrote the seconds
-          # value into the ms files, silently giving most devices a 0.9s
-          # delay while rejecting devices kept the 15 min default.
-          # btusb adapters are skipped here: udev owns their idle delays
-          # (btusb-idle.rules -- 14 min blanket, 2 h override for the
-          # adapter hosting the Surface Dial + BlueTurn).
-          ( find -L /sys/bus/usb/devices -maxdepth 3 -name "autosuspend_delay_ms" -print0 |
+          # policy: USB runtime PM stays OFF on this box. BLE HID bearer
+          # deaths (Surface Dial, iRig BlueTurn), daily xhci
+          # invalid-context resets of the BT dongle under suspend churn,
+          # and a historically slow-to-wake keyboard all trace to runtime
+          # suspend; wake-from-device is only reliable on an awake device.
+          # usbcore is built in, so modprobe.d cannot set its param --
+          # this oneshot applies it every boot.
+          echo -1 | sudo tee /sys/module/usbcore/parameters/autosuspend || true
+          # btusb force-enables autosuspend in probe unless the module
+          # param says otherwise; flip it live too (param stays rw).
+          echo N | sudo tee /sys/module/btusb/parameters/enable_autosuspend 2>/dev/null || true
+          # best-effort: pin every device's control to on; catches drivers
+          # that force control=auto with their own delay. nothing here may
+          # fail the oneshot.
+          ( find -L /sys/bus/usb/devices -maxdepth 3 -path "*/power/control" -print0 |
           while IFS= read -r -d '' usb
           do
-            dev="${usb%/power/autosuspend_delay_ms}"
-            if ls -l "$dev"/*/driver 2>/dev/null | grep -q 'drivers/btusb$'
-            then
-              echo "skip btusb adapter: $dev"
-              continue
-            fi
-            echo "$usb -> $AUTOSUSPEND_MS"
-            echo $AUTOSUSPEND_MS | sudo tee "$usb" >/dev/null 2>&1 || true
+            echo on | sudo tee "$usb" >/dev/null 2>&1 || true
           done ) || true
           exit 0
-    # btusb runtime PM shapes bearer life for every BLE HID device (Surface
-    # Dial, iRig BlueTurn): a suspended adapter silently kills LE bearers
-    # minutes into a session, and suspend/resume churn on the UB500 dongle
-    # showed up as daily xhci "invalid context state" resets. The 2026-10
-    # audit found the previous always-on rule was triply dead: its "\\"
-    # line continuations failed udev parsing outright (udevadm: Invalid key
-    # '\ATTR'), it matched interface nodes, and usb interfaces carry no
-    # power/ runtime-PM files -- the writable knobs live on the parent
-    # usb_device, reached via ../ from the btusb interface bind event.
+    # history: the 2026-10 audit found the previous always-on rule was
+    # triply dead -- doubled-backslash continuations failed udev parsing
+    # outright (udevadm: Invalid key), it matched interface nodes, and usb
+    # interfaces carry no power/ runtime-PM files at all. the writable
+    # knobs live on the usb_device. before that fix the UB500 (sole btusb
+    # adapter, hosts Dial + BlueTurn) had ~24 days runtime-suspended with
+    # daily xhci resets.
     ETC_FILES:
       - name: usb-autosuspend.conf
         content: |
-          options usbcore autosuspend={{autosuspend}}
-          # Escape hatch: keep every btusb adapter awake unconditionally by
-          # opting btusb out of runtime PM entirely (module default is Y,
-          # which lets btusb enable autosuspend; the udev delays above then
-          # shape the idle window instead). Uncomment if delay-shaped
-          # suspend still kills bearers (symptoms: ~10 min ATT death,
-          # daily xhci invalid-context resets of the dongle):
-          #options btusb enable_autosuspend=0
-      - name: btusb-idle.rules
+          # USB devices never runtime-suspend on this box.
+          options usbcore autosuspend=-1
+          # btusb opts itself back into autosuspend in probe unless told
+          # not to -- the adapter hosting the Dial/BlueTurn never sleeps.
+          options btusb enable_autosuspend=0
+      - name: usb-always-on.rules
         content: |
-          # idle delays before a btusb adapter may runtime-suspend. rules run
-          # on the btusb interface add/bind event and write the PARENT
-          # usb_device's power knobs -- interfaces have none of their own.
-          # blanket: any btusb adapter idles {{bt_autosuspend}}s first
-          ACTION=="add|bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", DRIVER=="btusb", \
-            ATTR{../power/autosuspend_delay_ms}="{{bt_autosuspend * 1000}}"
-          # override: the UB500 dongle (2357:0604) hosts the Surface Dial +
-          # iRig BlueTurn; 2 h idle so long sessions never see the adapter
-          # sleep. Listed after the blanket rule, so on the same event its
-          # write lands last and wins.
-          ACTION=="add|bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", DRIVER=="btusb", \
-            ATTRS{idVendor}=="2357", ATTRS{idProduct}=="0604", \
-            ATTR{../power/autosuspend_delay_ms}="{{bt_override_autosuspend * 1000}}"
+          # belt for the boot-time hammer in setup.sh: hotplugged devices
+          # pin awake too. device-level on purpose -- usb interfaces carry
+          # no power/ runtime-PM files, and the prior interface-level rule
+          # wrote ATTRs that never existed.
+          ACTION=="add|bind", SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", \
+            ATTR{power/control}="on"
     LINKS:
       - src: "{{ETC}}/usb-autosuspend.conf"
         dest: "/etc/modprobe.d/usb-autosuspend.conf"
-      - src: "{{ETC}}/btusb-idle.rules"
-        dest: "/etc/udev/rules.d/90-btusb-idle.rules"
-    ENV:
-      AUTOSUSPEND: "{{autosuspend}}"
-      AUTOSUSPEND_MS: "{{autosuspend * 1000}}"
-    autosuspend: 900               # seconds; global usbcore idle delay
-    bt_autosuspend: 840            # seconds; blanket btusb adapter idle (14 min)
-    bt_override_autosuspend: 7200  # seconds; UB500 (Dial + BlueTurn) idle (2 h)
+      - src: "{{ETC}}/usb-always-on.rules"
+        dest: "/etc/udev/rules.d/90-usb-always-on.rules"
   tasks:
     - import_tasks: tasks/compfuzor.includes

@@ -76,10 +76,10 @@
           ;; 1 LEFT=up RIGHT=down; 2 LEFT=pgup RIGHT=pgdn; 3 LEFT=left
           ;; RIGHT=right. momentary keys; no long/short distinction.
           ;; half-attached bearer ("Connected" but no HID node, silent
-          ;; ATT death ~10min): btusb adapter autosuspend -- idle-delayed
-          ;; via kernel-usb-autosuspend.etc.pb (2 h on the UB500 since
-          ;; 2026-10; the prior always-on rule never parsed, let alone
-          ;; pinned anything); zombie links clear with
+          ;; ATT death ~10min): btusb adapter autosuspend -- off entirely
+          ;; since 2026-10 via kernel-usb-autosuspend.etc.pb (the prior
+          ;; always-on rule never parsed, let alone pinned anything);
+          ;; zombie links clear with
           ;; a controller power cycle (bluetoothctl power off; on).
   tasks:
     - import_tasks: tasks/compfuzor.includes
