@@ -12,10 +12,10 @@ while IFS= read -r _cf_entry; do
     _cf_matches+=("$_cf_match")
   done < <(compgen -G "$_cf_pattern")
 
-  # NOTE: avoid bash array-length syntax (dollar-brace-hash) here -- the
-  # BINS wrapper templates src files through Jinja, whose comment tag
-  # opener collides with it.
-  if [ -z "${_cf_matches[*]}" ]; then
+  # array-length sigil is emitted via the string-expression idiom (see
+  # wg.srv.pb): a literal brace-hash here would open a Jinja comment when
+  # the BINS wrapper templates this file.
+  if [ ${{'{#'}}_cf_matches[@]} -eq 0 ]; then
     printf 'No matches for KERNEL_SYSFS pattern: %s\n' "$_cf_pattern" >&2
     exit 1
   fi

@@ -142,10 +142,10 @@ fi
 # Keys = declared intent: compfuzor (preferred) merged with system, so stale
 # system-only entries still surface. Requiring data here rejects the case where
 # the only key source is missing (nothing to diff against).
-if [ "${#v_cf[@]}" -gt 0 ]; then
+if [ "${{'{#'}}v_cf[@]}" -gt 0 ]; then
   keylist="${!v_cf[@]}"
   if [ "$want_sys" -eq 1 ]; then keylist="$keylist ${!v_sys[@]}"; fi
-elif [ "${#v_sys[@]}" -gt 0 ]; then
+elif [ "${{'{#'}}v_sys[@]}" -gt 0 ]; then
   keylist="${!v_sys[@]}"
 else
   die "no key-defining source available (need --compfuzor or --system with data)"
@@ -210,7 +210,7 @@ fi
 if [ "$out_json" -eq 1 ]; then
   sources_json=$(printf '%s\n' "${order[@]}" | jq -R . | jq -s .)
   cols_json=$(printf '%s\n' key status "${order[@]}" | jq -R . | jq -s .)
-  if [ "${#records[@]}" -gt 0 ]; then
+  if [ "${{'{#'}}records[@]}" -gt 0 ]; then
     printf '%s\n' "${records[@]}" \
       | jq -R --argjson cols "$cols_json" --argjson sources "$sources_json" --argjson drift "$drift" '
           [ split("\t") as $row
@@ -224,7 +224,7 @@ else
   printf 'key\tstatus'
   for src in "${order[@]}"; do printf '\t%s' "$src"; done
   printf '\n'
-  [ "${#records[@]}" -gt 0 ] && printf '%s\n' "${records[@]}"
+  [ "${{'{#'}}records[@]}" -gt 0 ] && printf '%s\n' "${records[@]}"
 fi
 
 exit "$drift"
