@@ -34,8 +34,8 @@ SCRATCH = ROOT / ".test-agent/keybindings-media-keys"
 
 # The exact spawn fragments each compositor must render for the fine-step
 # volume action the Surface Dial's dial rotation uses.
-NIRI_FINE_UP = 'spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.02+" "-l" "1.0";'
-UMBRIEL_FINE_UP = "spawn:'wpctl' 'set-volume' '@DEFAULT_AUDIO_SINK@' '0.02+' '-l' '1.0'"
+NIRI_FINE_UP = 'spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "0.01+" "-l" "1.0";'
+UMBRIEL_FINE_UP = "spawn:'wpctl' 'set-volume' '@DEFAULT_AUDIO_SINK@' '0.01+' '-l' '1.0'"
 
 
 def test_media_keys_model_producer() -> None:
@@ -98,7 +98,7 @@ def test_media_keys_model_producer() -> None:
         assert json.dumps("Shift+XF86AudioRaiseVolume") in fine_up and NIRI_FINE_UP in fine_up
         assert "allow-when-locked=true" in fine_up and "hotkey-overlay-title=\"Volume up (fine)\"" in fine_up
         coarse_up = (niri_generated / "media-volume-up.binding.kdl").read_text()
-        assert json.dumps("XF86AudioRaiseVolume") in coarse_up and '"0.06+"' in coarse_up
+        assert json.dumps("XF86AudioRaiseVolume") in coarse_up and '"0.03+"' in coarse_up
         mute = (niri_generated / "media-mute.binding.kdl").read_text()
         assert json.dumps("XF86AudioMute") in mute and json.dumps("Shift+XF86AudioMute") in mute
         mic = (niri_generated / "media-mic-mute.binding.kdl").read_text()

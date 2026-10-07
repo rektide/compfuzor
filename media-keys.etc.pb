@@ -31,16 +31,16 @@
 - hosts: all
   vars:
     TYPE: media-keys
-    NAME: media-keys
+    INSTANCE: main
     KEYBINDING_ACTIONS:
       media-volume-up:
-        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.06+", "-l", "1.0"]
+        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.03+", "-l", "1.0"]
       media-volume-down:
-        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.06-"]
+        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.03-"]
       media-volume-up-fine:
-        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.02+", "-l", "1.0"]
+        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.01+", "-l", "1.0"]
       media-volume-down-fine:
-        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.02-"]
+        exec: [wpctl, set-volume, "@DEFAULT_AUDIO_SINK@", "0.01-"]
       media-mute:
         exec: [wpctl, set-mute, "@DEFAULT_AUDIO_SINK@", toggle]
       media-mic-mute:
