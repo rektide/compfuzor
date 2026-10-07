@@ -49,6 +49,8 @@ After reviewing the prepared service declarations and their generated artifacts:
 
 The old enabled main-unit link points at Debian's vendor path. Repair that specific enable link for the owned canonical unit (e.g. deliberate `enable --force`) rather than leaving a dangling boot-time reference after removal. Do not publish live artifacts from disposable scratch roots; copy the selected generated files to durable Kanata material before linking them.
 
+Refreshing only the unit file would leave older generated installation composites/catalogs capable of composing the Debian apt lane. The requested preparation revision therefore adds an explicit per-config `KANATA_CONFIG_PRESERVE` generation flag, using the existing filesystem writer's `once` primitive. With that flag, rerendering the deployed main/BlueTurn material can refresh current declared units, rules, sysusers, installer compositions, and link plans while leaving existing keymap files byte-identical. Execution/package/thunk phases remain bypassed during that refresh; only the selected owned install lanes run afterward. Inert obsolete leaf files are left in place rather than pruned. Its isolated preservation test must pass before live use.
+
 The input units will recreate their virtual devices during this authorized cutover. A failed start requires recovery to the preserved previously working binary/unit/config state, not experimentation with the keyboard split or broad sandbox removal.
 
 # Configuration boundary retained
