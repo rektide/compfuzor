@@ -114,6 +114,8 @@ For the channel, design a **snapshot with designated source, generation/epoch, a
 
 State updates and dial events are separate streams. Log the state generation sampled at dispatch rather than promising instantaneous ordering at physical-event time. Keep policy configuration separate from held state; do not persist “Shift is held” across restarts. Reliability and action execution ordering should be designed, not replaced with a blanket catch-and-print policy.
 
+Direct actuation also moves eligibility out of Umbriel: its shortcut matcher applies lock, inhibition, and submap rules, whereas a daemon-issued audio command does not inherit those rules. Decide whether dial volume should intentionally remain available in those contexts. This matters more if the same mechanism later controls actions beyond volume; do not assume every future mode should bypass compositor policy.
+
 # Recommended next checkpoint
 
 1. **Logging-first:** add the smallest useful daemon observability slice in the existing layered variant, preserving current output behavior. Choose its source lineage deliberately before any deployment; the notification-timeout fork is a separate predecessor worth preserving.
