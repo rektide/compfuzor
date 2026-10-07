@@ -31,6 +31,10 @@ The missing flag is therefore addressed by an installed source artifact. Active 
 5. **Retain sandbox and no listener:** the replacement gains compiled TCP support; no consumer endpoint, broader network access, or command execution feature is introduced here. Endpoint/security changes are deliberate later configuration, not a blocker to building the capability.
 6. **Remove, not purge:** remove only package `kanata`; no autoremove. Its `prerm` stops canonical `kanata.service`, and purge would delete `_kanata`. Preserve configuration and identity.
 
+Review corrections before cutover: do not pin this machine's UID/GID in the portable playbook. Existing names retain their IDs under sysusers; fresh hosts use ordinary allocation. Carry the vendor's explicit empty `CapabilityBoundingSet=` into the owned units, and emit `Restart=no` explicitly. Leave inert historical artifacts alone; the handoff is not a cleanup pass.
+
+The removed package can retain conffile/postrm bookkeeping. A later `apt purge kanata` would still run its account-deletion hook, so that future action needs a deliberate identity-preservation plan rather than treating the removed package's residue as harmless cleanup.
+
 # Safe cutover shape
 
 After reviewing the prepared service declarations and their generated artifacts:
@@ -42,6 +46,8 @@ After reviewing the prepared service declarations and their generated artifacts:
 - Enable/start only the instances that were already deployed. Confirm their actual executable paths and active state; compare config hashes and account IDs to the pre-cutover capture.
 - Verify the Kanata-owned udev rule and module-loading dependency survive package removal. Reloading rule definitions is not permission to trigger every input device or reboot the host.
 - Record discovery/startup checks separately from manual caps/pedal behavior. Do not inject keys merely to claim end-to-end verification.
+
+The old enabled main-unit link points at Debian's vendor path. Repair that specific enable link for the owned canonical unit (e.g. deliberate `enable --force`) rather than leaving a dangling boot-time reference after removal. Do not publish live artifacts from disposable scratch roots; copy the selected generated files to durable Kanata material before linking them.
 
 The input units will recreate their virtual devices during this authorized cutover. A failed start requires recovery to the preserved previously working binary/unit/config state, not experimentation with the keyboard split or broad sandbox removal.
 
