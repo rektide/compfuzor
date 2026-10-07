@@ -20,6 +20,8 @@ an outer 120-second limit completed when given an adequate limit. Maintained
 [action](/doc/actions/README.md) guides and playbook-generated READMEs now describe
 the actual registry interface. See the
 [registry guide](/runtime/registry/README.md) for policy/selection schemas.
+Exact scoped checks, correction history and saved stages are in the
+[cutover completion checkpoint](/design/registry-discovery/implementation3.gpt61s.md).
 
 All native verification used disposable HOME/XDG/explicit SYSTEM policy roots,
 with service commands stubbed or never executed. This is **not a live deployment**:
