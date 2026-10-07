@@ -30,9 +30,24 @@
 
 ## Compfuzor implementation checkpoints
 
+- [Regression and documentation migration map](/design/registry-discovery/regression-map0.gpt61s.md)
+  — independent inventory of retained native behavior, obsolete wiring assertions,
+  isolation prerequisites and the next verification/fixture-migration slice.
+- [Prospective publication architecture](/design/registry-discovery/publication0.gpt6a.md)
+  — reviewed next slice: explicit prospective consumers, exact publication
+  transitions, coherent registry policy pairs and combined/system proof requirements.
+- [Generated/native implementation](/design/registry-discovery/implementation1.gpt61s.md)
+  — committed generated owner endpoints, advertised native batches, force policy,
+  real bundled closure and the first-install integration boundary.
 - [First executable rendezvous slice](/design/registry-discovery/implementation0.gpt61s.md)
   — shared library, reference registration, domain descriptions, Router/tab CLI,
   local source dependency wiring and isolated checks before generator cutover.
+
+## Coordination
+
+- [Architectural lead handoff](/design/registry-discovery/handoff0.gpt6a.md) — active
+  agent sessions, accepted Figments work, current code/checks, user decisions and
+  next review responsibilities for context rollover.
 
 ## Predecessor
 
