@@ -28,6 +28,8 @@ Use Sol M to implement `kanata-dial.etc.pb`, enhancing media-keys as a separate 
 - Distinguish whole-extension enablement from the momentary precision bit. Disabling the enhancement should fall back to existing media volume behavior, not leave F-key events unbound or a precision key held.
 - Current user-authored media actions are `0.03` plain and `0.01` Shift. Preserve these edits. Proposed extra precision `0.005` is only a configurable initial candidate; amounts remain a user decision.
 
+Subsequent user confirmation: [decisions0](/design/kanata-dial/decisions0.gpt61s.md) selects **`0.003`** and enhancement-only OFF with legacy fallback. The earlier numeric candidate is retained here as inquiry history, not the implementation default. Device-ID work is parked while this contribution is finished.
+
 # Functional TCP encoding candidate
 
 To avoid a redundant relay whose effect is already supplied by compositor keyboard Shift, consider:
