@@ -158,9 +158,12 @@ This satisfies "increase the key repeat rate somehow" but not the per-key ramp.
 (deflayer ramp-pgup _ _ _)   ;; transparent: other keys unaffected while held
 (deflayer ramp-pgdn _ _ _)
 
+;; bare keycodes, NOT (macro …): Tap = discrete down+up (tap phase),
+;; Press/Release = genuinely held key (continuous phase — see cruise
+;; strategies). A macro vkey self-completes and cannot be held.
 (defvirtualkeys
-  pgup-tap (macro pgup)
-  pgdn-tap (macro pgdn)
+  pgup-tap pgup
+  pgdn-tap pgdn
 )
 ```
 
@@ -230,6 +233,53 @@ Guards summary (user's ask, mapped):
 This daemon is materially *simpler* than the dial relay (one socket, no lease,
 no reset barrier, no two-instance fan-out) and could even live in the same
 `files/kanata-dial/`-style playbook family as a sibling TYPE.
+
+## Cruise strategies — "de-hold and switch to continuous"
+
+After the ramp converges there are three ways to run the long tail of the hold
+(kanata can inject all of them: vkey `Tap` and vkey `Press`/`Release` are both
+first-class, [config.adoc virtual keys](https://github.com/jtroo/kanata/blob/2f84d17/docs/config.adoc#L6138-L6180)
+— "press-virtualkey … will not be released until another action triggers a
+release or tap", and Press on an already-pressed vkey is an idempotent no-op):
+
+- **A. Cruise on floor-rate taps (default).** Keep emitting Taps at the ramp's
+  floor interval. For scrolling this is indistinguishable from real repeat;
+  no lease, no re-arm hitch, and the per-key rate can exceed umbriel's global
+  `repeat_rate` freely. Costs one ~50-byte loopback message per repeat —
+  nothing at 40/s.
+- **B. Switch to a held key.** One final `ActOnFakeKey Press` on the bare-keycode
+  vkey and pgup is genuinely down; repeats now come from the *downstream*
+  machinery (client-side repeat, and/or whatever compositor-side repeat
+  umbriel does — see the companion trace); `Release` on layer exit. Two real
+  catches with today's umbriel config (`repeat_rate = 25`, `repeat_delay = 600`):
+  1. **Re-arm hitch**: the client's repeat timer starts when it sees the
+     keydown, so the switch moment stalls `repeat_delay` (600ms) and then
+     repeats at the *flat global* rate — likely slower than the ramp floor.
+     B is only worth it if umbriel's rate/delay are raised — globally via
+     config, or live (which is exactly the companion live-reload lane).
+  2. **Lease**: a held Press *must* be Released; daemon crash = pgup stuck
+     down, scrolling forever. This reintroduces the dial relay's full lease
+     discipline (release-before-reapply on reconnect, ExecStopPost reset,
+     watchdog). Safety valve: kanata's output is a keycode set-diff that
+     dedups holders ([init0](/design/kanata-devices/init0.glm53.md)), so a
+     stuck pgup clears by tapping the physical pgup — its down/up cycle
+     releases the held output key.
+- **C. The pure-native graduation B hints at.** Skip synthesis entirely:
+  physical pgup maps to a *real* held pgup plus the layer edge
+  (`(multi pgup (layer-while-held rate-ramp))` — no macro-tap, no double-fire
+  because the daemon never taps), and the daemon uses the layer edges not to
+  tap but to **step umbriel's repeat_rate up over time**, restoring on keyup.
+  All repeats are then native (X11 apps, games, client repeat semantics all
+  just work), acceleration is rate-stepping, and kanata's only job is the
+  edge feed — its most robust role. Feasibility hangs entirely on the
+  companion question: can repeat_rate be mutated live, and does a
+  mid-repeat client honor the new `wl_keyboard.repeat_info`? That is the
+  [live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) lane.
+
+Recommendation: A now; B never without raised rates (it exists on the menu
+mostly to explain C); C as the end-state if live mutation proves out — the
+user's original "detect the page down, alter behavior live, undo on keyup"
+instinct realized with kanata supplying the edges and umbriel the rate.
 
 # Option 2 — patch kanata (source lane)
 
