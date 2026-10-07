@@ -104,3 +104,22 @@ Do not adopt a global submap solely to model a dial-local boolean. Do not demand
 - [Previous overall assessment](/design/surface-dial-input/assessment0.gpt61s.md): running compositor revision and the stock dial's synthetic Shift semantics.
 - [Kanata merger assessment](/design/surface-dial-input/kanata-assessment0.gpt61s.md): device-identity loss and same-key release hazards, motivating a separate physical precision signal.
 - [Producer authoring guide](/doc/config/keybinding-producers.md): source deployments can declare their own action/binding resources without moving dial policy into global media keys.
+
+# Addendum: deployed Kanata is not TCP-ready
+
+A subsequent read-only capability check narrows the upstream message-push option. `/usr/bin/kanata --help` listed no `-p` or `--port` argument. The [v1.9.0 CLI source](https://github.com/jtroo/kanata/blob/v1.9.0/src/main_lib/args.rs) exposes that argument only with the `tcp_server` feature. This is evidence that the installed binary lacks that facility, rather than merely having no configured listener.
+
+The installed `/usr/lib/systemd/system/kanata.service` also has:
+
+```ini
+User=_kanata
+ExecStart=/usr/bin/kanata --cfg /etc/kanata/config.kbd
+PrivateNetwork=true
+RestrictAddressFamilies=AF_AX25
+RestrictAddressFamilies=~AF_AX25
+IPAddressDeny=any
+```
+
+The declared [kinata service](/kinata.srv.pb) and [BlueTurn service](/kanata-blueturn.srv.pb) follow the same network-isolation pattern. A loopback listener inside a private network namespace would not become the desktop user's host-loopback endpoint; the address-family restrictions are a separate barrier. `_kanata` also is not the desktop user that owns session audio and runtime state.
+
+Therefore, a TCP state bridge would require **a binary with the feature plus a deliberately revised service transport/security arrangement**, not just adding `push-msg` to a keymap. No such changes were made. A local non-TCP publisher or a different trusted state source remains worth comparing; it must also account for the service's permissions and sandbox, rather than assuming arbitrary commands can reach a user-session socket.
