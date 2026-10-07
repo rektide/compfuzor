@@ -11,6 +11,10 @@
 
 ## Implementation planning
 
+- [Broader registry/discovery inquiry](/design/registry-discovery/init0.gpt6a.md)
+  — subsequent operator direction adds disabled declarations alongside masks and
+  asks for shared discovery across existing CONFIG/Zim roles, with layered config
+  and Router/tab investigation before revising the implementation plan.
 - [Advertised receivers and masks: code plan](/design/runtime-sourcing/receiver-plan0.gpt6a.md)
   — proposed overlay layout, receiver identity, batch admission, host publication,
   generator cutover and file-level verification; followed by the producer-drop
