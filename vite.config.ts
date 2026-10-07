@@ -15,6 +15,9 @@ const config: ReturnType<typeof defineConfig> = defineConfig({
       hash: false,
       dts: false,
       sourcemap: false,
+      // Source-linked Figments and published CLI libraries must travel with the
+      // deployed artifact, not rely on receiver-side node_modules/checkouts.
+      deps: { alwaysBundle: [/^figmen-ts(?:\/|$)/, /^@bomb\.sh\//, /^confbox(?:\/|$)/] },
       outputOptions: {
         codeSplitting: false,
       },

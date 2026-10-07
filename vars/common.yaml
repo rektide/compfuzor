@@ -201,23 +201,9 @@ CONFIG_CONTEXT: "{{ CONTEXT_DEFAULT }}"
 ZIM_CONTEXT: "{{ CONTEXT_DEFAULT }}"
 CONFIG_INSTALL_OWNER: config
 
-# Shared producer delivery wiring, applied by gen_keybindings only when actions
-# or bindings are declared without a consumer host. KEYBINDING_TARGETS remains
-# an optional per-deployment override; host-owned patches stay in the user layer.
-# Profile selectors resolve against the installing user's HOME/XDG at invocation.
-KEYBINDING_TARGET_DEFAULTS:
-  niri:
-    consumer:
-      env: COMPFUZOR_NIRI_PROFILE
-      default: "${XDG_DATA_HOME}/compfuzor/etc/niri/etc/keybinding-niri.json"
-    context: user
-    scope: user
-  umbriel:
-    consumer:
-      env: COMPFUZOR_UMBRIEL_PROFILE
-      default: "${XDG_DATA_HOME}/compfuzor/etc/umbriel/etc/keybinding-umbriel.json"
-    context: user
-    scope: user
+# Producer delivery defaults to advertised compatible receivers at invocation.
+# Explicit KEYBINDING_TARGETS narrows IDs/settings; [] remains no native delivery.
+# Native profile selectors and COMPFUZOR_*_PROFILE overrides belong to host descriptions.
 
 # Proc-backed status kind registry. sub_status_proc uses this single ordered map
 # to validate check support and compile the selected reporter contributions.

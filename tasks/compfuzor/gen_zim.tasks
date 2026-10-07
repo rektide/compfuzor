@@ -35,7 +35,8 @@
 
 - name: "Compfuzor: render zim contributor fragments"
   set_fact:
-    ETC_FILES: "{{ ETC_FILES | merge_list(_zim_fragments, preset='append') }}"
+    ETC_FILES: "{{ ETC_FILES | merge_list(_zim_fragments, _zim_registry.files, preset='append') }}"
+    BINS: "{{ BINS | merge_list(_zim_registry.bins | annotate_bins('zim'), preset='bins_generated') }}"
     ETC_DIRS: "{{ ETC_DIRS | merge_list(['zim'], _zim_fragment_dirs, _zim_module_dirs, preset='append') }}"
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy or ZIM_ARRAYS is deflengthy)
@@ -84,6 +85,7 @@
          + ([_zim_array_module] if ZIM_ARRAYS is deflengthy else []) }}
     _zim_phase: "{{ ZIM_PHASE|def }}"
     _zim_fragments: "{{ _zim_modules | zim_fragment(phase=_zim_phase, etc=ETC, host=(ZIM_HOST is defined)) }}"
+    _zim_registry: "{{ (_zim_fragments | zim_registry(NAME, ETC)) if ZIM_HOST is not defined else {'files': [], 'bins': []} }}"
     _zim_fragment_dirs: >-
       {{ _zim_fragments
         | map(attribute='name')

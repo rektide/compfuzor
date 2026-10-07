@@ -47,6 +47,9 @@
     # redeployed producer definitions track automatically.
     KEYBINDING_CONSUMERS:
       niri:
+        profile_selector:
+          env: COMPFUZOR_NIRI_PROFILE
+          default: "{{ETC}}/keybinding-niri.json"
         contexts:
           user: {scope: user, root: config, subpath: niri}
     BINS:

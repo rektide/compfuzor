@@ -1,23 +1,42 @@
 #!/usr/bin/env -S node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
 import { createRequire } from "node:module";
 import { access, chmod, constants, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, matchesGlob, normalize, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, matchesGlob, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile, spawn } from "node:child_process";
-import { constants as constants$1, tmpdir } from "node:os";
+import { constants as constants$1, homedir, tmpdir } from "node:os";
 import { parseArgs, promisify } from "node:util";
 import { createHash } from "node:crypto";
+import i from "node:assert";
 //#region \0rolldown/runtime.js
+var __defProp = Object.defineProperty;
+var __esmMin = (fn, res, err) => () => {
+	if (err) throw err[0];
+	try {
+		return fn && (res = fn(fn = 0)), res;
+	} catch (e) {
+		throw err = [e], e;
+	}
+};
 var __commonJSMin = (cb, mod) => () => (mod || (cb((mod = { exports: {} }).exports, mod), cb = null), mod.exports);
+var __exportAll = (all, no_symbols) => {
+	let target = {};
+	for (var name in all) __defProp(target, name, {
+		get: all[name],
+		enumerable: true
+	});
+	if (!no_symbols) __defProp(target, Symbol.toStringTag, { value: "Module" });
+	return target;
+};
 var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
 //#endregion
 //#region files/config/context.ts
 /** Import-safe consumer-context selection and path binding for CONFIGS specs. */
-function fail$15(message) {
+function fail$21(message) {
 	throw new Error(message);
 }
 function object$6(value, label) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) fail$15(`${label} must be an object`);
+	if (!value || typeof value !== "object" || Array.isArray(value)) fail$21(`${label} must be an object`);
 	return value;
 }
 function knownRoot(name) {
@@ -31,51 +50,71 @@ function knownRoot(name) {
 function expandPath$1(value, base, label) {
 	let expanded = value;
 	if (value === "~" || value.startsWith("~/")) {
-		const home = knownRoot("HOME") ?? fail$15(`${label}: HOME is required to expand ${value}`);
-		if (value.slice(1).includes("$") || value.slice(1).includes("~")) fail$15(`${label}: unsupported runtime-root expression: ${value}`);
+		const home = knownRoot("HOME") ?? fail$21(`${label}: HOME is required to expand ${value}`);
+		if (value.slice(1).includes("$") || value.slice(1).includes("~")) fail$21(`${label}: unsupported runtime-root expression: ${value}`);
 		expanded = home + value.slice(1);
 	} else if (value.startsWith("${")) {
 		const match = /^\$\{(HOME|XDG_CONFIG_HOME|XDG_STATE_HOME|XDG_CACHE_HOME|XDG_DATA_HOME)\}(?:\/|$)/.exec(value);
-		if (!match) fail$15(`${label}: unsupported runtime-root expression: ${value}`);
-		const root = knownRoot(match[1]) ?? fail$15(`${label}: ${match[1]} or HOME is required to expand ${value}`);
+		if (!match) fail$21(`${label}: unsupported runtime-root expression: ${value}`);
+		const root = knownRoot(match[1]) ?? fail$21(`${label}: ${match[1]} or HOME is required to expand ${value}`);
 		const suffix = value.slice(match[0].length - (match[0].endsWith("/") ? 1 : 0));
-		if (suffix.includes("$") || suffix.includes("~")) fail$15(`${label}: unsupported runtime-root expression: ${value}`);
+		if (suffix.includes("$") || suffix.includes("~")) fail$21(`${label}: unsupported runtime-root expression: ${value}`);
 		expanded = root + suffix;
-	} else if (value.includes("$") || value.includes("~")) fail$15(`${label}: unsupported runtime-root expression: ${value}`);
+	} else if (value.includes("$") || value.includes("~")) fail$21(`${label}: unsupported runtime-root expression: ${value}`);
 	if (!isAbsolute(expanded)) {
-		if (!base) fail$15(`${label}: resolved root must be absolute: ${expanded}`);
+		if (!base) fail$21(`${label}: resolved root must be absolute: ${expanded}`);
 		expanded = resolve(base, expanded);
 	}
 	return normalize(expanded);
 }
-function resolvePathSelector(raw, base, label) {
+/** Validate inert selector shape without binding HOME/XDG/env or opening its target. */
+function validatePathSelector(raw, label, depth = 0) {
+	if (depth > 32) fail$21(`${label}: selector fallback nesting is too deep`);
 	const selector = object$6(raw, label);
+	if (Object.keys(selector).some((key) => ![
+		"path",
+		"relative",
+		"env",
+		"default",
+		"ignore"
+	].includes(key))) fail$21(`${label}: unknown selector field`);
 	if ([
 		selector.path !== void 0,
 		selector.relative !== void 0,
 		selector.env !== void 0
-	].filter(Boolean).length !== 1) fail$15(`${label} must contain exactly one of path, relative, or env`);
+	].filter(Boolean).length !== 1) fail$21(`${label} must contain exactly one of path, relative, or env`);
+	for (const key of [
+		"path",
+		"relative",
+		"env"
+	]) if (selector[key] !== void 0 && (typeof selector[key] !== "string" || !selector[key]?.trim())) fail$21(`${label}.${key} must be a non-empty string`);
+	if (selector.ignore !== void 0 && (!Array.isArray(selector.ignore) || selector.ignore.some((value) => typeof value !== "string"))) fail$21(`${label}.ignore must be a string list`);
+	if (selector.default !== void 0) validatePathSelector(selector.default, `${label}.default`, depth + 1);
+	return selector;
+}
+function resolvePathSelector(raw, base, label) {
+	const selector = validatePathSelector(raw, label);
 	if (selector.path !== void 0) {
-		if (typeof selector.path !== "string" || !selector.path) fail$15(`${label}.path must be a non-empty string`);
+		if (typeof selector.path !== "string" || !selector.path) fail$21(`${label}.path must be a non-empty string`);
 		return expandPath$1(selector.path, void 0, `${label}.path`);
 	}
 	if (selector.relative !== void 0) {
-		if (typeof selector.relative !== "string" || !selector.relative || !base) fail$15(`${label}.relative requires a context root`);
+		if (typeof selector.relative !== "string" || !selector.relative || !base) fail$21(`${label}.relative requires a context root`);
 		const resolved = resolve(base, selector.relative);
 		const fromBase = relative(base, resolved);
-		if (fromBase === ".." || fromBase.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(fromBase)) fail$15(`${label}.relative escapes the context root`);
+		if (fromBase === ".." || fromBase.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`) || isAbsolute(fromBase)) fail$21(`${label}.relative escapes the context root`);
 		return normalize(resolved);
 	}
-	if (typeof selector.env !== "string" || !selector.env) fail$15(`${label}.env must name an environment variable`);
+	if (typeof selector.env !== "string" || !selector.env) fail$21(`${label}.env must name an environment variable`);
 	const environmentValue = process.env[selector.env];
 	if (environmentValue && !selector.ignore?.includes(environmentValue)) return expandPath$1(environmentValue, base, `${label}.env(${selector.env})`);
 	if (selector.default !== void 0) return resolvePathSelector(selector.default, base, `${label}.default`);
-	fail$15(`${label}: environment variable ${selector.env} is required`);
+	fail$21(`${label}: environment variable ${selector.env} is required`);
 }
 function getConfigContext(spec, contextName) {
-	if (spec.version !== 2) fail$15(`unsupported config spec version: ${String(spec.version)}; rerender the deployment (expected version 2)`);
+	if (spec.version !== 2) fail$21(`unsupported config spec version: ${String(spec.version)}; rerender the deployment (expected version 2)`);
 	const context = object$6(object$6(spec.contexts, "config spec contexts")[contextName], `unknown config context ${contextName}`);
-	if (context.scope !== "user" && context.scope !== "system") fail$15(`context ${contextName}: invalid scope`);
+	if (context.scope !== "user" && context.scope !== "system") fail$21(`context ${contextName}: invalid scope`);
 	object$6(context.configs, `context ${contextName}.configs`);
 	return context;
 }
@@ -92,15 +131,15 @@ function selectRecipeNames(spec, contextName, requested, applyOnly = true) {
 	if (requested.length === 0) return contextConfigNames(spec, contextName, applyOnly);
 	const seen = /* @__PURE__ */ new Set();
 	for (const name of requested) {
-		if (!available.includes(name)) fail$15(`unknown config in context ${contextName}: ${name}`);
-		if (seen.has(name)) fail$15(`config selected more than once in context ${contextName}: ${name}`);
+		if (!available.includes(name)) fail$21(`unknown config in context ${contextName}: ${name}`);
+		if (seen.has(name)) fail$21(`config selected more than once in context ${contextName}: ${name}`);
 		seen.add(name);
 	}
 	return requested;
 }
 function bindContextConfigs(spec, contextName, names) {
 	const context = getConfigContext(spec, contextName);
-	for (const name of names) if (!(name in context.configs)) fail$15(`unknown config in context ${contextName}: ${name}`);
+	for (const name of names) if (!(name in context.configs)) fail$21(`unknown config in context ${contextName}: ${name}`);
 	const root = resolvePathSelector(context.root, void 0, `context ${contextName}.root`);
 	const base = context.subpath ? resolve(root, context.subpath) : root;
 	const contextConfigs = object$6(context.configs, `context ${contextName}.configs`);
@@ -109,10 +148,10 @@ function bindContextConfigs(spec, contextName, names) {
 	for (const name of names) {
 		const source = object$6(spec.configs[name], `context ${contextName}: missing source config ${name}`);
 		const binding = object$6(contextConfigs[name], `context ${contextName}.configs.${name}`);
-		if (!Array.isArray(source.inputs) || !Array.isArray(binding.inputs) || source.inputs.length !== binding.inputs.length) fail$15(`context ${contextName}.configs.${name}: input bindings do not match the source recipe`);
+		if (!Array.isArray(source.inputs) || !Array.isArray(binding.inputs) || source.inputs.length !== binding.inputs.length) fail$21(`context ${contextName}.configs.${name}: input bindings do not match the source recipe`);
 		const output = resolvePathSelector(binding.output, base, `context ${contextName}.configs.${name}.output`);
 		const prior = outputs.get(output);
-		if (prior) fail$15(`context ${contextName}: configs ${prior} and ${name} resolve to the same output ${output}`);
+		if (prior) fail$21(`context ${contextName}: configs ${prior} and ${name} resolve to the same output ${output}`);
 		outputs.set(output, name);
 		const inputs = source.inputs.map((rawInput, index) => {
 			const input = { ...object$6(rawInput, `config ${name}.inputs[${index}]`) };
@@ -137,40 +176,10 @@ function bindContextConfigs(spec, contextName, names) {
 		remotes: {}
 	};
 }
+var init_context$1 = __esmMin((() => {}));
 //#endregion
 //#region files/links/delivery.ts
 /** Shared, import-safe filesystem delivery primitives used by LINKS and CONFIGS. */
-const localLinkDeliveryExecutor = {
-	async mkdir(path) {
-		await mkdir(path, { recursive: true });
-	},
-	async symlink(source, destination) {
-		await symlink(source, destination);
-	},
-	async rename(source, destination) {
-		await rename(source, destination);
-	},
-	async rm(path) {
-		await rm(path, { force: true });
-	}
-};
-const localCopyDeliveryExecutor = {
-	async mkdir(path) {
-		await mkdir(path, { recursive: true });
-	},
-	async copyFile(source, destination) {
-		await copyFile(source, destination);
-	},
-	async chmod(path, mode) {
-		await chmod(path, mode);
-	},
-	async rename(source, destination) {
-		await rename(source, destination);
-	},
-	async rm(path) {
-		await rm(path, { force: true });
-	}
-};
 async function inspectDeliveryEntry(path) {
 	let entry;
 	try {
@@ -277,6 +286,40 @@ async function replaceWithCopy(source, destination, executor = localCopyDelivery
 		throw error;
 	}
 }
+var localLinkDeliveryExecutor, localCopyDeliveryExecutor;
+var init_delivery = __esmMin((() => {
+	localLinkDeliveryExecutor = {
+		async mkdir(path) {
+			await mkdir(path, { recursive: true });
+		},
+		async symlink(source, destination) {
+			await symlink(source, destination);
+		},
+		async rename(source, destination) {
+			await rename(source, destination);
+		},
+		async rm(path) {
+			await rm(path, { force: true });
+		}
+	};
+	localCopyDeliveryExecutor = {
+		async mkdir(path) {
+			await mkdir(path, { recursive: true });
+		},
+		async copyFile(source, destination) {
+			await copyFile(source, destination);
+		},
+		async chmod(path, mode) {
+			await chmod(path, mode);
+		},
+		async rename(source, destination) {
+			await rename(source, destination);
+		},
+		async rm(path) {
+			await rm(path, { force: true });
+		}
+	};
+}));
 //#endregion
 //#region files/config/assembly.ts
 /** Bind CONFIG recipes to one context and invoke the sole transaction runner. */
@@ -403,8 +446,13 @@ async function evaluateAssembly(options, name) {
 		return { error: `assembly candidate could not run: ${error instanceof Error ? error.message : String(error)}` };
 	}
 }
+var init_assembly = __esmMin((() => {
+	init_context$1();
+	init_delivery();
+}));
 //#endregion
 //#region files/config/cli.ts
+init_assembly();
 /** CONFIG's fixed command vocabulary, argument parsing, aliases, and help. */
 const CONFIG_ACTIONS = [
 	"install",
@@ -489,7 +537,7 @@ Options:
   --json          Emit one JSON row per line
   --json-array    Emit one JSON array`
 };
-function fail$14(message) {
+function fail$20(message) {
 	throw new Error(message);
 }
 function explicitHelpAction(argv) {
@@ -570,39 +618,40 @@ function configAliasPieces(options, contextNames) {
 	if (options.invokedAs === "command.ts") return {};
 	const fixed = CONFIG_ACTIONS.find((action) => options.invokedAs === `config-${action}.sh`);
 	if (fixed) return { action: options.action === void 0 ? fixed : void 0 };
-	if (!options.invokedAs.startsWith("config-") || !options.invokedAs.endsWith(".sh")) fail$14(`unsupported config command alias ${options.invokedAs}; use a fixed config-ACTION.sh command or explicit --action and --context`);
+	if (!options.invokedAs.startsWith("config-") || !options.invokedAs.endsWith(".sh")) fail$20(`unsupported config command alias ${options.invokedAs}; use a fixed config-ACTION.sh command or explicit --action and --context`);
 	const body = options.invokedAs.slice(7, -3);
 	const full = contextNames.flatMap((context) => CONFIG_ACTIONS.filter((action) => body === `${context}-${action}`).map((action) => ({
 		action,
 		context
 	})));
 	if (options.action === void 0 && options.context === void 0) {
-		if (full.length !== 1) fail$14(`unknown or ambiguous config command alias ${options.invokedAs}`);
+		if (full.length !== 1) fail$20(`unknown or ambiguous config command alias ${options.invokedAs}`);
 		return full[0];
 	}
 	if (options.action === void 0) {
 		const actions = CONFIG_ACTIONS.filter((candidate) => body.endsWith(`-${candidate}`));
 		const longest = Math.max(...actions.map((candidate) => candidate.length), -1);
 		const selected = actions.filter((candidate) => candidate.length === longest);
-		if (selected.length !== 1) fail$14(`unknown or ambiguous action in config command alias ${options.invokedAs}`);
+		if (selected.length !== 1) fail$20(`unknown or ambiguous action in config command alias ${options.invokedAs}`);
 		return { action: selected[0] };
 	}
 	const contexts = contextNames.filter((candidate) => body === candidate || body.startsWith(`${candidate}-`));
 	const longest = Math.max(...contexts.map((candidate) => candidate.length), -1);
 	const selected = contexts.filter((candidate) => candidate.length === longest);
-	if (selected.length !== 1) fail$14(`unknown or ambiguous context in config command alias ${options.invokedAs}`);
+	if (selected.length !== 1) fail$20(`unknown or ambiguous context in config command alias ${options.invokedAs}`);
 	return { context: selected[0] };
 }
 function rejectIrrelevantFlags(options, action) {
-	if (action !== "assemble" && (options.check || options.stdout || options.list || options.quiet)) fail$14(`${action} does not accept assembly display flags`);
-	if (action !== "status" && action !== "inputs" && options.format !== "human") fail$14(`${action} does not accept status format flags`);
-	if (action !== "sync-inputs" && options.seed) fail$14(`${action} does not accept --seed`);
-	if (action !== "inputs" && (!options.rebuild || options.initiallyDisabled)) fail$14(`${action} does not accept input mutation flags`);
-	if (action !== "install" && options.dropins !== void 0) fail$14(`${action} does not accept --dropins`);
+	if (action !== "assemble" && (options.check || options.stdout || options.list || options.quiet)) fail$20(`${action} does not accept assembly display flags`);
+	if (action !== "status" && action !== "inputs" && options.format !== "human") fail$20(`${action} does not accept status format flags`);
+	if (action !== "sync-inputs" && options.seed) fail$20(`${action} does not accept --seed`);
+	if (action !== "inputs" && (!options.rebuild || options.initiallyDisabled)) fail$20(`${action} does not accept input mutation flags`);
+	if (action !== "install" && options.dropins !== void 0) fail$20(`${action} does not accept --dropins`);
 }
 //#endregion
 //#region files/config/file-state.ts
 /** Shared regular-file availability and byte comparison observations. */
+init_delivery();
 async function compareFileContents(first, second) {
 	try {
 		const [one, two] = await Promise.all([readFile(first), readFile(second)]);
@@ -644,11 +693,13 @@ async function inspectUsableFile(path) {
 //#endregion
 //#region files/config/input-state.ts
 /** Consumer input catalog, synchronization, and status observation. */
-function fail$13(message) {
+init_context$1();
+init_delivery();
+function fail$19(message) {
 	throw new Error(message);
 }
 function object$5(value, label) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) fail$13(`${label} must be an object`);
+	if (!value || typeof value !== "object" || Array.isArray(value)) fail$19(`${label} must be an object`);
 	return value;
 }
 function filenameMatches$1(value, pattern) {
@@ -698,7 +749,7 @@ async function inputCatalog(spec, contextName, names) {
 				});
 				continue;
 			}
-			if (typeof donor.directory !== "string" || typeof donor.pattern !== "string" || typeof local.directory !== "string") fail$13(`config ${configName} input ${index} has an invalid compiled shape`);
+			if (typeof donor.directory !== "string" || typeof donor.pattern !== "string" || typeof local.directory !== "string") fail$19(`config ${configName} input ${index} has an invalid compiled shape`);
 			const suffix = typeof donor.disabled_suffix === "string" ? donor.disabled_suffix : void 0;
 			const directory = {
 				config: configName,
@@ -795,12 +846,12 @@ async function deliver$2(source, destination, strategy) {
 	else await replaceWithCopy(source, destination);
 }
 async function applyRelation(relation, strategy, seed) {
-	if (relation.aliasHazard) fail$13(`${relation.id}: ${relation.aliasHazard}`);
-	if (relation.donorConflict) fail$13(`${relation.id}: donor has both enabled and disabled entries`);
+	if (relation.aliasHazard) fail$19(`${relation.id}: ${relation.aliasHazard}`);
+	if (relation.donorConflict) fail$19(`${relation.id}: donor has both enabled and disabled entries`);
 	const sourceEntry = await inspectDeliveryEntry(relation.source);
-	if (sourceEntry.kind === "missing" || sourceEntry.kind === "directory" || sourceEntry.kind === "special") fail$13(`${relation.id}: donor source is ${sourceEntry.kind}: ${relation.source}`);
+	if (sourceEntry.kind === "missing" || sourceEntry.kind === "directory" || sourceEntry.kind === "special") fail$19(`${relation.id}: donor source is ${sourceEntry.kind}: ${relation.source}`);
 	const local = await localSelection(relation);
-	if (local.conflict) fail$13(`${relation.id}: both enabled and disabled local entries exist`);
+	if (local.conflict) fail$19(`${relation.id}: both enabled and disabled local entries exist`);
 	if (seed && local.selectedPath) return `preserved\t${relation.id}\t${local.selectedState}\t${local.selectedPath}`;
 	const state = local.selectedState ?? relation.donorState;
 	const destination = state === "disabled" && relation.suffix && relation.destinationDirectory ? join(relation.destinationDirectory, `${relation.logicalName}${relation.suffix}`) : relation.destinationDirectory ? join(relation.destinationDirectory, relation.logicalName) : relation.destination;
@@ -1066,7 +1117,9 @@ function printStatusRows(rows, format) {
 //#endregion
 //#region files/config/inputs.ts
 /** Consumer input inventory and mutation operations. */
-function fail$12(message) {
+init_context$1();
+init_delivery();
+function fail$18(message) {
 	throw new Error(message);
 }
 function filenameMatches(value, pattern) {
@@ -1094,7 +1147,7 @@ function selectInput(spec, contextName, selector) {
 			});
 		});
 	}
-	if (matches.length !== 1) fail$12(matches.length === 0 ? `unknown context input: ${selector}` : `ambiguous context input: ${selector}; use CONFIG/INPUT`);
+	if (matches.length !== 1) fail$18(matches.length === 0 ? `unknown context input: ${selector}` : `ambiguous context input: ${selector}; use CONFIG/INPUT`);
 	const selected = matches[0];
 	const consumer = bindContextConfigs(spec, contextName, [selected.config]).configs[selected.config].inputs[selected.index];
 	return {
@@ -1114,7 +1167,7 @@ async function rebuild$1(options, config) {
 	return 4;
 }
 function localInputPaths(selected, name) {
-	if (typeof selected.consumer.directory !== "string") fail$12(`${selected.config}/${inputIdentity(selected.source, selected.index)} is not a glob input`);
+	if (typeof selected.consumer.directory !== "string") fail$18(`${selected.config}/${inputIdentity(selected.source, selected.index)} is not a glob input`);
 	const suffix = typeof selected.source.disabled_suffix === "string" ? selected.source.disabled_suffix : void 0;
 	return {
 		active: join(selected.consumer.directory, name),
@@ -1123,15 +1176,15 @@ function localInputPaths(selected, name) {
 }
 async function assertInputBindingSeparated(selected) {
 	if (typeof selected.source.file === "string" && typeof selected.consumer.file === "string") {
-		if (await pathsSharePhysicalEntry(selected.source.file, selected.consumer.file)) fail$12(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer file aliases canonical input: ${selected.consumer.file}`);
+		if (await pathsSharePhysicalEntry(selected.source.file, selected.consumer.file)) fail$18(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer file aliases canonical input: ${selected.consumer.file}`);
 		return;
 	}
-	if (typeof selected.source.directory === "string" && typeof selected.consumer.directory === "string" && await pathsSharePhysicalDirectory(selected.source.directory, selected.consumer.directory)) fail$12(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer directory aliases canonical input directory: ${selected.consumer.directory}`);
+	if (typeof selected.source.directory === "string" && typeof selected.consumer.directory === "string" && await pathsSharePhysicalDirectory(selected.source.directory, selected.consumer.directory)) fail$18(`${selected.config}/${inputIdentity(selected.source, selected.index)} consumer directory aliases canonical input directory: ${selected.consumer.directory}`);
 }
 function validateInputName(input, name) {
-	if (!name || basename(name) !== name || name === "." || name === "..") fail$12(`invalid input filename: ${name}`);
-	if (typeof input.pattern !== "string" || !filenameMatches(name, input.pattern)) fail$12(`${name} does not match input pattern ${String(input.pattern)}`);
-	if (typeof input.disabled_suffix === "string" && name.endsWith(input.disabled_suffix)) fail$12(`input filename must not include disabled suffix ${input.disabled_suffix}`);
+	if (!name || basename(name) !== name || name === "." || name === "..") fail$18(`invalid input filename: ${name}`);
+	if (typeof input.pattern !== "string" || !filenameMatches(name, input.pattern)) fail$18(`${name} does not match input pattern ${String(input.pattern)}`);
+	if (typeof input.disabled_suffix === "string" && name.endsWith(input.disabled_suffix)) fail$18(`input filename must not include disabled suffix ${input.disabled_suffix}`);
 }
 async function inspectPair(paths) {
 	const [active, disabled] = await Promise.all([inspectDeliveryEntry(paths.active), paths.disabled ? inspectDeliveryEntry(paths.disabled) : Promise.resolve(void 0)]);
@@ -1142,7 +1195,7 @@ async function inspectPair(paths) {
 	};
 }
 function replaceableLocal(entry, path) {
-	if (entry.kind === "directory" || entry.kind === "special") fail$12(`local input is not a regular file or symlink: ${path}`);
+	if (entry.kind === "directory" || entry.kind === "special") fail$18(`local input is not a regular file or symlink: ${path}`);
 }
 async function putInput(options) {
 	const spec = options.spec;
@@ -1153,9 +1206,9 @@ async function putInput(options) {
 	await assertInputBindingSeparated(selected);
 	const source = resolve(sourceArgument);
 	if (typeof selected.source.file === "string") {
-		if (suppliedName !== void 0) fail$12(`${selector} is a direct file input and does not accept a destination name`);
-		if (options.initiallyDisabled ?? false) fail$12(`${selector} is a direct file input and cannot be disabled`);
-		if (typeof selected.consumer.file !== "string") fail$12(`${selector} has an invalid resolved file binding`);
+		if (suppliedName !== void 0) fail$18(`${selector} is a direct file input and does not accept a destination name`);
+		if (options.initiallyDisabled ?? false) fail$18(`${selector} is a direct file input and cannot be disabled`);
+		if (typeof selected.consumer.file !== "string") fail$18(`${selector} has an invalid resolved file binding`);
 		await deliver$1(source, selected.consumer.file, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link");
 		console.log(`put\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${selected.consumer.file}`);
 		return options.rebuild ?? true ? rebuild$1(options, selected.config) : 0;
@@ -1164,21 +1217,21 @@ async function putInput(options) {
 	validateInputName(selected.source, name);
 	const paths = localInputPaths(selected, name);
 	const pair = await inspectPair(paths);
-	if (pair.conflict) fail$12(`both enabled and disabled local entries exist for ${name}`);
-	const destination = pair.active.kind !== "missing" ? paths.active : pair.disabled && pair.disabled.kind !== "missing" ? paths.disabled : options.initiallyDisabled ?? false ? paths.disabled ?? fail$12(`${selector} cannot be disabled`) : paths.active;
+	if (pair.conflict) fail$18(`both enabled and disabled local entries exist for ${name}`);
+	const destination = pair.active.kind !== "missing" ? paths.active : pair.disabled && pair.disabled.kind !== "missing" ? paths.disabled : options.initiallyDisabled ?? false ? paths.disabled ?? fail$18(`${selector} cannot be disabled`) : paths.active;
 	await deliver$1(source, destination, options.strategy ?? getConfigContext(spec, options.contextName).dropins ?? "link");
 	console.log(`put\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${destination}`);
 	return options.rebuild ?? true ? rebuild$1(options, selected.config) : 0;
 }
 async function inputMutation(options, action, args) {
 	const [selector, name] = args;
-	if (!selector) fail$12(`usage: config-inputs.sh ${action} INPUT [NAME]`);
+	if (!selector) fail$18(`usage: config-inputs.sh ${action} INPUT [NAME]`);
 	const selected = selectInput(options.spec, options.contextName, selector);
 	if (!getConfigContext(options.spec, options.contextName).canonical || action === "remove") await assertInputBindingSeparated(selected);
 	if (typeof selected.source.file === "string") {
-		if (action !== "remove") fail$12(`${selector} is a direct file input and cannot be ${action}d`);
-		if (args.length !== 1) fail$12(`usage: config-inputs.sh remove DIRECT_INPUT`);
-		if (typeof selected.consumer.file !== "string") fail$12(`${selector} has an invalid resolved file binding`);
+		if (action !== "remove") fail$18(`${selector} is a direct file input and cannot be ${action}d`);
+		if (args.length !== 1) fail$18(`usage: config-inputs.sh remove DIRECT_INPUT`);
+		if (typeof selected.consumer.file !== "string") fail$18(`${selector} has an invalid resolved file binding`);
 		const entry = await inspectDeliveryEntry(selected.consumer.file);
 		if (entry.kind === "missing") return 0;
 		replaceableLocal(entry, selected.consumer.file);
@@ -1186,11 +1239,11 @@ async function inputMutation(options, action, args) {
 		console.log(`remove\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${selected.consumer.file}`);
 		return rebuild$1(options, selected.config);
 	}
-	if (!name || args.length !== 2) fail$12(`usage: config-inputs.sh ${action} INPUT NAME`);
+	if (!name || args.length !== 2) fail$18(`usage: config-inputs.sh ${action} INPUT NAME`);
 	validateInputName(selected.source, name);
 	const paths = localInputPaths(selected, name);
 	const pair = await inspectPair(paths);
-	if (pair.conflict) fail$12(`both enabled and disabled local entries exist for ${name}`);
+	if (pair.conflict) fail$18(`both enabled and disabled local entries exist for ${name}`);
 	if (action === "remove") {
 		const path = pair.active.kind !== "missing" ? paths.active : pair.disabled && pair.disabled.kind !== "missing" ? paths.disabled : void 0;
 		if (!path) return 0;
@@ -1199,12 +1252,12 @@ async function inputMutation(options, action, args) {
 		console.log(`remove\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${path}`);
 		return rebuild$1(options, selected.config);
 	}
-	if (!paths.disabled) fail$12(`${selected.config}/${inputIdentity(selected.source, selected.index)} cannot be disabled`);
+	if (!paths.disabled) fail$18(`${selected.config}/${inputIdentity(selected.source, selected.index)} cannot be disabled`);
 	const from = action === "disable" ? paths.active : paths.disabled;
 	const to = action === "disable" ? paths.disabled : paths.active;
 	const fromEntry = action === "disable" ? pair.active : pair.disabled;
 	if ((action === "disable" ? pair.disabled : pair.active).kind !== "missing") return 0;
-	if (fromEntry.kind === "missing") fail$12(`local input does not exist: ${from}`);
+	if (fromEntry.kind === "missing") fail$18(`local input does not exist: ${from}`);
 	replaceableLocal(fromEntry, from);
 	await rename(from, to);
 	console.log(`${action}\t${selected.config}/${inputIdentity(selected.source, selected.index)}\t${to}`);
@@ -1233,7 +1286,7 @@ async function runInputAction(options, commandArgs) {
 	}
 	if (action === "put") {
 		const [selector, source, name] = args;
-		if (!selector || !source || args.length > 3) fail$12("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]");
+		if (!selector || !source || args.length > 3) fail$18("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]");
 		return putInput({
 			...options,
 			selector,
@@ -1242,13 +1295,13 @@ async function runInputAction(options, commandArgs) {
 		});
 	}
 	if (action === "enable" || action === "disable" || action === "remove") return inputMutation(options, action, args);
-	fail$12("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...");
+	fail$18("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...");
 }
 /** Pure syntax/binding admission. Sources and local entries may appear during earlier body work. */
 function inputActionRecipeNames(spec, contextName, commandArgs) {
 	const [action, ...args] = commandArgs;
 	if (action === "list" || action === "status") return selectRecipeNames(spec, contextName, args, action !== "list");
-	if (!args[0]) fail$12(`usage: config-inputs.sh ${action ?? "SUBACTION"} INPUT ...`);
+	if (!args[0]) fail$18(`usage: config-inputs.sh ${action ?? "SUBACTION"} INPUT ...`);
 	return [selectInput(spec, contextName, args[0]).config];
 }
 /** Pure syntax/binding admission. Sources and local entries may appear during earlier body work. */
@@ -1263,19 +1316,19 @@ function admitInputArgs(options, commandArgs) {
 		"enable",
 		"disable",
 		"remove"
-	].includes(action ?? "")) fail$12("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...");
+	].includes(action ?? "")) fail$18("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...");
 	const [selector, sourceOrName, suppliedName] = args;
-	if (!selector) fail$12(`usage: config-inputs.sh ${action} INPUT ...`);
+	if (!selector) fail$18(`usage: config-inputs.sh ${action} INPUT ...`);
 	const selected = selectInput(options.spec, options.contextName, selector);
 	if (action === "put") {
-		if (!sourceOrName || args.length > 3) fail$12("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]");
+		if (!sourceOrName || args.length > 3) fail$18("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]");
 		const source = resolve(sourceOrName);
 		if (typeof selected.source.file === "string") {
-			if (suppliedName !== void 0) fail$12(`${selector} is a direct file input and does not accept a destination name`);
-			if (options.initiallyDisabled) fail$12(`${selector} is a direct file input and cannot be disabled`);
+			if (suppliedName !== void 0) fail$18(`${selector} is a direct file input and does not accept a destination name`);
+			if (options.initiallyDisabled) fail$18(`${selector} is a direct file input and cannot be disabled`);
 		} else {
 			validateInputName(selected.source, suppliedName ?? basename(source));
-			if (options.initiallyDisabled && typeof selected.source.disabled_suffix !== "string") fail$12(`${selector} cannot be disabled`);
+			if (options.initiallyDisabled && typeof selected.source.disabled_suffix !== "string") fail$18(`${selector} cannot be disabled`);
 		}
 		return [
 			action,
@@ -1285,18 +1338,19 @@ function admitInputArgs(options, commandArgs) {
 		];
 	}
 	if (typeof selected.source.file === "string") {
-		if (action !== "remove") fail$12(`${selector} is a direct file input and cannot be ${action}d`);
-		if (args.length !== 1) fail$12("usage: config-inputs.sh remove DIRECT_INPUT");
+		if (action !== "remove") fail$18(`${selector} is a direct file input and cannot be ${action}d`);
+		if (args.length !== 1) fail$18("usage: config-inputs.sh remove DIRECT_INPUT");
 	} else {
-		if (!sourceOrName || args.length !== 2) fail$12(`usage: config-inputs.sh ${action} INPUT NAME`);
+		if (!sourceOrName || args.length !== 2) fail$18(`usage: config-inputs.sh ${action} INPUT NAME`);
 		validateInputName(selected.source, sourceOrName);
-		if (action !== "remove" && typeof selected.source.disabled_suffix !== "string") fail$12(`${selector} cannot be disabled`);
+		if (action !== "remove" && typeof selected.source.disabled_suffix !== "string") fail$18(`${selector} cannot be disabled`);
 	}
 	return [...commandArgs];
 }
 //#endregion
 //#region files/config/publication.ts
-/** Whole-output publication for selected CONFIG recipes. */
+init_context$1();
+init_delivery();
 async function publishOutputs(options) {
 	const resolved = bindContextConfigs(options.spec, options.contextName, options.names);
 	let failed = false;
@@ -1316,7 +1370,7 @@ async function publishOutputs(options) {
 }
 //#endregion
 //#region files/config/install.ts
-/** Complete ordinary CONFIG install over typed assembly and delivery operations. */
+init_assembly();
 function truthy$1(value) {
 	return [
 		"1",
@@ -1325,7 +1379,7 @@ function truthy$1(value) {
 		"yes"
 	].includes(value?.trim().toLowerCase() ?? "");
 }
-function resolve$1(value) {
+function resolve$4(value) {
 	return typeof value === "function" ? value() : value;
 }
 async function installContext(options) {
@@ -1335,7 +1389,7 @@ async function installContext(options) {
 		code: 0,
 		reason
 	};
-	const strategy = resolve$1(options.strategy);
+	const strategy = resolve$4(options.strategy);
 	if (strategy === "copy" || strategy === "link") return {
 		status: "completed",
 		code: await publishOutputs({
@@ -1344,7 +1398,7 @@ async function installContext(options) {
 		})
 	};
 	if (!options.inputStrategy) throw new Error("assemble install requires an input strategy");
-	const inputStrategy = resolve$1(options.inputStrategy);
+	const inputStrategy = resolve$4(options.inputStrategy);
 	const seeded = await syncInputs({
 		...options,
 		strategy: inputStrategy,
@@ -1366,7 +1420,7 @@ async function installContext(options) {
 }
 //#endregion
 //#region files/config/invocation.ts
-function fail$11(message) {
+function fail$17(message) {
 	throw new Error(message);
 }
 /**
@@ -1376,12 +1430,15 @@ function fail$11(message) {
 function resolveSelectedName(options) {
 	const declared = new Set(options.declared);
 	const selected = options.explicit ?? options.inferAlias(options.invokedAs, declared) ?? options.environment ?? options.fallback;
-	if (!declared.has(selected)) fail$11(`unknown ${options.label}: ${selected}`);
+	if (!declared.has(selected)) fail$17(`unknown ${options.label}: ${selected}`);
 	return selected;
 }
 //#endregion
 //#region files/config/status.ts
 /** Multi-representation CONFIG status over selected recipes. */
+init_assembly();
+init_context$1();
+init_delivery();
 async function candidateMatches(candidate, destination) {
 	try {
 		return { equal: candidate.equals(await readFile(destination)) };
@@ -1650,16 +1707,18 @@ async function statusContext(options) {
 //#endregion
 //#region files/config/runtime.ts
 /** Thin multicall dispatcher for the fixed CONFIG action vocabulary. */
-function fail$10(message) {
+init_assembly();
+init_context$1();
+function fail$16(message) {
 	throw new Error(message);
 }
 function parseInputStrategy$1(value, label) {
 	if (value === "copy" || value === "link") return value;
-	fail$10(`${label} must be copy or link`);
+	fail$16(`${label} must be copy or link`);
 }
 function parseInstallStrategy$1(value, label) {
 	if (value === "assemble" || value === "copy" || value === "link") return value;
-	fail$10(`${label} must be assemble, copy, or link`);
+	fail$16(`${label} must be assemble, copy, or link`);
 }
 function contextInputStrategy(spec, contextName, explicit) {
 	return parseInputStrategy$1(explicit ?? process.env.COMPFUZOR_CONFIG_DROPINS_STRATEGY ?? getConfigContext(spec, contextName).dropins ?? "link", "effective config input strategy");
@@ -1690,12 +1749,12 @@ async function admitConfigCommand(options, binding) {
 	});
 	const context = getConfigContext(spec, contextName);
 	if (binding) {
-		if (action !== binding.action) fail$10(`config action ${action} does not match declared ${binding.action} operation`);
-		if (context.canonical) fail$10("canonical donor context is not a receiver action audience");
-		if (context.scope !== binding.audience) fail$10(`config context ${contextName} has ${context.scope} scope, not selected ${binding.audience} audience`);
+		if (action !== binding.action) fail$16(`config action ${action} does not match declared ${binding.action} operation`);
+		if (context.canonical) fail$16("canonical donor context is not a receiver action audience");
+		if (context.scope !== binding.audience) fail$16(`config context ${contextName} has ${context.scope} scope, not selected ${binding.audience} audience`);
 		if (action === "install" && spec.installOwner !== void 0) {
-			if (typeof spec.installOwner !== "string") fail$10("config install owner must be a domain name");
-			if (spec.installOwner !== "config") fail$10(`config installation is owned by ${spec.installOwner}, not config`);
+			if (typeof spec.installOwner !== "string") fail$16("config install owner must be a domain name");
+			if (spec.installOwner !== "config") fail$16(`config installation is owned by ${spec.installOwner}, not config`);
 		}
 	}
 	rejectIrrelevantFlags(options, action);
@@ -1706,7 +1765,7 @@ async function admitConfigCommand(options, binding) {
 		"enable",
 		"disable"
 	].includes(canonicalInputAction ?? "");
-	if (context.canonical && !canonicalAllowed) fail$10(`config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`);
+	if (context.canonical && !canonicalAllowed) fail$16(`config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`);
 	if (!binding) return {
 		spec,
 		options: {
@@ -1742,16 +1801,16 @@ async function admitConfigCommand(options, binding) {
 		}]))
 	} };
 	if (action === "assemble") {
-		if (fixed.strategy !== void 0) fail$10("assemble does not accept --strategy");
-		if (fixed.check && fixed.stdout) fail$10("--check and --stdout are mutually exclusive");
-		if (fixed.list && fixed.args.length) fail$10("--list does not accept recipe names");
+		if (fixed.strategy !== void 0) fail$16("assemble does not accept --strategy");
+		if (fixed.check && fixed.stdout) fail$16("--check and --stdout are mutually exclusive");
+		if (fixed.list && fixed.args.length) fail$16("--list does not accept recipe names");
 		const selected = selectRecipeNames(frozen, contextName, fixed.args, !fixed.list);
-		if (fixed.stdout && selected.length !== 1) fail$10("--stdout requires exactly one selected config");
+		if (fixed.stdout && selected.length !== 1) fail$16("--stdout requires exactly one selected config");
 	} else if (action === "inputs") {
 		if (fixed.args[0] === "put") fixed.strategy = contextInputStrategy(frozen, contextName, fixed.strategy);
 		else {
-			if (fixed.strategy !== void 0) fail$10(`${fixed.args[0]} does not accept --strategy`);
-			if (fixed.initiallyDisabled || !fixed.rebuild) fail$10(`${fixed.args[0]} does not accept put-only flags --disabled/--no-rebuild`);
+			if (fixed.strategy !== void 0) fail$16(`${fixed.args[0]} does not accept --strategy`);
+			if (fixed.initiallyDisabled || !fixed.rebuild) fail$16(`${fixed.args[0]} does not accept put-only flags --disabled/--no-rebuild`);
 		}
 	} else {
 		selectRecipeNames(frozen, contextName, fixed.args);
@@ -1760,7 +1819,7 @@ async function admitConfigCommand(options, binding) {
 			fixed.dropins = contextInputStrategy(frozen, contextName, fixed.dropins);
 		} else if (action === "sync-inputs") fixed.strategy = contextInputStrategy(frozen, contextName, fixed.strategy);
 		else if (action === "publish") fixed.strategy = parseInputStrategy$1(fixed.strategy ?? process.env.COMPFUZOR_CONFIG_PUBLISH_STRATEGY, "config publish strategy");
-		else if (fixed.strategy !== void 0) fail$10(`${action} does not accept --strategy`);
+		else if (fixed.strategy !== void 0) fail$16(`${action} does not accept --strategy`);
 	}
 	return {
 		spec: frozen,
@@ -1772,14 +1831,14 @@ async function admitConfigCommand(options, binding) {
 async function runAdmittedConfigCommand(admitted) {
 	const { spec, options, action, contextName } = admitted;
 	if (action === "assemble") {
-		if (options.check && options.stdout) fail$10("--check and --stdout are mutually exclusive");
+		if (options.check && options.stdout) fail$16("--check and --stdout are mutually exclusive");
 		if (options.list) {
-			if (options.args.length > 0) fail$10("--list does not accept recipe names");
+			if (options.args.length > 0) fail$16("--list does not accept recipe names");
 			for (const name of selectRecipeNames(spec, contextName, [], false).sort()) console.log(name);
 			return 0;
 		}
 		const names = selectRecipeNames(spec, contextName, options.args);
-		if (options.stdout && names.length !== 1) fail$10("--stdout requires exactly one selected config");
+		if (options.stdout && names.length !== 1) fail$16("--stdout requires exactly one selected config");
 		return runAssembly({
 			spec,
 			contextName,
@@ -1820,7 +1879,7 @@ async function runAdmittedConfigCommand(admitted) {
 	});
 	if (action === "inputs") {
 		const inputAction = options.args[0];
-		const strategy = inputAction === "put" ? contextInputStrategy(spec, contextName, options.strategy) : options.strategy === void 0 ? void 0 : fail$10(`${inputAction ?? "inputs"} does not accept --strategy`);
+		const strategy = inputAction === "put" ? contextInputStrategy(spec, contextName, options.strategy) : options.strategy === void 0 ? void 0 : fail$16(`${inputAction ?? "inputs"} does not accept --strategy`);
 		return runInputAction({
 			spec,
 			contextName,
@@ -1846,7 +1905,7 @@ async function runAdmittedConfigCommand(admitted) {
 async function runConfigCommand(options) {
 	return runAdmittedConfigCommand(await admitConfigCommand(options));
 }
-async function main$8(argv, deploymentDir, invokedAs) {
+async function main$9(argv, deploymentDir, invokedAs) {
 	return runConfigCommand(parseConfigCommandArgs(argv, deploymentDir, invokedAs));
 }
 //#endregion
@@ -1908,7 +1967,7 @@ async function inspect(remote, target, name) {
 		disabled
 	};
 }
-async function main$7(argv, deploymentDir) {
+async function main$8(argv, deploymentDir) {
 	const parsed = parseArgs({
 		args: argv,
 		allowPositionals: true,
@@ -2072,16 +2131,16 @@ Inspect the compiled read-only runtime catalog. Commands:
   resources
   flows
   flow NAME`;
-function fail$9(message) {
+function fail$15(message) {
 	throw new Error(message);
 }
 function object$4(value, label) {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) fail$9(`${label} must be an object`);
+	if (typeof value !== "object" || value === null || Array.isArray(value)) fail$15(`${label} must be an object`);
 	return value;
 }
-function strings(value, label = "value") {
+function strings$1(value, label = "value") {
 	if (value === void 0) return [];
-	if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) fail$9(`${label} must be an array of strings`);
+	if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) fail$15(`${label} must be an array of strings`);
 	return value;
 }
 function phaseFor(flow, index) {
@@ -2092,19 +2151,19 @@ function lexical(left, right) {
 }
 function parseCatalog(value) {
 	const record = object$4(value, "runtime catalog");
-	if (record.version !== 1) fail$9(`unsupported runtime catalog version: ${String(record.version)}`);
+	if (record.version !== 1) fail$15(`unsupported runtime catalog version: ${String(record.version)}`);
 	const flows = object$4(record.flows, "runtime catalog flows");
 	return {
 		version: 1,
 		deployment: object$4(record.deployment, "runtime catalog deployment"),
-		contributors: Array.isArray(record.contributors) ? record.contributors.map((item, index) => object$4(item, `contributor ${index}`)) : fail$9("runtime catalog contributors must be an array"),
-		resources: Array.isArray(record.resources) ? record.resources.map((item, index) => object$4(item, `resource ${index}`)) : fail$9("runtime catalog resources must be an array"),
-		commands: Array.isArray(record.commands) ? record.commands.map((item, index) => object$4(item, `command ${index}`)) : fail$9("runtime catalog commands must be an array"),
-		actions: Array.isArray(record.actions) ? record.actions.map((item, index) => object$4(item, `action ${index}`)) : fail$9("runtime catalog actions must be an array"),
+		contributors: Array.isArray(record.contributors) ? record.contributors.map((item, index) => object$4(item, `contributor ${index}`)) : fail$15("runtime catalog contributors must be an array"),
+		resources: Array.isArray(record.resources) ? record.resources.map((item, index) => object$4(item, `resource ${index}`)) : fail$15("runtime catalog resources must be an array"),
+		commands: Array.isArray(record.commands) ? record.commands.map((item, index) => object$4(item, `command ${index}`)) : fail$15("runtime catalog commands must be an array"),
+		actions: Array.isArray(record.actions) ? record.actions.map((item, index) => object$4(item, `action ${index}`)) : fail$15("runtime catalog actions must be an array"),
 		flows: Object.fromEntries(Object.entries(flows).map(([name, item]) => {
 			return [name, {
 				name,
-				entries: strings(object$4(item, `flow ${name}`).entries, `flow ${name} entries`)
+				entries: strings$1(object$4(item, `flow ${name}`).entries, `flow ${name} entries`)
 			}];
 		})),
 		execution: object$4(record.execution, "runtime catalog execution")
@@ -2132,7 +2191,7 @@ function parseOptions$1(argv, deploymentDir) {
 		console.log(USAGE$2);
 		process.exit(0);
 	}
-	if (values.catalog && values.deployment) fail$9("--catalog and --deployment are mutually exclusive");
+	if (values.catalog && values.deployment) fail$15("--catalog and --deployment are mutually exclusive");
 	const root = resolve(values.deployment ?? deploymentDir);
 	return {
 		catalogPath: resolve(values.catalog ?? join(root, "etc", "compfuzor-runtime", "catalog.json")),
@@ -2142,10 +2201,10 @@ function parseOptions$1(argv, deploymentDir) {
 }
 function placement(path, expectedFlow) {
 	const match = /^(\d{2})-(build|install|status)-.+\.json$/.exec(basename(path));
-	if (!match) fail$9(`invalid indexed flow filename: ${path}`);
+	if (!match) fail$15(`invalid indexed flow filename: ${path}`);
 	const index = Number(match[1]);
-	if (index < 1 || index > 99) fail$9(`flow index must be 01-99: ${path}`);
-	if (match[2] !== expectedFlow) fail$9(`flow filename ${path} does not match descriptor flow ${expectedFlow}`);
+	if (index < 1 || index > 99) fail$15(`flow index must be 01-99: ${path}`);
+	if (match[2] !== expectedFlow) fail$15(`flow filename ${path} does not match descriptor flow ${expectedFlow}`);
 	return {
 		index,
 		flow: match[2]
@@ -2186,29 +2245,29 @@ async function readLayer(directory, layer) {
 	}));
 }
 async function loadFlow(catalogPath, flow, suppliedCatalog) {
-	if (!(flow in FLOW_PHASES)) fail$9(`unknown flow: ${flow}`);
+	if (!(flow in FLOW_PHASES)) fail$15(`unknown flow: ${flow}`);
 	const catalog = suppliedCatalog ?? await loadCatalog(catalogPath);
 	const declaredById = /* @__PURE__ */ new Map();
 	for (const [declaredFlow, descriptor] of Object.entries(catalog.flows)) for (const id of descriptor.entries) {
 		const previous = declaredById.get(id);
-		if (previous) fail$9(`flow contribution id ${id} is declared by both ${previous} and ${declaredFlow}`);
+		if (previous) fail$15(`flow contribution id ${id} is declared by both ${previous} and ${declaredFlow}`);
 		declaredById.set(id, declaredFlow);
 	}
 	const declaredDescriptor = catalog.flows[flow];
-	if (!declaredDescriptor) fail$9(`catalog does not declare flow: ${flow}`);
+	if (!declaredDescriptor) fail$15(`catalog does not declare flow: ${flow}`);
 	const declared = new Set(declaredDescriptor.entries);
 	const root = join(dirname(catalogPath), "workflows");
 	const [compiled, site] = await Promise.all([readLayer(join(root, "compiled"), "compiled"), readLayer(join(root, "site"), "site")]);
 	const selected = /* @__PURE__ */ new Map();
 	for (const item of compiled) {
 		const id = item.record.id;
-		if (typeof id !== "string" || !id) fail$9(`flow descriptor ${item.path} requires an id`);
+		if (typeof id !== "string" || !id) fail$15(`flow descriptor ${item.path} requires an id`);
 		if (!declared.has(id)) continue;
-		if (item.record.version !== 1) fail$9(`flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`);
-		if (item.record.flow !== flow) fail$9(`flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`);
+		if (item.record.version !== 1) fail$15(`flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`);
+		if (item.record.flow !== flow) fail$15(`flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`);
 		object$4(item.record.invoke, `flow descriptor ${item.path} invocation`);
-		strings(item.record.contributors, `flow descriptor ${item.path} contributors`);
-		if (selected.has(id)) fail$9(`duplicate compiled flow contribution id ${id}`);
+		strings$1(item.record.contributors, `flow descriptor ${item.path} contributors`);
+		if (selected.has(id)) fail$15(`duplicate compiled flow contribution id ${id}`);
 		const effective = placement(item.path, flow);
 		selected.set(id, {
 			...item.record,
@@ -2220,29 +2279,29 @@ async function loadFlow(catalogPath, flow, suppliedCatalog) {
 			selectedLayer: "compiled"
 		});
 	}
-	for (const id of declared) if (!selected.has(id)) fail$9(`catalog flow ${flow} references missing compiled contribution ${id}`);
+	for (const id of declared) if (!selected.has(id)) fail$15(`catalog flow ${flow} references missing compiled contribution ${id}`);
 	const siteIds = /* @__PURE__ */ new Set();
 	for (const item of site) {
 		const id = item.record.id;
-		if (typeof id !== "string" || !id) fail$9(`site flow descriptor ${item.path} requires an id`);
-		if (siteIds.has(id)) fail$9(`duplicate site flow contribution id ${id}`);
+		if (typeof id !== "string" || !id) fail$15(`site flow descriptor ${item.path} requires an id`);
+		if (siteIds.has(id)) fail$15(`duplicate site flow contribution id ${id}`);
 		siteIds.add(id);
 		const declaredFlow = declaredById.get(id);
-		if (!declaredFlow) fail$9(`site flow descriptor ${item.path} names undeclared contribution ${id}`);
+		if (!declaredFlow) fail$15(`site flow descriptor ${item.path} names undeclared contribution ${id}`);
 		if (declaredFlow !== flow) continue;
 		const previous = selected.get(id);
 		if (item.record.state === "absent") {
-			if (!previous) fail$9(`site tombstone ${item.path} names unknown compiled contribution ${id}`);
-			if (Object.keys(item.record).some((key) => key !== "id" && key !== "state")) fail$9(`site tombstone ${item.path} may contain only id and state`);
+			if (!previous) fail$15(`site tombstone ${item.path} names unknown compiled contribution ${id}`);
+			if (Object.keys(item.record).some((key) => key !== "id" && key !== "state")) fail$15(`site tombstone ${item.path} may contain only id and state`);
 			selected.delete(id);
 			continue;
 		}
-		if (item.record.version !== 1) fail$9(`site flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`);
-		if (item.record.flow !== flow) fail$9(`site flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`);
+		if (item.record.version !== 1) fail$15(`site flow descriptor ${item.path} has unsupported version ${String(item.record.version)}`);
+		if (item.record.flow !== flow) fail$15(`site flow descriptor ${item.path} is indexed under ${flow} but declares ${String(item.record.flow)}`);
 		object$4(item.record.invoke, `site flow descriptor ${item.path} invocation`);
-		strings(item.record.contributors, `site flow descriptor ${item.path} contributors`);
+		strings$1(item.record.contributors, `site flow descriptor ${item.path} contributors`);
 		const effective = placement(item.path, flow);
-		if (previous && semanticDescriptor(previous) !== semanticDescriptor(item.record)) fail$9(`site flow contribution ${id} may change placement only; use a new id for changed behavior`);
+		if (previous && semanticDescriptor(previous) !== semanticDescriptor(item.record)) fail$15(`site flow contribution ${id} may change placement only; use a new id for changed behavior`);
 		selected.set(id, {
 			...item.record,
 			id,
@@ -2268,7 +2327,7 @@ function cell(value) {
 async function runCatalog(options) {
 	const catalog = await loadCatalog(options.catalogPath);
 	const [command, argument, ...extra] = options.positionals;
-	if (extra.length > 0) fail$9(USAGE$2);
+	if (extra.length > 0) fail$15(USAGE$2);
 	if (!command) {
 		const summary = {
 			deployment: catalog.deployment,
@@ -2284,7 +2343,7 @@ async function runCatalog(options) {
 		return 0;
 	}
 	if (command === "flow") {
-		if (!argument) fail$9("catalog flow requires a flow name");
+		if (!argument) fail$15("catalog flow requires a flow name");
 		const entries = await loadFlow(options.catalogPath, argument, catalog);
 		if (options.json) console.log(JSON.stringify(entries));
 		else printRows(entries.map((entry) => [
@@ -2293,11 +2352,11 @@ async function runCatalog(options) {
 			entry.id,
 			cell(object$4(entry.invoke, `flow invocation ${entry.id}`).action),
 			entry.selectedLayer,
-			strings(entry.contributors, `flow invocation ${entry.id} contributors`).join(",")
+			strings$1(entry.contributors, `flow invocation ${entry.id} contributors`).join(",")
 		]));
 		return 0;
 	}
-	if (argument) fail$9(`${command} does not accept an argument`);
+	if (argument) fail$15(`${command} does not accept an argument`);
 	if (command === "flows") {
 		const rows = await Promise.all(Object.keys(catalog.flows).map(async (name) => [name, String((await loadFlow(options.catalogPath, name, catalog)).length)]));
 		if (options.json) console.log(JSON.stringify(Object.fromEntries(rows)));
@@ -2310,16 +2369,16 @@ async function runCatalog(options) {
 		commands: catalog.commands,
 		resources: catalog.resources
 	}[command];
-	if (!values) fail$9(USAGE$2);
+	if (!values) fail$15(USAGE$2);
 	if (options.json) console.log(JSON.stringify(values));
 	else printRows(values.map((value) => [
 		cell(value.id ?? value.name),
 		cell(value.action ?? value.contract ?? value.kind),
-		strings(value.contributors, "catalog contributors").join(",")
+		strings$1(value.contributors, "catalog contributors").join(",")
 	]));
 	return 0;
 }
-async function main$6(argv, deploymentDir) {
+async function main$7(argv, deploymentDir) {
 	return runCatalog(parseOptions$1(argv, deploymentDir));
 }
 //#endregion
@@ -2328,16 +2387,16 @@ async function main$6(argv, deploymentDir) {
 const USAGE$1 = `Usage: compfuzor-flow.sh [--catalog PATH | --deployment DIR] [--dry-run] FLOW
 
 Execute one catalog-authorized build, install, or status flow in lexical order.`;
-function fail$8(message) {
+function fail$14(message) {
 	throw new Error(message);
 }
 function object$3(value, label) {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) fail$8(`${label} must be an object`);
+	if (typeof value !== "object" || value === null || Array.isArray(value)) fail$14(`${label} must be an object`);
 	return value;
 }
 function stringArray(value, label) {
 	if (value === void 0) return [];
-	if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) fail$8(`${label} must be an array of strings`);
+	if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) fail$14(`${label} must be an array of strings`);
 	return value;
 }
 function parseOptions(argv, defaultDeployment) {
@@ -2359,12 +2418,12 @@ function parseOptions(argv, defaultDeployment) {
 		console.log(USAGE$1);
 		process.exit(0);
 	}
-	if (values.catalog && values.deployment) fail$8("--catalog and --deployment are mutually exclusive");
+	if (values.catalog && values.deployment) fail$14("--catalog and --deployment are mutually exclusive");
 	if (positionals.length !== 1 || ![
 		"build",
 		"install",
 		"status"
-	].includes(positionals[0])) fail$8(USAGE$1);
+	].includes(positionals[0])) fail$14(USAGE$1);
 	const deploymentDir = resolve(values.deployment ?? defaultDeployment);
 	return {
 		catalogPath: resolve(values.catalog ?? join(deploymentDir, "etc", "compfuzor-runtime", "catalog.json")),
@@ -2374,11 +2433,11 @@ function parseOptions(argv, defaultDeployment) {
 	};
 }
 async function executablePath$1(deploymentDir, configured, id) {
-	if (typeof configured !== "string" || !configured) fail$8(`flow invocation ${id} requires an executable path`);
+	if (typeof configured !== "string" || !configured) fail$14(`flow invocation ${id} requires an executable path`);
 	const lexicalPath = resolve(deploymentDir, configured);
 	const [root, physicalPath] = await Promise.all([realpath(deploymentDir), realpath(lexicalPath)]);
 	const remainder = relative(root, physicalPath);
-	if (remainder === ".." || remainder.startsWith(`..${sep}`)) fail$8(`flow invocation ${id} executable escapes deployment: ${configured}`);
+	if (remainder === ".." || remainder.startsWith(`..${sep}`)) fail$14(`flow invocation ${id} executable escapes deployment: ${configured}`);
 	return lexicalPath;
 }
 async function runExecutable$1(path, args, deploymentDir) {
@@ -2423,7 +2482,7 @@ async function runExecutable$1(path, args, deploymentDir) {
 async function runInvocation(entry, deploymentDir, dryRun) {
 	const invoke = object$3(entry.invoke, `flow invocation ${entry.id}`);
 	const handler = object$3(invoke.handler, `flow invocation ${entry.id} handler`);
-	if (handler.kind !== "exec") fail$8(`flow invocation ${entry.id} has unsupported handler kind ${String(handler.kind)}`);
+	if (handler.kind !== "exec") fail$14(`flow invocation ${entry.id} has unsupported handler kind ${String(handler.kind)}`);
 	const path = await executablePath$1(deploymentDir, handler.path, entry.id);
 	const args = stringArray(invoke.args, `flow invocation ${entry.id} args`);
 	console.error(`${dryRun ? "would run" : "running"} ${entry.effectiveIndex.toString().padStart(2, "0")} ${entry.id}: ${path}${args.length ? ` ${args.join(" ")}` : ""}`);
@@ -2431,7 +2490,7 @@ async function runInvocation(entry, deploymentDir, dryRun) {
 }
 async function executeFlow(options) {
 	const catalog = await loadCatalog(options.catalogPath);
-	if (catalog.execution.catalogOnly || catalog.execution.authority !== "catalog") fail$8(`catalog flow execution is disabled for ${typeof catalog.deployment.id === "string" ? catalog.deployment.id : "deployment"}`);
+	if (catalog.execution.catalogOnly || catalog.execution.authority !== "catalog") fail$14(`catalog flow execution is disabled for ${typeof catalog.deployment.id === "string" ? catalog.deployment.id : "deployment"}`);
 	const entries = await loadFlow(options.catalogPath, options.flow, catalog);
 	let attention = false;
 	for (const entry of entries) {
@@ -2447,7 +2506,7 @@ async function executeFlow(options) {
 	}
 	return attention ? 1 : 0;
 }
-async function main$5(argv, deploymentDir) {
+async function main$6(argv, deploymentDir) {
 	return executeFlow(parseOptions(argv, deploymentDir));
 }
 //#endregion
@@ -2471,7 +2530,7 @@ Options:
   -h, --help           Show this help
 
 Exit: 0 success/in-sync, 1 drift or policy conflict, 2 usage/source error.`;
-function fail$7(message) {
+function fail$13(message) {
 	throw new Error(message);
 }
 function parseSudoWord(value) {
@@ -2495,13 +2554,13 @@ function parseSudoWord(value) {
 function resolveSudoMode(flagValue) {
 	if (flagValue !== void 0) {
 		const mode = parseSudoWord(flagValue);
-		if (!mode) fail$7(`--sudo expects auto, always, or never (got ${flagValue})`);
+		if (!mode) fail$13(`--sudo expects auto, always, or never (got ${flagValue})`);
 		return mode;
 	}
 	const environmentValue = process.env.COMPFUZOR_LINKS_SUDO;
 	if (environmentValue === void 0 || environmentValue.trim() === "") return "auto";
 	const mode = parseSudoWord(environmentValue);
-	if (!mode) fail$7(`COMPFUZOR_LINKS_SUDO must be auto, always, or never (got ${environmentValue})`);
+	if (!mode) fail$13(`COMPFUZOR_LINKS_SUDO must be auto, always, or never (got ${environmentValue})`);
 	return mode;
 }
 /**
@@ -2551,16 +2610,16 @@ function parseLinksArgs(argv, defaultManifest) {
 		process.exit(0);
 	}
 	const commandIndex = positionals.findIndex((value) => value === "apply" || value === "status" || value === "audit" || value === "remove");
-	if (commandIndex < 0) fail$7("expected apply, status, audit, or remove");
+	if (commandIndex < 0) fail$13("expected apply, status, audit, or remove");
 	const command = positionals[commandIndex];
 	const paths = positionals.toSpliced(commandIndex, 1);
-	if (command !== "audit" && paths.length > 1) fail$7(`${command} accepts at most one manifest`);
-	if (values.strategy !== void 0 && command !== "apply") fail$7("--strategy is only valid with apply");
-	if (values.composed && command !== "apply") fail$7("--composed is only valid with apply");
-	if (values.scope !== void 0 && values.scope !== "system" && values.scope !== "user") fail$7("--scope must be system or user");
-	if (values.strategy !== void 0 && values.strategy !== "link" && values.strategy !== "copy") fail$7("--strategy must be link or copy");
+	if (command !== "audit" && paths.length > 1) fail$13(`${command} accepts at most one manifest`);
+	if (values.strategy !== void 0 && command !== "apply") fail$13("--strategy is only valid with apply");
+	if (values.composed && command !== "apply") fail$13("--composed is only valid with apply");
+	if (values.scope !== void 0 && values.scope !== "system" && values.scope !== "user") fail$13("--scope must be system or user");
+	if (values.strategy !== void 0 && values.strategy !== "link" && values.strategy !== "copy") fail$13("--strategy must be link or copy");
 	const id = values.id?.flatMap((value) => value.split(",").map((part) => part.trim()).filter(Boolean));
-	if (values.id !== void 0 && id?.length === 0) fail$7("--id requires a comma-separated glob list");
+	if (values.id !== void 0 && id?.length === 0) fail$13("--id requires a comma-separated glob list");
 	const formatToken = tokens.findLast((token) => token.kind === "option" && (token.name === "json" || token.name === "json-array"));
 	const format = formatToken?.name === "json-array" ? "array" : formatToken?.name === "json" ? "jsonl" : "human";
 	return {
@@ -2578,15 +2637,15 @@ function parseLinksArgs(argv, defaultManifest) {
 //#endregion
 //#region files/links/manifest.ts
 /** LINKS manifest v1/v2 decoding, path binding, and record selection. */
-function fail$6(message) {
+function fail$12(message) {
 	throw new Error(message);
 }
 function object$2(value, description) {
-	if (!value || typeof value !== "object" || Array.isArray(value)) fail$6(`${description} must be an object`);
+	if (!value || typeof value !== "object" || Array.isArray(value)) fail$12(`${description} must be an object`);
 	return value;
 }
 function stringField(value, description) {
-	if (typeof value !== "string" || value.length === 0) fail$6(`${description} must be a non-empty string`);
+	if (typeof value !== "string" || value.length === 0) fail$12(`${description} must be a non-empty string`);
 	return value;
 }
 function strategiesField(value, description) {
@@ -2596,13 +2655,13 @@ function strategiesField(value, description) {
 	};
 	const strategies = object$2(value, description);
 	const unknown = Object.keys(strategies).filter((key) => key !== "available" && key !== "default");
-	if (unknown.length > 0) fail$6(`${description} has unknown fields: ${unknown.sort().join(", ")}`);
-	if (!Array.isArray(strategies.available) || strategies.available.length === 0) fail$6(`${description}.available must be a non-empty array`);
-	if (strategies.available.some((entry) => entry !== "link" && entry !== "copy")) fail$6(`${description}.available contains an unsupported strategy`);
+	if (unknown.length > 0) fail$12(`${description} has unknown fields: ${unknown.sort().join(", ")}`);
+	if (!Array.isArray(strategies.available) || strategies.available.length === 0) fail$12(`${description}.available must be a non-empty array`);
+	if (strategies.available.some((entry) => entry !== "link" && entry !== "copy")) fail$12(`${description}.available contains an unsupported strategy`);
 	const declared = strategies.available;
-	if (new Set(declared).size !== declared.length) fail$6(`${description}.available contains duplicates`);
-	if (strategies.default !== "link" && strategies.default !== "copy") fail$6(`${description}.default must be link or copy`);
-	if (!declared.includes(strategies.default)) fail$6(`${description}.default must be available`);
+	if (new Set(declared).size !== declared.length) fail$12(`${description}.available contains duplicates`);
+	if (strategies.default !== "link" && strategies.default !== "copy") fail$12(`${description}.default must be link or copy`);
+	if (!declared.includes(strategies.default)) fail$12(`${description}.default must be available`);
 	return {
 		available: ["link", "copy"].filter((strategy) => declared.includes(strategy)),
 		default: strategies.default
@@ -2620,25 +2679,25 @@ async function loadManifest(inputPath) {
 	try {
 		raw = JSON.parse(await readFile(path, "utf8"));
 	} catch (error) {
-		fail$6(`cannot read manifest ${path}: ${error instanceof Error ? error.message : String(error)}`);
+		fail$12(`cannot read manifest ${path}: ${error instanceof Error ? error.message : String(error)}`);
 	}
 	const value = object$2(raw, `manifest ${path}`);
-	if (value.version !== 1 && value.version !== 2) fail$6(`manifest ${path}: unsupported version ${String(value.version)}`);
+	if (value.version !== 1 && value.version !== 2) fail$12(`manifest ${path}: unsupported version ${String(value.version)}`);
 	const version = value.version;
-	if (!Array.isArray(value.links)) fail$6(`manifest ${path}: links must be an array`);
+	if (!Array.isArray(value.links)) fail$12(`manifest ${path}: links must be an array`);
 	const seen = /* @__PURE__ */ new Set();
 	const links = value.links.map((entry, index) => {
 		const record = object$2(entry, `${path}: links[${index}]`);
 		const id = stringField(record.id, `${path}: links[${index}].id`);
-		if (seen.has(id)) fail$6(`${path}: duplicate link id ${id}`);
+		if (seen.has(id)) fail$12(`${path}: duplicate link id ${id}`);
 		seen.add(id);
-		if (record.scope !== "system" && record.scope !== "user") fail$6(`${path}: ${id}: invalid scope`);
-		if (record.policy !== "preserve" && record.policy !== "fail" && record.policy !== "replace") fail$6(`${path}: ${id}: invalid policy`);
-		if (record.state !== "present" && record.state !== "absent") fail$6(`${path}: ${id}: invalid state`);
-		if (version === 1 && (record.strategies !== void 0 || record.compose !== void 0)) fail$6(`${path}: ${id}: version 1 records cannot declare strategies or compose; rerender as LINKS manifest version 2`);
+		if (record.scope !== "system" && record.scope !== "user") fail$12(`${path}: ${id}: invalid scope`);
+		if (record.policy !== "preserve" && record.policy !== "fail" && record.policy !== "replace") fail$12(`${path}: ${id}: invalid policy`);
+		if (record.state !== "present" && record.state !== "absent") fail$12(`${path}: ${id}: invalid state`);
+		if (version === 1 && (record.strategies !== void 0 || record.compose !== void 0)) fail$12(`${path}: ${id}: version 1 records cannot declare strategies or compose; rerender as LINKS manifest version 2`);
 		let runtimeRoots;
 		if (record.runtimeRoots !== void 0) {
-			if (!Array.isArray(record.runtimeRoots) || record.runtimeRoots.some((root) => root !== "HOME" && root !== "XDG_RUNTIME_DIR" && root !== "XDG_STATE_HOME")) fail$6(`${path}: ${id}: runtimeRoots contains an unsupported root`);
+			if (!Array.isArray(record.runtimeRoots) || record.runtimeRoots.some((root) => root !== "HOME" && root !== "XDG_RUNTIME_DIR" && root !== "XDG_STATE_HOME")) fail$12(`${path}: ${id}: runtimeRoots contains an unsupported root`);
 			runtimeRoots = record.runtimeRoots;
 		}
 		return {
@@ -2649,7 +2708,7 @@ async function loadManifest(inputPath) {
 			policy: record.policy,
 			state: record.state,
 			strategies: strategiesField(record.strategies, `${path}: ${id}: strategies`),
-			compose: record.compose === void 0 ? true : typeof record.compose === "boolean" ? record.compose : fail$6(`${path}: ${id}: compose must be boolean`),
+			compose: record.compose === void 0 ? true : typeof record.compose === "boolean" ? record.compose : fail$12(`${path}: ${id}: compose must be boolean`),
 			runtimeRoots
 		};
 	});
@@ -2674,18 +2733,18 @@ function expandPath(value, base) {
 	const runtime = process.env.XDG_RUNTIME_DIR;
 	const state = process.env.XDG_STATE_HOME || (home ? join(home, ".local/state") : void 0);
 	if (value === "~" || value.startsWith("~/")) {
-		if (!home) fail$6(`HOME is required to expand ${value}`);
+		if (!home) fail$12(`HOME is required to expand ${value}`);
 		expanded = home + value.slice(1);
 	} else if (value === "${HOME}" || value.startsWith("${HOME}/")) {
-		if (!home) fail$6(`HOME is required to expand ${value}`);
+		if (!home) fail$12(`HOME is required to expand ${value}`);
 		expanded = home + value.slice(7);
 	} else if (value === "${XDG_RUNTIME_DIR}" || value.startsWith("${XDG_RUNTIME_DIR}/")) {
-		if (!runtime) fail$6(`XDG_RUNTIME_DIR is required to expand ${value}`);
+		if (!runtime) fail$12(`XDG_RUNTIME_DIR is required to expand ${value}`);
 		expanded = runtime + value.slice(18);
 	} else if (value === "${XDG_STATE_HOME}" || value.startsWith("${XDG_STATE_HOME}/")) {
-		if (!state) fail$6(`HOME or XDG_STATE_HOME is required to expand ${value}`);
+		if (!state) fail$12(`HOME or XDG_STATE_HOME is required to expand ${value}`);
 		expanded = state + value.slice(17);
-	} else if (value.startsWith("~") || value.includes("${") || value.includes("$")) fail$6(`unsupported runtime-root expression: ${value}`);
+	} else if (value.startsWith("~") || value.includes("${") || value.includes("$")) fail$12(`unsupported runtime-root expression: ${value}`);
 	return normalize(isAbsolute(expanded) ? expanded : resolve(base, expanded));
 }
 function idMatches(idPatterns, id) {
@@ -2704,10 +2763,10 @@ function resolveRecords(path, manifest, scope, idPatterns, composed = false) {
 			srcPath: expandPath(record.src, base),
 			destPath: expandPath(record.dest, base)
 		};
-		if (resolved.srcPath === resolved.destPath) fail$6(`${path}: ${record.id}: source and destination are the same path`);
+		if (resolved.srcPath === resolved.destPath) fail$12(`${path}: ${record.id}: source and destination are the same path`);
 		const key = `${record.scope}\0${resolved.destPath}`;
 		const prior = claims.get(key);
-		if (prior && (prior.srcPath !== resolved.srcPath || prior.policy !== resolved.policy || prior.state !== resolved.state || prior.compose !== resolved.compose || prior.strategies.default !== resolved.strategies.default || prior.strategies.available.join("\0") !== resolved.strategies.available.join("\0"))) fail$6(`${path}: conflicting claims for ${resolved.destPath}`);
+		if (prior && (prior.srcPath !== resolved.srcPath || prior.policy !== resolved.policy || prior.state !== resolved.state || prior.compose !== resolved.compose || prior.strategies.default !== resolved.strategies.default || prior.strategies.available.join("\0") !== resolved.strategies.available.join("\0"))) fail$12(`${path}: conflicting claims for ${resolved.destPath}`);
 		claims.set(key, resolved);
 		records.push(resolved);
 	} catch (error) {
@@ -2739,6 +2798,7 @@ function globMatches(pattern, value) {
 //#endregion
 //#region files/links/operations.ts
 /** LINKS representation assessment and bounded filesystem mutations. */
+init_delivery();
 const _execFile = promisify(execFile);
 async function destWritable(destPath) {
 	let dir = dirname(destPath);
@@ -3102,7 +3162,7 @@ async function removeRecord(record, sudoMode) {
 }
 //#endregion
 //#region files/links/runtime.ts
-function fail$5(message) {
+function fail$11(message) {
 	throw new Error(message);
 }
 async function audit(paths, scope, idPatterns) {
@@ -3176,7 +3236,7 @@ function output(rows, options) {
 		}
 	}
 }
-async function main$4(argv, deploymentDir) {
+async function main$5(argv, deploymentDir) {
 	const options = parseLinksArgs(argv, join(process.env.DIR ?? deploymentDir, "links.json"));
 	const sudoMode = resolveSudoMode(options.sudo);
 	if ([
@@ -3190,16 +3250,16 @@ async function main$4(argv, deploymentDir) {
 	else {
 		const loaded = await loadManifest(options.paths[0]);
 		const resolved = resolveRecords(loaded.path, loaded.manifest, options.scope, options.id, options.composed);
-		if ((options.command === "apply" || options.command === "remove") && sudoMode === "always" && resolved.records.some((record) => record.scope === "user")) fail$5("--sudo always is not permitted for user-scope link mutations");
+		if ((options.command === "apply" || options.command === "remove") && sudoMode === "always" && resolved.records.some((record) => record.scope === "user")) fail$11("--sudo always is not permitted for user-scope link mutations");
 		if (options.command === "apply" && options.strategy) {
 			const unavailable = resolved.records.filter((record) => record.state === "present" && !record.strategies.available.includes(options.strategy));
-			if (unavailable.length > 0) fail$5(`strategy ${options.strategy} is unavailable for: ${unavailable.map((record) => record.id).join(", ")}`);
+			if (unavailable.length > 0) fail$11(`strategy ${options.strategy} is unavailable for: ${unavailable.map((record) => record.id).join(", ")}`);
 			if (options.strategy === "copy") {
 				const unusable = (await Promise.all(resolved.records.map(async (record) => ({
 					record,
 					source: await sourceState(record.srcPath)
 				})))).filter(({ record, source }) => record.state === "present" && source.entryExists && !source.regular);
-				if (unusable.length > 0) fail$5(`strategy copy requires a source that resolves to a regular file: ${unusable.map(({ record }) => record.id).join(", ")}`);
+				if (unusable.length > 0) fail$11(`strategy copy requires a source that resolves to a regular file: ${unusable.map(({ record }) => record.id).join(", ")}`);
 			}
 		}
 		const operation = options.command === "apply" ? (record) => applyRecord(record, {
@@ -3216,11 +3276,12 @@ async function main$4(argv, deploymentDir) {
 //#endregion
 //#region files/zim/activation.ts
 /** Zim context binding, loader projection, cache builds, and health checks. */
-function fail$4(message) {
+init_context$1();
+function fail$10(message) {
 	throw new Error(message);
 }
 function resolveActivation(name, zimSpec, configSpec) {
-	const spec = zimSpec.contexts[name] ?? fail$4(`unknown Zim context: ${name}`);
+	const spec = zimSpec.contexts[name] ?? fail$10(`unknown Zim context: ${name}`);
 	const bound = bindContextConfigs(configSpec, spec.config, ["zimrc", "zimenv"]);
 	return {
 		name,
@@ -3262,13 +3323,13 @@ async function runCommand(file, args, capture = false, input) {
 	});
 }
 function zshQuote(value) {
-	if (value.includes("\0")) fail$4("cannot project a Zsh path containing NUL");
+	if (value.includes("\0")) fail$10("cannot project a Zsh path containing NUL");
 	return `'${value.replaceAll("'", "'\\''")}'`;
 }
 function replaceLoaderToken(template, token, value, source) {
 	const first = template.indexOf(token);
-	if (first < 0) fail$4(`Zim loader template ${source} is missing ${token}`);
-	if (template.indexOf(token, first + token.length) >= 0) fail$4(`Zim loader template ${source} repeats ${token}`);
+	if (first < 0) fail$10(`Zim loader template ${source} is missing ${token}`);
+	if (template.indexOf(token, first + token.length) >= 0) fail$10(`Zim loader template ${source} repeats ${token}`);
 	return `${template.slice(0, first)}${value}${template.slice(first + token.length)}`;
 }
 async function projectLoader(channel, activation, canonical) {
@@ -3286,7 +3347,7 @@ async function projectLoader(channel, activation, canonical) {
 	if (channel === "zimrc") replacements.push(["@@ZIM_EMERGENCY_MODULE@@", zshQuote(canonical.emergencyModule)]);
 	for (const [token, value] of replacements) projected = replaceLoaderToken(projected, token, value, template);
 	const unknown = projected.match(/@@ZIM_[A-Z_]+@@/);
-	if (unknown) fail$4(`Zim loader template ${template} has unsupported placeholder ${unknown[0]}`);
+	if (unknown) fail$10(`Zim loader template ${template} has unsupported placeholder ${unknown[0]}`);
 	projected = projected.replace(/\r?\n$/, "");
 	return {
 		content: Buffer.from(projected),
@@ -3302,7 +3363,7 @@ async function installLoader(block, content, destination, legacyBlock) {
 			`^${legacyBlock}$`,
 			"-o",
 			destination
-		])).code !== 0) fail$4(`failed to remove legacy block from ${destination}`);
+		])).code !== 0) fail$10(`failed to remove legacy block from ${destination}`);
 	} catch (error) {
 		if (error.code !== "ENOENT") throw error;
 	}
@@ -3315,7 +3376,7 @@ async function installLoader(block, content, destination, legacyBlock) {
 		"-",
 		"-o",
 		destination
-	], false, content)).code !== 0) fail$4(`failed to install block ${block} in ${destination}`);
+	], false, content)).code !== 0) fail$10(`failed to install block ${block} in ${destination}`);
 }
 async function buildChannel(channel, activation, canonical) {
 	const home = channel === "zimrc" ? activation.zimrcHome : activation.zimenvHome;
@@ -3328,7 +3389,7 @@ async function buildChannel(channel, activation, canonical) {
 		config,
 		canonical.controller,
 		"install"
-	])).code !== 0) fail$4(`failed to build ${channel} cache for context ${activation.name}`);
+	])).code !== 0) fail$10(`failed to build ${channel} cache for context ${activation.name}`);
 }
 async function installActivation(activation, canonical) {
 	const [zimenvLoader, zimrcLoader] = await Promise.all([projectLoader("zimenv", activation, canonical), projectLoader("zimrc", activation, canonical)]);
@@ -3362,7 +3423,7 @@ async function wireDotfile(channel, activation, canonical) {
 		pattern,
 		"-o",
 		destination
-	])).code !== 0) fail$4(`failed to remove legacy block ${pattern} from ${destination}`);
+	])).code !== 0) fail$10(`failed to remove legacy block ${pattern} from ${destination}`);
 	if ((await runCommand(executable, [
 		"-n",
 		block,
@@ -3372,7 +3433,7 @@ async function wireDotfile(channel, activation, canonical) {
 		"-",
 		"-o",
 		destination
-	], false, Buffer.from(wiringContent(channel, activation)))).code !== 0) fail$4(`failed to wire block ${block} into ${destination}`);
+	], false, Buffer.from(wiringContent(channel, activation)))).code !== 0) fail$10(`failed to wire block ${block} into ${destination}`);
 }
 async function wiringHealthy(channel, activation, canonical) {
 	const destination = wiringTarget(channel, activation);
@@ -3447,6 +3508,7 @@ async function activationHealthy(activation, canonical) {
 //#endregion
 //#region files/zim/cli.ts
 /** Zim command parsing, context selection, strategy normalization, and help. */
+init_context$1();
 const HELP = {
 	install: `Usage: install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]
 
@@ -3475,16 +3537,16 @@ Options:
   --context NAME     Select a declared Zim context
   --activation-only  Skip CONFIG rows (used by aggregate status)`
 };
-function fail$3(message) {
+function fail$9(message) {
 	throw new Error(message);
 }
 function parseInstallStrategy(value, label) {
 	if (value === "assemble" || value === "copy" || value === "link") return value;
-	fail$3(`${label} must be assemble, copy, or link`);
+	fail$9(`${label} must be assemble, copy, or link`);
 }
 function parseInputStrategy(value, label) {
 	if (value === "copy" || value === "link") return value;
-	fail$3(`${label} must be copy or link`);
+	fail$9(`${label} must be copy or link`);
 }
 function parseZimArgs(argv, deploymentDir) {
 	const { values, positionals } = parseArgs({
@@ -3512,11 +3574,11 @@ function parseZimArgs(argv, deploymentDir) {
 		console.log(action ? HELP[action] : Object.values(HELP).join("\n\n"));
 		process.exit(0);
 	}
-	if (!action) fail$3("expected Zim action: install, import, or status");
+	if (!action) fail$9("expected Zim action: install, import, or status");
 	const args = positionals.toSpliced(actionIndex, 1);
-	if (action !== "import" && args.length > 0) fail$3(`${action} does not accept positional arguments`);
-	if (action === "import" && args.length !== 1) fail$3("import requires exactly one producer directory");
-	if (values["activation-only"] && action !== "status") fail$3("--activation-only requires status");
+	if (action !== "import" && args.length > 0) fail$9(`${action} does not accept positional arguments`);
+	if (action === "import" && args.length !== 1) fail$9("import requires exactly one producer directory");
+	if (values["activation-only"] && action !== "status") fail$9("--activation-only requires status");
 	return {
 		action,
 		context: values.context,
@@ -3533,8 +3595,8 @@ function parseZimArgs(argv, deploymentDir) {
 function aliasContext(invokedAs, spec) {
 	if (invokedAs === "install-zim.sh") return void 0;
 	const match = /^install-zim-(.+)\.sh$/.exec(invokedAs);
-	if (!match) fail$3(`unsupported Zim command alias ${invokedAs}; use install-zim-CONTEXT.sh or explicit --context`);
-	if (!(match[1] in spec.contexts)) fail$3(`Zim command alias ${invokedAs} names undeclared context ${match[1]}`);
+	if (!match) fail$9(`unsupported Zim command alias ${invokedAs}; use install-zim-CONTEXT.sh or explicit --context`);
+	if (!(match[1] in spec.contexts)) fail$9(`Zim command alias ${invokedAs} names undeclared context ${match[1]}`);
 	return match[1];
 }
 function resolveSettings(options, spec, configSpec) {
@@ -3549,7 +3611,7 @@ function resolveSettings(options, spec, configSpec) {
 	});
 	const activation = spec.contexts[contextName];
 	const configContext = getConfigContext(configSpec, activation.config);
-	if (configContext.scope !== activation.scope) fail$3(`Zim context ${contextName} scope does not match config context ${activation.config}`);
+	if (configContext.scope !== activation.scope) fail$9(`Zim context ${contextName} scope does not match config context ${activation.config}`);
 	return {
 		contextName,
 		install: options.action === "install" ? options.install : void 0,
@@ -3559,7 +3621,9 @@ function resolveSettings(options, spec, configSpec) {
 //#endregion
 //#region files/zim/runtime.ts
 /** Complete Zim install, producer import, and status orchestration. */
-function fail$2(message) {
+init_assembly();
+init_context$1();
+function fail$8(message) {
 	throw new Error(message);
 }
 function truthy(value) {
@@ -3655,7 +3719,7 @@ async function inventoryProducer(producer) {
 		for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
 			if (!entry.name.endsWith(".conf") || !entry.isFile() && !entry.isSymbolicLink()) continue;
 			const key = `${channel}/${entry.name}`;
-			if (seen.has(key)) fail$2(`producer has both active and disabled entries: ${key}`);
+			if (seen.has(key)) fail$8(`producer has both active and disabled entries: ${key}`);
 			seen.add(key);
 			records.push({
 				channel,
@@ -3717,14 +3781,14 @@ async function runZim(options, deploymentDir) {
 		return 0;
 	}
 	const [zimSpec, configSpec] = await Promise.all([readFile(options.zimSpecPath, "utf8").then((text) => JSON.parse(text)), readFile(options.configSpecPath, "utf8").then((text) => JSON.parse(text))]);
-	if (zimSpec.version !== 2) fail$2(`unsupported Zim spec version: ${String(zimSpec.version)}; rerender the deployment with the current playbook (expected version 2)`);
+	if (zimSpec.version !== 2) fail$8(`unsupported Zim spec version: ${String(zimSpec.version)}; rerender the deployment with the current playbook (expected version 2)`);
 	const settings = resolveSettings(options, zimSpec, configSpec);
 	const activation = resolveActivation(settings.contextName, zimSpec, configSpec);
 	if (options.action === "install") return installZim(options, settings, activation, zimSpec, deploymentDir);
 	if (options.action === "import") return importProducer(options, settings, activation, zimSpec);
 	return statusZim(activation, zimSpec, deploymentDir, options.configRunner, options.activationOnly);
 }
-async function main$3(argv, deploymentDir) {
+async function main$4(argv, deploymentDir) {
 	return runZim(parseZimArgs(argv, deploymentDir), deploymentDir);
 }
 //#endregion
@@ -3822,6 +3886,12022 @@ async function assertFileGuards(guards) {
 		if (current.parent !== expected.parent || current.kind !== expected.kind || current.hash !== expected.hash || current.target !== expected.target) throw new Error(`configuration source changed since capture: ${expected.path}`);
 	}
 }
+var init_capture$1 = __esmMin((() => {
+	init_delivery();
+}));
+//#endregion
+//#region ../figments/src/profile.ts
+function normalizeProfile(profile) {
+	return profile.trim().toLowerCase();
+}
+function isCustomProfile(profile) {
+	return profile !== "default" && profile !== "global";
+}
+var DEFAULT_PROFILE, GLOBAL_PROFILE;
+var init_profile$1 = __esmMin((() => {
+	DEFAULT_PROFILE = "default";
+	GLOBAL_PROFILE = "global";
+}));
+//#endregion
+//#region ../figments/src/core/types.ts
+function isConfigDict(value) {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function deepClone(value) {
+	if (Array.isArray(value)) return value.map((item) => deepClone(item));
+	if (isConfigDict(value)) {
+		const copy = {};
+		for (const [key, item] of Object.entries(value)) copy[key] = deepClone(item);
+		return copy;
+	}
+	return value;
+}
+var init_types$1 = __esmMin((() => {}));
+//#endregion
+//#region ../figments/src/core/tag.ts
+function buildTagTree(value, tag) {
+	if (Array.isArray(value)) return {
+		kind: "array",
+		tag,
+		children: value.map((item) => buildTagTree(item, tag))
+	};
+	if (isConfigDict(value)) {
+		const children = [];
+		for (const [key, item] of Object.entries(value)) children.push({
+			...buildTagTree(item, tag),
+			key
+		});
+		return {
+			kind: "dict",
+			tag,
+			children
+		};
+	}
+	return {
+		kind: "scalar",
+		tag
+	};
+}
+function buildTagProfileMap(values, tag) {
+	const map = {};
+	for (const [profile, dict] of Object.entries(values)) map[profile] = buildTagTree(dict, retagForProfile(tag, profile));
+	return map;
+}
+function isTagDictNode(value) {
+	return value.kind === "dict";
+}
+function isTagArrayNode(value) {
+	return value.kind === "array";
+}
+function dictChildrenIndex(node) {
+	const cached = dictChildrenIndexCache.get(node);
+	if (cached) return cached;
+	const index = /* @__PURE__ */ new Map();
+	for (const child of node.children) index.set(child.key, child);
+	dictChildrenIndexCache.set(node, index);
+	return index;
+}
+function cloneTagTree(value) {
+	if (value.kind === "array") return {
+		kind: "array",
+		tag: value.tag,
+		key: value.key,
+		children: value.children.map((item) => cloneTagTree(item))
+	};
+	if (value.kind === "dict") return {
+		kind: "dict",
+		tag: value.tag,
+		key: value.key,
+		children: value.children.map((item) => cloneTagTree(item))
+	};
+	return {
+		kind: "scalar",
+		tag: value.tag,
+		key: value.key
+	};
+}
+function cloneTagDictNode(value) {
+	return cloneTagTree(value);
+}
+function cloneProfileTagMap(map) {
+	const out = {};
+	for (const [profile, node] of Object.entries(map)) out[profile] = cloneTagDictNode(node);
+	return out;
+}
+function remapProfileTagMap(map, tagMap) {
+	const out = {};
+	for (const [profile, node] of Object.entries(map)) out[profile] = remapTagTree(node, tagMap);
+	return out;
+}
+function remapTagTree(value, tagMap) {
+	const tag = {
+		metadataId: tagMap.get(value.tag.metadataId) ?? value.tag.metadataId,
+		profile: value.tag.profile
+	};
+	if (value.kind === "array") return {
+		kind: "array",
+		tag,
+		key: value.key,
+		children: value.children.map((item) => remapTagTree(item, tagMap))
+	};
+	if (value.kind === "dict") return {
+		kind: "dict",
+		tag,
+		key: value.key,
+		children: value.children.map((item) => remapTagTree(item, tagMap))
+	};
+	return {
+		kind: "scalar",
+		tag,
+		key: value.key
+	};
+}
+function makeTag(metadataId, profile) {
+	return {
+		metadataId,
+		profile
+	};
+}
+function retagForProfile(tag, profile) {
+	return {
+		metadataId: tag.metadataId,
+		profile
+	};
+}
+var dictChildrenIndexCache;
+var init_tag$1 = __esmMin((() => {
+	init_types$1();
+	dictChildrenIndexCache = /* @__PURE__ */ new WeakMap();
+}));
+//#endregion
+//#region ../figments/src/core/coalesce.ts
+function profileCoalesce(current, incoming, order) {
+	switch (order) {
+		case "join":
+		case "adjoin":
+		case "zipjoin": return current;
+		case "merge":
+		case "admerge":
+		case "zipmerge": return incoming;
+	}
+}
+function coalesceProfiles(current, incoming, order) {
+	const out = {};
+	const keys = /* @__PURE__ */ new Set([...Object.keys(current), ...Object.keys(incoming)]);
+	for (const key of keys) if (current[key] && incoming[key]) out[key] = coalesceDict(current[key], incoming[key], order);
+	else if (current[key]) out[key] = deepClone(current[key]);
+	else if (incoming[key]) out[key] = deepClone(incoming[key]);
+	return out;
+}
+function coalesceDict(current, incoming, order) {
+	const out = {};
+	const keys = /* @__PURE__ */ new Set([...Object.keys(current), ...Object.keys(incoming)]);
+	for (const key of keys) if (key in current && key in incoming) out[key] = coalesceValue(current[key], incoming[key], order);
+	else if (key in current) out[key] = deepClone(current[key]);
+	else out[key] = deepClone(incoming[key]);
+	return out;
+}
+function coalesceValue(current, incoming, order) {
+	if (current === void 0 && incoming !== void 0) return deepClone(incoming);
+	if (current !== void 0 && incoming === void 0) return deepClone(current);
+	if (current === void 0 && incoming === void 0) return;
+	if (isConfigDict(current) && isConfigDict(incoming)) return coalesceDict(current, incoming, order);
+	if (Array.isArray(current) && Array.isArray(incoming)) {
+		if (order === "adjoin" || order === "admerge") return [...deepClone(current), ...deepClone(incoming)];
+		if (order === "zipjoin" || order === "zipmerge") return zipArrayValues(current, incoming, order);
+		return order === "join" ? deepClone(current) : deepClone(incoming);
+	}
+	if (order === "join" || order === "adjoin" || order === "zipjoin") return deepClone(current);
+	return deepClone(incoming);
+}
+function coalesceTagProfiles(current, incoming, order) {
+	const out = {};
+	const keys = /* @__PURE__ */ new Set([...Object.keys(current), ...Object.keys(incoming)]);
+	for (const key of keys) if (current[key] && incoming[key]) out[key] = coalesceTagDictNode(current[key], incoming[key], order);
+	else if (current[key]) out[key] = deepCloneTag(current[key]);
+	else if (incoming[key]) out[key] = deepCloneTag(incoming[key]);
+	return out;
+}
+function coalesceTagDictNode(current, incoming, order) {
+	return {
+		kind: "dict",
+		key: current.key ?? incoming.key,
+		tag: prefersCurrent(order) ? current.tag : incoming.tag,
+		children: coalesceDictChildren(current, incoming, order)
+	};
+}
+function coalesceTagValue(current, incoming, order) {
+	if (isTagDictNode(current) && isTagDictNode(incoming)) return coalesceTagDictNode(current, incoming, order);
+	if (isTagArrayNode(current) && isTagArrayNode(incoming)) {
+		if (order === "adjoin" || order === "admerge") return {
+			kind: "array",
+			key: current.key ?? incoming.key,
+			tag: prefersCurrent(order) ? current.tag : incoming.tag,
+			children: [...current.children.map((item) => deepCloneTag(item)), ...incoming.children.map((item) => deepCloneTag(item))]
+		};
+		if (order === "zipjoin" || order === "zipmerge") return {
+			kind: "array",
+			key: current.key ?? incoming.key,
+			tag: prefersCurrent(order) ? current.tag : incoming.tag,
+			children: zipTagArrayChildren(current, incoming, order)
+		};
+		return order === "join" ? deepCloneTag(current) : deepCloneTag(incoming);
+	}
+	if (order === "join" || order === "adjoin" || order === "zipjoin") return deepCloneTag(current);
+	return deepCloneTag(incoming);
+}
+function coalesceDictChildren(current, incoming, order) {
+	const byCurrent = dictChildrenIndex(current);
+	const byIncoming = dictChildrenIndex(incoming);
+	const keys = /* @__PURE__ */ new Set([...byCurrent.keys(), ...byIncoming.keys()]);
+	const out = [];
+	for (const key of keys) {
+		const left = byCurrent.get(key);
+		const right = byIncoming.get(key);
+		if (left && right) out.push({
+			...coalesceTagValue(left, right, order),
+			key
+		});
+		else if (left) out.push(deepCloneTag(left));
+		else if (right) out.push(deepCloneTag(right));
+	}
+	return out;
+}
+function deepCloneTag(value) {
+	if (isTagArrayNode(value)) return {
+		kind: "array",
+		tag: value.tag,
+		key: value.key,
+		children: value.children.map((item) => deepCloneTag(item))
+	};
+	if (isTagDictNode(value)) return {
+		kind: "dict",
+		tag: value.tag,
+		key: value.key,
+		children: value.children.map((item) => deepCloneTag(item))
+	};
+	return {
+		kind: "scalar",
+		tag: value.tag,
+		key: value.key
+	};
+}
+function zipArrayValues(current, incoming, order) {
+	const out = [];
+	const max = Math.max(current.length, incoming.length);
+	for (let i = 0; i < max; i += 1) {
+		const left = current[i];
+		const right = incoming[i];
+		if (left !== void 0 && right !== void 0) out[i] = coalesceValue(left, right, order);
+		else if (left !== void 0) out[i] = deepClone(left);
+		else if (right !== void 0) out[i] = deepClone(right);
+	}
+	return out;
+}
+function zipTagArrayChildren(current, incoming, order) {
+	const out = [];
+	const max = Math.max(current.children.length, incoming.children.length);
+	for (let i = 0; i < max; i += 1) {
+		const left = current.children[i];
+		const right = incoming.children[i];
+		if (left && right) out[i] = coalesceTagValue(left, right, order);
+		else if (left) out[i] = deepCloneTag(left);
+		else if (right) out[i] = deepCloneTag(right);
+	}
+	return out;
+}
+function prefersCurrent(order) {
+	return order === "join" || order === "adjoin" || order === "zipjoin";
+}
+var init_coalesce = __esmMin((() => {
+	init_types$1();
+	init_tag$1();
+}));
+//#endregion
+//#region ../figments/src/core/metadata.ts
+function metadataFromFile(name, path) {
+	return Metadata.named(name).source({
+		kind: SourceKind.File,
+		path
+	}).build();
+}
+function metadataFromInline(name, descriptor) {
+	return Metadata.named(name).source({
+		kind: SourceKind.Inline,
+		descriptor
+	}).build();
+}
+function formatMetadataSource(source, options = {}) {
+	if (!source) return "";
+	const mode = options.mode ?? "concise";
+	const cwd = options.cwd ?? process.cwd();
+	switch (source.kind) {
+		case SourceKind.File: return `file ${displayFilePath(source.path, mode, cwd)}`;
+		case SourceKind.Env: return `environment ${source.selector}`;
+		case SourceKind.Inline: return source.descriptor;
+		case SourceKind.Code: return `code ${source.location}`;
+		case SourceKind.Custom: return source.value;
+	}
+}
+function formatMetadataDisplay(metadata, options = {}) {
+	if (!metadata) return "";
+	const source = formatMetadataSource(metadata.source, options);
+	if (!source) return metadata.name;
+	return `${metadata.name} (${source})`;
+}
+function normalizeMetadataSource(source) {
+	if (typeof source === "string") return {
+		kind: SourceKind.Custom,
+		value: source
+	};
+	return source;
+}
+function defaultInterpolater(profile, keys) {
+	return `${profile}.${keys.join(".")}`;
+}
+function displayFilePath(path, mode, cwd) {
+	if (mode === "verbose") return isAbsolute(path) ? path : resolve(cwd, path);
+	if (!isAbsolute(path)) return path;
+	const relPath = relative(cwd, path);
+	if (!relPath || relPath === ".") return path;
+	if (!isReadableRelativePath(relPath)) return path;
+	return segmentCount(relPath) < segmentCount(path) ? relPath : path;
+}
+function segmentCount(path) {
+	return normalize(path).split(sep).filter(Boolean).length;
+}
+function isReadableRelativePath(path) {
+	return !path.split(sep).some((part) => part === "..");
+}
+var SourceKind, MetadataBuilder, Metadata;
+var init_metadata = __esmMin((() => {
+	SourceKind = {
+		File: "file",
+		Env: "env",
+		Inline: "inline",
+		Code: "code",
+		Custom: "custom"
+	};
+	MetadataBuilder = class MetadataBuilder {
+		name;
+		sourceValue;
+		provideLocationValue;
+		interpolaterValue;
+		constructor(name) {
+			this.name = name;
+			this.interpolaterValue = defaultInterpolater;
+		}
+		static named(name) {
+			return new MetadataBuilder(name);
+		}
+		static from(name, source) {
+			return new MetadataBuilder(name).source(source);
+		}
+		source(source) {
+			this.sourceValue = normalizeMetadataSource(source);
+			return this;
+		}
+		interpolater(interpolater) {
+			this.interpolaterValue = interpolater;
+			return this;
+		}
+		provideLocation(location) {
+			this.provideLocationValue = location;
+			return this;
+		}
+		build() {
+			return {
+				name: this.name,
+				source: this.sourceValue,
+				provideLocation: this.provideLocationValue,
+				interpolate: this.interpolaterValue
+			};
+		}
+	};
+	Metadata = {
+		named(name) {
+			return MetadataBuilder.named(name);
+		},
+		from(name, source) {
+			return MetadataBuilder.from(name, source);
+		}
+	};
+}));
+//#endregion
+//#region ../figments/src/core/error.ts
+function isFigmentFailure(error) {
+	return error instanceof FigmentError || error instanceof FigmentAggregateError;
+}
+function flattenFigmentFailure(error) {
+	if (error instanceof FigmentAggregateError) return error.toArray();
+	return [error];
+}
+function mergeFigmentFailures(incoming, previous) {
+	if (!previous) return incoming;
+	return new FigmentAggregateError([...flattenFigmentFailure(incoming), ...flattenFigmentFailure(previous)]);
+}
+function decodeIssues(error) {
+	if (!error || typeof error !== "object") return [];
+	const maybeIssues = error.issues;
+	if (!Array.isArray(maybeIssues)) return [];
+	return maybeIssues.flatMap((issue) => normalizeDecoderIssue(issue));
+}
+function normalizeDecoderIssue(issue) {
+	if (!issue || typeof issue !== "object") return [];
+	const input = issue;
+	if (typeof input.message !== "string") return [];
+	const path = typeof input.path === "string" || Array.isArray(input.path) ? input.path : void 0;
+	const options = Array.isArray(input.options) ? input.options.filter((item) => typeof item === "string") : void 0;
+	const keys = Array.isArray(input.keys) ? input.keys.filter((item) => typeof item === "string") : void 0;
+	return [{
+		message: input.message,
+		path,
+		code: typeof input.code === "string" ? input.code : void 0,
+		expected: typeof input.expected === "string" ? input.expected : void 0,
+		received: input.received,
+		options,
+		keys
+	}];
+}
+function fromDecoderIssue(scope, issue) {
+	const path = normalizeDecoderIssuePath(issue.path);
+	let error;
+	switch (issue.code) {
+		case "invalid_type":
+			error = new FigmentError("InvalidType", `failed to decode ${scope}: ${issue.message}`, {
+				expected: issue.expected,
+				actual: actualType(issue.received),
+				actualValue: stringifyActualValue(issue.received)
+			});
+			break;
+		case "invalid_enum_value":
+		case "invalid_union_discriminator":
+			error = new FigmentError("UnknownVariant", `failed to decode ${scope}: ${issue.message}`, {
+				actualValue: stringifyActualValue(issue.received) ?? "unknown",
+				expectedValues: issue.options
+			});
+			break;
+		case "unrecognized_keys": {
+			const first = issue.keys?.[0] ?? stringifyActualValue(issue.received) ?? "unknown";
+			error = new FigmentError("UnknownField", `failed to decode ${scope}: ${issue.message}`, {
+				actualValue: typeof first === "number" ? String(first) : first,
+				expectedValues: issue.keys
+			});
+			break;
+		}
+		default: error = new FigmentError("Decode", `failed to decode ${scope}: ${issue.message}`);
+	}
+	return path ? error.withPath(path) : error;
+}
+function normalizeDecoderIssuePath(path) {
+	if (path === void 0) return;
+	if (typeof path === "string") {
+		const trimmed = path.trim();
+		return trimmed.length > 0 ? trimmed : void 0;
+	}
+	const parts = path.map((part) => String(part).trim()).filter((part) => part.length > 0);
+	if (parts.length === 0) return;
+	return parts.join(".");
+}
+function formatKindDetail(error) {
+	switch (error.kind) {
+		case "InvalidLength": return error.actualValue !== void 0 ? ` (length ${error.actualValue}, expected ${error.expected ?? "unknown"})` : "";
+		case "UnknownVariant":
+		case "UnknownField": {
+			const actual = error.actualValue !== void 0 ? ` '${error.actualValue}'` : "";
+			const expected = error.expectedValues?.join(", ") ?? "";
+			return expected.length > 0 ? ` (${actual.trim()} expected one of: ${expected})` : "";
+		}
+		case "DuplicateField": return error.field ? ` ('${error.field}')` : "";
+		case "Unsupported": return error.actual ? ` (${error.actual})` : "";
+		case "UnsupportedKey": {
+			const actual = error.actual ? ` ${error.actual}` : "";
+			const needed = error.needed ? `, need ${error.needed}` : "";
+			return ` (${actual.trim()}${needed})`;
+		}
+		default: return "";
+	}
+}
+function stringifyActualValue(value) {
+	if (typeof value === "number") return value;
+	if (typeof value === "string") return value;
+	if (typeof value === "boolean") return value ? "true" : "false";
+	if (value === null) return "null";
+	if (value === void 0) return "undefined";
+	if (Array.isArray(value)) return "array";
+	if (typeof value === "object") return "object";
+}
+function actualType(value) {
+	if (value === void 0) return "undefined";
+	if (value === null) return "null";
+	if (Array.isArray(value)) return "array";
+	if (typeof value === "object") return "dict";
+	if (typeof value === "string") return "string";
+	if (typeof value === "number") return "number";
+	if (typeof value === "boolean") return "boolean";
+	return "other";
+}
+var FigmentError, FigmentAggregateError;
+var init_error$2 = __esmMin((() => {
+	init_metadata();
+	FigmentError = class FigmentError extends Error {
+		kind;
+		tag;
+		path;
+		profile;
+		selectedProfiles;
+		effectiveProfileOrder;
+		metadata;
+		expected;
+		actual;
+		actualValue;
+		expectedValues;
+		field;
+		needed;
+		constructor(kind, message, options) {
+			super(message);
+			this.name = "FigmentError";
+			this.kind = kind;
+			this.tag = options?.tag;
+			this.path = options?.path ?? [];
+			this.profile = options?.profile;
+			this.selectedProfiles = options?.selectedProfiles ? [...options.selectedProfiles] : void 0;
+			this.effectiveProfileOrder = options?.effectiveProfileOrder ? [...options.effectiveProfileOrder] : void 0;
+			this.metadata = options?.metadata;
+			this.expected = options?.expected;
+			this.actual = options?.actual;
+			this.actualValue = options?.actualValue;
+			this.expectedValues = options?.expectedValues ? [...options.expectedValues] : void 0;
+			this.field = options?.field;
+			this.needed = options?.needed;
+		}
+		withPath(path) {
+			return new FigmentError(this.kind, this.message, {
+				path: [...this.path, ...path.split(".").filter(Boolean)],
+				tag: this.tag,
+				profile: this.profile,
+				selectedProfiles: this.selectedProfiles,
+				effectiveProfileOrder: this.effectiveProfileOrder,
+				metadata: this.metadata,
+				expected: this.expected,
+				actual: this.actual,
+				actualValue: this.actualValue,
+				expectedValues: this.expectedValues,
+				field: this.field,
+				needed: this.needed
+			});
+		}
+		withContext(options) {
+			return new FigmentError(this.kind, this.message, {
+				path: this.path,
+				tag: options.tag ?? this.tag,
+				profile: options.profile ?? this.profile,
+				selectedProfiles: options.selectedProfiles ?? this.selectedProfiles,
+				effectiveProfileOrder: options.effectiveProfileOrder ?? this.effectiveProfileOrder,
+				metadata: options.metadata ?? this.metadata,
+				expected: this.expected,
+				actual: this.actual,
+				actualValue: this.actualValue,
+				expectedValues: this.expectedValues,
+				field: this.field,
+				needed: this.needed
+			});
+		}
+		missing() {
+			return this.kind === "MissingField";
+		}
+		toString() {
+			const keySuffix = this.path.length > 0 ? ` for key '${this.path.join(".")}'` : "";
+			const profile = this.profile ?? this.tag?.profile ?? "default";
+			const interpolated = this.metadata && this.path.length > 0 ? this.metadata.interpolate(profile, this.path) : void 0;
+			const providerKeySuffix = interpolated ? ` (provider key '${interpolated}')` : "";
+			const display = formatMetadataDisplay(this.metadata);
+			const sourceSuffix = display ? ` in ${display}` : "";
+			const mismatchSuffix = this.expected ? ` (expected ${this.expected}, found ${this.actual ?? "unknown"})` : "";
+			const detailSuffix = formatKindDetail(this);
+			const profileOrderSuffix = this.effectiveProfileOrder && this.effectiveProfileOrder.length > 0 ? ` [profile order: ${this.effectiveProfileOrder.join(" -> ")}]` : "";
+			return `${this.message}${mismatchSuffix}${detailSuffix}${keySuffix}${sourceSuffix}${providerKeySuffix}` + profileOrderSuffix;
+		}
+		static missingField(path, options) {
+			return new FigmentError("MissingField", `missing field '${path}'`, {
+				path: path.split(".").filter(Boolean),
+				profile: options?.profile,
+				selectedProfiles: options?.selectedProfiles,
+				effectiveProfileOrder: options?.effectiveProfileOrder
+			});
+		}
+		static message(message) {
+			return new FigmentError("Message", message);
+		}
+		static decode(scope, error) {
+			const issues = decodeIssues(error);
+			if (issues.length > 0) return FigmentError.decodeIssues(scope, issues);
+			const detail = error instanceof Error ? error.message : String(error);
+			return new FigmentError("Decode", `failed to decode ${scope}: ${detail}`);
+		}
+		static decodeIssues(scope, issues) {
+			if (issues.length === 0) return new FigmentError("Decode", `failed to decode ${scope}: unknown decoder issue`);
+			const mapped = issues.map((issue) => fromDecoderIssue(scope, issue));
+			if (mapped.length === 1) return mapped[0];
+			return new FigmentAggregateError(mapped, `failed to decode ${scope} with ${mapped.length} issues`);
+		}
+		static invalidType(expected, actualValue) {
+			return new FigmentError("InvalidType", "invalid type", {
+				expected,
+				actual: actualType(actualValue),
+				actualValue: stringifyActualValue(actualValue)
+			});
+		}
+		static invalidValue(message) {
+			return new FigmentError("InvalidValue", message);
+		}
+		static invalidLength(actual, expected) {
+			return new FigmentError("InvalidLength", "invalid length", {
+				expected,
+				actualValue: actual
+			});
+		}
+		static unknownVariant(actual, expectedValues) {
+			return new FigmentError("UnknownVariant", "unknown variant", {
+				actualValue: actual,
+				expectedValues
+			});
+		}
+		static unknownField(actual, expectedValues) {
+			return new FigmentError("UnknownField", "unknown field", {
+				actualValue: actual,
+				expectedValues
+			});
+		}
+		static duplicateField(field) {
+			return new FigmentError("DuplicateField", "duplicate field", { field });
+		}
+		static unsupported(actualValue) {
+			return new FigmentError("Unsupported", "unsupported type", {
+				actual: actualType(actualValue),
+				actualValue: stringifyActualValue(actualValue)
+			});
+		}
+		static unsupportedKey(actualValue, needed) {
+			return new FigmentError("UnsupportedKey", "unsupported key type", {
+				actual: actualType(actualValue),
+				actualValue: stringifyActualValue(actualValue),
+				needed
+			});
+		}
+	};
+	FigmentAggregateError = class FigmentAggregateError extends AggregateError {
+		constructor(errors, message = "multiple figment errors") {
+			const normalized = [...errors];
+			super(normalized, message);
+			this.name = "FigmentAggregateError";
+			this.errors = normalized;
+		}
+		withPath(path) {
+			return new FigmentAggregateError(this.errors.map((error) => error.withPath(path)), this.message);
+		}
+		withContext(context) {
+			return new FigmentAggregateError(this.errors.map((error) => error.withContext(context)), this.message);
+		}
+		count() {
+			return this.errors.length;
+		}
+		missing() {
+			return this.errors.some((error) => error.missing());
+		}
+		*values() {
+			for (const error of this.errors) yield error;
+		}
+		[Symbol.iterator]() {
+			return this.values();
+		}
+		toArray() {
+			return [...this.errors];
+		}
+		toString() {
+			return [this.message, ...this.errors.map((error) => error.toString())].join("\n");
+		}
+	};
+}));
+//#endregion
+//#region ../figments/src/core/path-parse.ts
+function parsePathIndex(key) {
+	if (!/^\d+$/.test(key)) return;
+	return Number.parseInt(key, 10);
+}
+var init_path_parse = __esmMin((() => {}));
+//#endregion
+//#region ../figments/src/core/path-nav.ts
+function findValue(dict, path) {
+	if (path.length === 0) return dict;
+	const keys = path.split(".").filter(Boolean);
+	let current = dict;
+	for (const key of keys) {
+		if (Array.isArray(current)) {
+			const index = parsePathIndex(key);
+			if (index === void 0) return;
+			current = current[index];
+			if (current === void 0) return;
+			continue;
+		}
+		if (!isConfigDict(current)) return;
+		if (!(key in current)) return;
+		current = current[key];
+	}
+	return current;
+}
+function findTag(dict, path) {
+	if (path.length === 0) return dict;
+	const keys = path.split(".").filter(Boolean);
+	let current = dict;
+	for (const key of keys) {
+		if (current.kind === "array") {
+			const index = parsePathIndex(key);
+			if (index === void 0) return;
+			const child = current.children[index];
+			if (!child) return;
+			current = child;
+			continue;
+		}
+		if (current.kind !== "dict") return;
+		const child = dictChildrenIndex(current).get(key);
+		if (!child) return;
+		current = child;
+	}
+	return current;
+}
+var init_path_nav = __esmMin((() => {
+	init_types$1();
+	init_tag$1();
+	init_path_parse();
+}));
+//#endregion
+//#region ../figments/src/operation/operator.ts
+function defineOperator(operator, meta) {
+	const resolved = operator;
+	resolved[OPERATOR_META] = {
+		...meta,
+		contract: meta.contract ? {
+			uses: meta.contract.uses ? { ...meta.contract.uses } : void 0,
+			mutates: meta.contract.mutates ? { ...meta.contract.mutates } : void 0
+		} : void 0
+	};
+	return resolved;
+}
+function resolveDeriveOptions(options) {
+	return {
+		name: options?.name,
+		nameSuffix: options?.nameSuffix,
+		coalesce: options?.coalesce ?? "merge",
+		policy: {
+			providerError: options?.policy?.providerError ?? "stop",
+			operatorError: options?.policy?.operatorError ?? "stop",
+			previousFailure: options?.policy?.previousFailure ?? "stop",
+			metadataMutationGuard: options?.policy?.metadataMutationGuard ?? "error",
+			scopeNonReversible: options?.policy?.scopeNonReversible ?? "warn"
+		},
+		exec: {
+			parallel: options?.exec?.parallel ?? false,
+			maxConcurrency: options?.exec?.maxConcurrency,
+			isolation: options?.exec?.isolation ?? "shared"
+		},
+		observe: {
+			hooks: options?.observe?.hooks,
+			include: options?.observe?.include
+		},
+		cache: {
+			mode: options?.cache?.mode,
+			key: options?.cache?.key
+		}
+	};
+}
+var OPERATOR_META;
+var init_operator = __esmMin((() => {
+	OPERATOR_META = Symbol("figment.operator.meta");
+}));
+//#endregion
+//#region ../figments/src/operation/handler.ts
+function registerOperationHandler(handler) {
+	operationHandlers.set(handler.kind, handler);
+}
+function getOperationHandler(kind) {
+	return operationHandlers.get(kind);
+}
+var operationHandlers;
+var init_handler = __esmMin((() => {
+	operationHandlers = /* @__PURE__ */ new Map();
+}));
+//#endregion
+//#region ../figments/src/operation/handlers/provide.ts
+function createProvideOperationHandler() {
+	return {
+		kind: "provide",
+		normalize(intent, { context }) {
+			return {
+				...intent,
+				coalesce: intent.coalesce ?? context.options.coalesce
+			};
+		},
+		async apply(intent, context) {
+			const applied = await context.applyProvidable(intent.provider, intent.coalesce ?? context.context.options.coalesce, context.provideLocation);
+			return {
+				id: context.allocateRecordId(),
+				kind: "provide",
+				status: "applied",
+				boundaryId: context.context.boundaryId,
+				parentRecordId: context.parentRecordId,
+				contextId: context.context.contextId,
+				operatorIndex: context.context.operatorIndex,
+				intentIndex: context.intentIndex,
+				operatorName: context.operatorName,
+				provideLocation: context.provideLocation,
+				intent,
+				metadataId: applied.metadataIds[0],
+				metadataIds: applied.metadataIds
+			};
+		}
+	};
+}
+var init_provide = __esmMin((() => {}));
+//#endregion
+//#region ../figments/src/operation/handlers/profile.ts
+function createProfileOperationHandler() {
+	return {
+		kind: "profile",
+		normalize(intent) {
+			return {
+				...intent,
+				profiles: normalizeSelectedProfiles$1(intent.profiles)
+			};
+		},
+		async apply(intent, context) {
+			const beforeProfiles = context.getSelectedProfiles();
+			const normalizedProfiles = normalizeSelectedProfiles$1(intent.profiles);
+			let afterProfiles = beforeProfiles;
+			switch (intent.op) {
+				case "set":
+					afterProfiles = normalizedProfiles;
+					break;
+				case "add": {
+					const base = [...beforeProfiles];
+					if (intent.at === "front") afterProfiles = normalizeSelectedProfiles$1([...normalizedProfiles, ...base]);
+					else if (intent.at === "back" || intent.at === void 0) afterProfiles = normalizeSelectedProfiles$1([...base, ...normalizedProfiles]);
+					else {
+						const index = Math.max(0, Math.min(intent.at, base.length));
+						const withInsert = [...base];
+						withInsert.splice(index, 0, ...normalizedProfiles);
+						afterProfiles = normalizeSelectedProfiles$1(withInsert);
+					}
+					break;
+				}
+				case "remove": {
+					const removeSet = new Set(normalizedProfiles);
+					afterProfiles = beforeProfiles.filter((profile) => !removeSet.has(profile));
+					break;
+				}
+			}
+			const status = sameProfiles(beforeProfiles, afterProfiles) ? "noop" : "applied";
+			if (status === "applied") context.setSelectedProfiles(afterProfiles);
+			return {
+				id: context.allocateRecordId(),
+				kind: "profile",
+				status,
+				boundaryId: context.context.boundaryId,
+				parentRecordId: context.parentRecordId,
+				contextId: context.context.contextId,
+				operatorIndex: context.context.operatorIndex,
+				intentIndex: context.intentIndex,
+				operatorName: context.operatorName,
+				provideLocation: context.provideLocation,
+				intent,
+				normalizedProfiles,
+				beforeProfiles,
+				afterProfiles
+			};
+		}
+	};
+}
+function normalizeSelectedProfiles$1(profiles) {
+	const normalized = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const profile of profiles) {
+		const next = normalizeProfile(profile);
+		if (!isCustomProfile(next) || seen.has(next)) continue;
+		seen.add(next);
+		normalized.push(next);
+	}
+	return normalized;
+}
+function sameProfiles(left, right) {
+	if (left.length !== right.length) return false;
+	for (let index = 0; index < left.length; index += 1) if (left[index] !== right[index]) return false;
+	return true;
+}
+var init_profile = __esmMin((() => {
+	init_profile$1();
+}));
+//#endregion
+//#region ../figments/src/operation/handlers/diagnostic.ts
+function createDiagnosticOperationHandler() {
+	return {
+		kind: "diagnostic",
+		normalize(intent) {
+			return {
+				...intent,
+				message: intent.message.trim()
+			};
+		},
+		async apply(intent, context) {
+			return {
+				id: context.allocateRecordId(),
+				kind: "diagnostic",
+				status: "applied",
+				boundaryId: context.context.boundaryId,
+				parentRecordId: context.parentRecordId,
+				contextId: context.context.contextId,
+				operatorIndex: context.context.operatorIndex,
+				intentIndex: context.intentIndex,
+				operatorName: context.operatorName,
+				provideLocation: context.provideLocation,
+				intent
+			};
+		}
+	};
+}
+var init_diagnostic = __esmMin((() => {}));
+//#endregion
+//#region ../figments/src/operation/handlers/assert.ts
+function createAssertOperationHandler() {
+	return {
+		kind: "assert",
+		normalize(intent) {
+			return {
+				...intent,
+				path: intent.path.trim()
+			};
+		},
+		async apply(intent, context) {
+			if (!context.hasPath(intent.path)) {
+				const selectedProfiles = context.getSelectedProfiles();
+				throw FigmentError.missingField(intent.path, {
+					profile: selectedProfiles[0] ?? "default",
+					selectedProfiles,
+					effectiveProfileOrder: [
+						DEFAULT_PROFILE,
+						...selectedProfiles,
+						GLOBAL_PROFILE
+					]
+				});
+			}
+			return {
+				id: context.allocateRecordId(),
+				kind: "assert",
+				status: "applied",
+				boundaryId: context.context.boundaryId,
+				parentRecordId: context.parentRecordId,
+				contextId: context.context.contextId,
+				operatorIndex: context.context.operatorIndex,
+				intentIndex: context.intentIndex,
+				operatorName: context.operatorName,
+				provideLocation: context.provideLocation,
+				intent
+			};
+		}
+	};
+}
+var init_assert = __esmMin((() => {
+	init_profile$1();
+	init_error$2();
+}));
+//#endregion
+//#region ../figments/src/operation/handlers/scope.ts
+function createScopeOperationHandler() {
+	return {
+		kind: "scope",
+		normalize(intent, { context }) {
+			return {
+				...intent,
+				policy: {
+					nonReversible: intent.policy?.nonReversible ?? context.options.policy.scopeNonReversible,
+					onFailure: intent.policy?.onFailure ?? "rollback-reversible"
+				}
+			};
+		},
+		async apply(intent, context) {
+			const policy = {
+				nonReversible: intent.policy?.nonReversible ?? context.context.options.policy.scopeNonReversible,
+				onFailure: intent.policy?.onFailure ?? "rollback-reversible"
+			};
+			const hasNonReversible = intent.ops.some((op) => isNonReversibleIntent(op));
+			if (policy.nonReversible === "error" && hasNonReversible) throw FigmentError.invalidValue("scope contains non-reversible operations under nonReversible='error'");
+			const beforeProfiles = context.getSelectedProfiles();
+			const scopeRecord = {
+				id: context.allocateRecordId(),
+				kind: "scope",
+				status: "applied",
+				boundaryId: context.context.boundaryId,
+				parentRecordId: context.parentRecordId,
+				contextId: context.context.contextId,
+				operatorIndex: context.context.operatorIndex,
+				intentIndex: context.intentIndex,
+				operatorName: context.operatorName,
+				provideLocation: context.provideLocation,
+				intent,
+				scopeDepth: context.scopeDepth,
+				childRecordIds: []
+			};
+			if (policy.nonReversible === "warn" && hasNonReversible) {
+				const warningRecord = {
+					id: context.allocateRecordId(),
+					kind: "diagnostic",
+					status: "applied",
+					boundaryId: context.context.boundaryId,
+					parentRecordId: scopeRecord.id,
+					contextId: context.context.contextId,
+					operatorIndex: context.context.operatorIndex,
+					intentIndex: context.intentIndex,
+					operatorName: context.operatorName,
+					provideLocation: context.provideLocation,
+					intent: {
+						kind: "diagnostic",
+						level: "warn",
+						message: "scope contains non-reversible operations"
+					}
+				};
+				context.appendRecord(warningRecord);
+				scopeRecord.childRecordIds.push(warningRecord.id);
+			}
+			let hadFailure = false;
+			let firstFailure;
+			let hadAppliedChild = false;
+			for (let childIntentIndex = 0; childIntentIndex < intent.ops.length; childIntentIndex += 1) {
+				const childIntent = intent.ops[childIntentIndex];
+				if (!childIntent) continue;
+				const childRecord = await context.applyOperation(childIntent, {
+					intentIndex: childIntentIndex,
+					parentRecordId: scopeRecord.id,
+					scopeDepth: context.scopeDepth + 1,
+					throwOnFailure: false
+				});
+				scopeRecord.childRecordIds.push(childRecord.id);
+				if (childRecord.status === "failed") {
+					hadFailure = true;
+					firstFailure = firstFailure ?? childRecord.error;
+					if (policy.onFailure === "rollback-reversible") {
+						context.setSelectedProfiles(beforeProfiles);
+						scopeRecord.status = "failed";
+						scopeRecord.error = firstFailure;
+						return scopeRecord;
+					}
+					continue;
+				}
+				if (childRecord.status === "applied") hadAppliedChild = true;
+			}
+			if (hadFailure) {
+				scopeRecord.status = "failed";
+				scopeRecord.error = firstFailure;
+			} else if (!hadAppliedChild) scopeRecord.status = "noop";
+			return scopeRecord;
+		}
+	};
+}
+function isNonReversibleIntent(intent) {
+	switch (intent.kind) {
+		case "profile": return false;
+		case "diagnostic": return false;
+		case "scope": return intent.ops.some((child) => isNonReversibleIntent(child));
+		case "provide": return true;
+		case "assert": return true;
+		default: return true;
+	}
+}
+var init_scope = __esmMin((() => {
+	init_error$2();
+}));
+//#endregion
+//#region ../figments/src/state.ts
+var FIGMENTS_STATE;
+var init_state = __esmMin((() => {
+	FIGMENTS_STATE = Symbol.for("figments.state");
+}));
+//#endregion
+//#region ../figments/src/core/path-builder.ts
+function nest(path, value) {
+	const keys = path.split(".").map((k) => k.trim()).filter(Boolean);
+	if (keys.length === 0) return {};
+	const root = keys[0];
+	if (parsePathIndex(root) !== void 0) return {};
+	let out = value;
+	for (let i = keys.length - 1; i >= 1; i -= 1) {
+		const key = keys[i];
+		const index = parsePathIndex(key);
+		if (index !== void 0) {
+			const array = [];
+			array[index] = out;
+			out = array;
+			continue;
+		}
+		out = { [key]: out };
+	}
+	return { [root]: out };
+}
+var init_path_builder = __esmMin((() => {
+	init_path_parse();
+}));
+//#endregion
+//#region ../figments/src/providers/serialized.ts
+function toConfigValue$1(value, path = []) {
+	if (value === void 0) return;
+	if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+	if (Array.isArray(value)) return value.map((item, index) => toConfigValue$1(item, [...path, index]));
+	if (typeof value === "object") {
+		const record = value;
+		const dict = {};
+		for (const [key, item] of Object.entries(record)) dict[key] = toConfigValue$1(item, [...path, key]);
+		return deepClone(dict);
+	}
+	const error = FigmentError.unsupported(value);
+	throw path.length > 0 ? error.withPath(path.join(".")) : error;
+}
+var Serialized;
+var init_serialized = __esmMin((() => {
+	init_error$2();
+	init_metadata();
+	init_profile$1();
+	init_types$1();
+	init_path_builder();
+	Serialized = class Serialized {
+		value;
+		keyPath;
+		targetProfile;
+		constructor(value, profile = DEFAULT_PROFILE, keyPath) {
+			this.value = value;
+			this.keyPath = keyPath;
+			this.targetProfile = normalizeProfile(profile);
+		}
+		static from(value, profile) {
+			return new Serialized(value, profile);
+		}
+		static defaults(value) {
+			return new Serialized(value, DEFAULT_PROFILE);
+		}
+		static globals(value) {
+			return new Serialized(value, GLOBAL_PROFILE);
+		}
+		static default(key, value) {
+			return new Serialized(value, DEFAULT_PROFILE, key);
+		}
+		static global(key, value) {
+			return new Serialized(value, GLOBAL_PROFILE, key);
+		}
+		profile(profile) {
+			return new Serialized(this.value, normalizeProfile(profile), this.keyPath);
+		}
+		selectedProfile() {
+			return this.targetProfile;
+		}
+		key(keyPath) {
+			return new Serialized(this.value, this.targetProfile, keyPath);
+		}
+		metadata() {
+			return metadataFromInline("Serialized", this.keyPath ? `serialized value for ${this.keyPath}` : "serialized value");
+		}
+		data() {
+			const serialized = toConfigValue$1(this.value);
+			let dict;
+			if (this.keyPath) dict = nest(this.keyPath, serialized);
+			else if (isConfigDict(serialized)) dict = serialized;
+			else throw new Error("Serialized provider without a key path must serialize to a dictionary");
+			return { [this.targetProfile]: dict };
+		}
+	};
+}));
+//#endregion
+//#region ../figments/src/providers/tuple.ts
+function isTupleEntry(value) {
+	return Array.isArray(value) && value.length === 2 && typeof value[0] === "string";
+}
+var Tuple$2;
+var init_tuple = __esmMin((() => {
+	init_metadata();
+	init_profile$1();
+	init_serialized();
+	Tuple$2 = class Tuple$2 {
+		entry;
+		constructor(entry) {
+			this.entry = entry;
+		}
+		static from(entry) {
+			return new Tuple$2(entry);
+		}
+		selectedProfile() {
+			return GLOBAL_PROFILE;
+		}
+		metadata() {
+			return metadataFromInline("Tuple", `tuple provider for ${this.entry[0]}`);
+		}
+		data() {
+			return Serialized.global(this.entry[0], this.entry[1]).data();
+		}
+	};
+}));
+//#endregion
+//#region ../figments/src/figment.ts
+function memoizeOperatorIntents(key, intents) {
+	if (operatorMemoCache.size >= OPERATOR_MEMO_CACHE_LIMIT && !operatorMemoCache.has(key)) {
+		const oldest = operatorMemoCache.keys().next().value;
+		if (oldest !== void 0) operatorMemoCache.delete(oldest);
+	}
+	operatorMemoCache.set(key, { intents });
+}
+async function runWithConcurrency(total, limit, worker) {
+	if (total <= 0) return [];
+	const maxConcurrency = limit === void 0 ? total : Math.max(1, Math.min(Math.floor(limit), total));
+	const results = new Array(total);
+	let nextIndex = 0;
+	const runOne = async () => {
+		while (nextIndex < total) {
+			const current = nextIndex;
+			nextIndex += 1;
+			results[current] = await worker(current);
+		}
+	};
+	await Promise.all(Array.from({ length: maxConcurrency }, async () => runOne()));
+	return results;
+}
+function ensureBuiltinOperationHandlersRegistered() {
+	if (builtinOperationHandlersRegistered) return;
+	registerOperationHandler(createProvideOperationHandler());
+	registerOperationHandler(createProfileOperationHandler());
+	registerOperationHandler(createDiagnosticOperationHandler());
+	registerOperationHandler(createAssertOperationHandler());
+	registerOperationHandler(createScopeOperationHandler());
+	builtinOperationHandlersRegistered = true;
+}
+function isStatelessOperator(operator) {
+	const uses = operator[OPERATOR_META]?.contract?.uses;
+	return uses?.values === false && uses?.metadata === false && uses?.profiles === false;
+}
+function shouldGuardMetadataMutation(operator, options) {
+	if (options.exec.isolation !== "shared") return false;
+	return operator[OPERATOR_META]?.contract?.mutates?.metadata === true;
+}
+function createGuardWarningRecord(options) {
+	const intent = {
+		kind: "diagnostic",
+		level: "warn",
+		message: `operator '${options.operatorName}' declared metadata mutation under shared isolation`
+	};
+	return {
+		id: options.id,
+		kind: "diagnostic",
+		status: "applied",
+		boundaryId: options.boundaryId,
+		contextId: options.contextId,
+		operatorIndex: options.operatorIndex,
+		intentIndex: -1,
+		operatorName: options.operatorName,
+		provideLocation: options.provideLocation,
+		intent
+	};
+}
+function createOperatorFailureRecord(options) {
+	const intent = {
+		kind: "diagnostic",
+		level: "warn",
+		message: `operator '${options.operatorName}' failed: ${options.error.message}`
+	};
+	return {
+		id: options.id,
+		kind: "diagnostic",
+		status: "failed",
+		boundaryId: options.boundaryId,
+		contextId: options.contextId,
+		operatorIndex: options.operatorIndex,
+		intentIndex: -1,
+		operatorName: options.operatorName,
+		provideLocation: options.provideLocation,
+		intent,
+		error: options.error
+	};
+}
+function normalizeOperatorResult(result) {
+	if (!Array.isArray(result)) throw FigmentError.invalidValue("operator must return an array of operation intents");
+	if (result.some((intent) => intent == null)) throw FigmentError.invalidValue("operator returned null/undefined intent entry");
+	return result;
+}
+function resolveOperatorName(operator, options, boundaryId) {
+	const suffix = options.nameSuffix ? `:${options.nameSuffix}` : "";
+	const configured = options.name;
+	if (configured && configured.trim().length > 0) return `${configured.trim()}${suffix}`;
+	const metaName = operator[OPERATOR_META]?.name;
+	if (metaName && metaName.trim().length > 0) return `${metaName.trim()}${suffix}`;
+	if (operator.name && operator.name.trim().length > 0) return `${operator.name.trim()}${suffix}`;
+	return `derive#${boundaryId}${suffix}`;
+}
+function buildOperatorMemoKey(options) {
+	const keyPrefix = options.cacheKey ?? "derive";
+	const optionHash = JSON.stringify({
+		coalesce: options.options.coalesce,
+		policy: options.options.policy,
+		exec: {
+			isolation: options.options.exec.isolation,
+			parallel: options.options.exec.parallel,
+			maxConcurrency: options.options.exec.maxConcurrency
+		}
+	});
+	return `${keyPrefix}|${options.operatorName}|${options.operatorIndex}|${optionHash}|${options.snapshotHash}`;
+}
+function getSnapshotHash(snapshot, cache) {
+	const cached = cache.get(snapshot);
+	if (cached) return cached;
+	const state = snapshot.state();
+	const metadata = [...state.metadataByTag.entries()].map(([id, item]) => ({
+		id,
+		name: item.name,
+		source: item.source,
+		provideLocation: item.provideLocation
+	}));
+	const hashed = JSON.stringify({
+		selectedProfiles: state.activeProfiles,
+		providerProfileSelectionMode: state.providerProfileSelectionMode,
+		values: state.values,
+		tags: state.tags,
+		metadata
+	});
+	cache.set(snapshot, hashed);
+	return hashed;
+}
+function cloneOperationIntents(intents) {
+	return intents.map((intent) => ({ ...intent }));
+}
+function normalizeFailure(error, context) {
+	const failure = isFigmentFailure(error) ? error : FigmentError.message(error instanceof Error ? error.message : String(error));
+	return context ? failure.withContext(context) : failure;
+}
+function cloneOperationRecord(record) {
+	return { ...record };
+}
+function cloneContextSnapshots(snapshots) {
+	const out = /* @__PURE__ */ new Map();
+	for (const [contextId, snapshot] of snapshots.entries()) out.set(contextId, cloneContextSnapshot(snapshot));
+	return out;
+}
+function cloneContextSnapshot(snapshot) {
+	return {
+		...snapshot,
+		selectedProfiles: [...snapshot.selectedProfiles],
+		effectiveProfileOrder: [...snapshot.effectiveProfileOrder],
+		activePolicies: { ...snapshot.activePolicies }
+	};
+}
+function normalizeProfiles(map) {
+	const out = {};
+	for (const [profile, dict] of Object.entries(map)) out[normalizeProfile(profile)] = deepClone(dict);
+	return out;
+}
+function normalizeProvidable(provider) {
+	if (provider instanceof Figment) return provider;
+	if (isTupleEntry(provider)) return Tuple$2.from(provider);
+	return provider;
+}
+function normalizeSelectedProfiles(profiles) {
+	const normalized = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const profile of profiles) {
+		const next = normalizeProfile(profile);
+		if (!isCustomProfile(next) || seen.has(next)) continue;
+		seen.add(next);
+		normalized.push(next);
+	}
+	return normalized;
+}
+function applyProviderProfileSelection(selectedProfiles, providerProfile, order, mode) {
+	if (!isCustomProfile(providerProfile)) return selectedProfiles;
+	switch (mode) {
+		case "never": return selectedProfiles;
+		case "seedWhenEmpty": return selectedProfiles.length === 0 ? [providerProfile] : selectedProfiles;
+		case "coalesce": {
+			const profile = profileCoalesce(selectedProfiles[0] ?? "default", providerProfile, order);
+			return isCustomProfile(profile) ? [profile] : [];
+		}
+	}
+}
+function normalizePath(path) {
+	if (path === void 0) return;
+	const trimmed = path.trim();
+	return trimmed.length === 0 ? void 0 : trimmed;
+}
+function applyInterpret(value, interpret) {
+	if (interpret === "lossy") return isConfigDict(value) ? lossyConfig(value) : lossyValue(value);
+	return value;
+}
+function resolveMissingValue(path, options, context, defaultMissing) {
+	const missing = options.missing ?? defaultMissing;
+	const missingPath = path ?? "(root)";
+	switch (missing) {
+		case "undefined": return;
+		case "null": return null;
+		case "default": {
+			const fallback = typeof options.fallback === "function" ? options.fallback() : options.fallback;
+			if (fallback === void 0) throw FigmentError.invalidValue("missing fallback for missing policy 'default'").withPath(missingPath).withContext(context);
+			return fallback;
+		}
+		case "throw": throw FigmentError.missingField(missingPath, context);
+	}
+}
+function describeScope(path, interpret) {
+	if (path) return interpret === "lossy" ? `lossy key '${path}'` : `key '${path}'`;
+	return interpret === "lossy" ? "lossy config" : "config";
+}
+function collectMetadata(tree, metadataByTag) {
+	if (!tree) return [];
+	const out = [];
+	const seen = /* @__PURE__ */ new Set();
+	for (const metadataId of collectMetadataIds(tree)) {
+		if (seen.has(metadataId)) continue;
+		seen.add(metadataId);
+		const metadata = metadataByTag.get(metadataId);
+		if (metadata) out.push(metadata);
+	}
+	return out;
+}
+function cloneResolvable(value) {
+	if (value === void 0 || value === null) return value;
+	if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+	if (Array.isArray(value) || isConfigDict(value)) return deepClone(value);
+	return value;
+}
+function lossyConfig(value) {
+	const out = {};
+	for (const [key, item] of Object.entries(value)) out[key] = lossyValue(item);
+	return out;
+}
+function lossyValue(value) {
+	if (Array.isArray(value)) return value.map((item) => lossyValue(item));
+	if (isConfigDict(value)) return lossyConfig(value);
+	if (typeof value !== "string") return value;
+	const trimmed = value.trim();
+	const lowered = trimmed.toLowerCase();
+	if ([
+		"true",
+		"yes",
+		"on",
+		"1"
+	].includes(lowered)) return true;
+	if ([
+		"false",
+		"no",
+		"off",
+		"0"
+	].includes(lowered)) return false;
+	if (/^-?\d+$/.test(trimmed)) {
+		const parsed = Number.parseInt(trimmed, 10);
+		if (!Number.isNaN(parsed)) return parsed;
+	}
+	if (/^-?\d+(\.\d+)?([eE]-?\d+)?$/.test(trimmed)) {
+		const parsed = Number.parseFloat(trimmed);
+		if (!Number.isNaN(parsed)) return parsed;
+	}
+	return value;
+}
+function unwrapTag(tree) {
+	return tree?.tag;
+}
+function collectMetadataIds(tree) {
+	const ids = [tree.tag.metadataId];
+	switch (tree.kind) {
+		case "scalar": return ids;
+		case "array":
+			for (const child of tree.children) ids.push(...collectMetadataIds(child));
+			return ids;
+		case "dict":
+			for (const child of tree.children) ids.push(...collectMetadataIds(child));
+			return ids;
+	}
+}
+function runDecoder(value, decode, scope, options) {
+	try {
+		if (typeof decode === "function") return decode(value, options?.decodeContext);
+		return decode.parse(value, options?.decodeContext);
+	} catch (error) {
+		let figmentError = isFigmentFailure(error) ? error : FigmentError.decode(scope, error);
+		if (options?.path) figmentError = figmentError.withPath(options.path);
+		if (options?.context) figmentError = figmentError.withContext(options.context);
+		throw figmentError;
+	}
+}
+function createDecodeContext(options) {
+	let metadataAllCache;
+	const selectedProfiles = [...options.profileContext.selectedProfiles];
+	const effectiveProfileOrder = [...options.profileContext.effectiveProfileOrder];
+	return {
+		path: options.path,
+		profile: options.profileContext.profile,
+		selectedProfiles,
+		effectiveProfileOrder,
+		tag: options.tag,
+		metadata: options.metadata,
+		get metadataAll() {
+			if (metadataAllCache === void 0) metadataAllCache = collectMetadata(options.tree, options.metadataByTag);
+			return [...metadataAllCache];
+		}
+	};
+}
+function emptyTagDictNode() {
+	return {
+		kind: "dict",
+		tag: makeTag(0, DEFAULT_PROFILE),
+		children: []
+	};
+}
+function captureProvideLocation() {
+	const stack = (/* @__PURE__ */ new Error()).stack;
+	if (!stack) return;
+	const lines = stack.split("\n").slice(1).map((line) => line.trim());
+	for (const line of lines) {
+		if (line.includes("captureProvideLocation") || line.includes("/src/figment.ts")) continue;
+		return line.replace(/^at\s+/, "");
+	}
+}
+var Figment, builtinOperationHandlersRegistered, OPERATOR_MEMO_CACHE_LIMIT, operatorMemoCache, AppliedOperationFailure;
+var init_figment = __esmMin((() => {
+	init_profile$1();
+	init_coalesce();
+	init_error$2();
+	init_path_nav();
+	init_types$1();
+	init_tag$1();
+	init_operator();
+	init_handler();
+	init_provide();
+	init_profile();
+	init_diagnostic();
+	init_assert();
+	init_scope();
+	init_state();
+	init_tuple();
+	Figment = class Figment {
+		activeProfiles;
+		providerProfileSelectionMode;
+		metadataByTag;
+		values;
+		tags;
+		failure;
+		nextTag;
+		operationRecordLog;
+		nextOperationRecordId;
+		contextSnapshots;
+		nextContextId;
+		nextBoundaryId;
+		pending;
+		constructor() {
+			this.activeProfiles = [];
+			this.providerProfileSelectionMode = "seedWhenEmpty";
+			this.metadataByTag = /* @__PURE__ */ new Map();
+			this.values = {};
+			this.tags = {};
+			this.failure = void 0;
+			this.nextTag = 1;
+			this.operationRecordLog = [];
+			this.nextOperationRecordId = 1;
+			this.contextSnapshots = /* @__PURE__ */ new Map();
+			this.nextContextId = 1;
+			this.nextBoundaryId = 1;
+			this.pending = Promise.resolve();
+		}
+		static new() {
+			return new Figment();
+		}
+		static from(provider) {
+			return new Figment().provide(provider, "merge", captureProvideLocation());
+		}
+		metadata() {
+			return {
+				name: "Figment",
+				interpolate: (profile, keys) => `${profile}.${keys.join(".")}`
+			};
+		}
+		state() {
+			return {
+				activeProfiles: this.activeProfiles,
+				providerProfileSelectionMode: this.providerProfileSelectionMode,
+				pending: this.pending,
+				values: this.values,
+				tags: this.tags,
+				metadataByTag: this.metadataByTag,
+				failure: this.failure,
+				nextTag: this.nextTag,
+				operationRecords: this.operationRecordLog,
+				nextOperationRecordId: this.nextOperationRecordId,
+				contextSnapshots: this.contextSnapshots,
+				nextContextId: this.nextContextId,
+				nextBoundaryId: this.nextBoundaryId
+			};
+		}
+		profile() {
+			return this.primaryProfile();
+		}
+		selectedProfile() {
+			return this.primaryProfile();
+		}
+		selectedProfiles() {
+			return [...this.activeProfiles];
+		}
+		/**
+		* Returns collected metadata entries in insertion order.
+		*
+		* This is a global metadata view across all merged providers and imported
+		* metadata maps, useful for diagnostics and audits.
+		*/
+		async metadataEntries() {
+			await this.ready();
+			return [...this.metadataByTag.values()];
+		}
+		/**
+		* Returns metadata associated with a tag.
+		*
+		* This is useful with tags returned from `explain()` when you want to resolve
+		* metadata separately from value extraction.
+		*/
+		async getMetadata(tag) {
+			if (!tag) return;
+			await this.ready();
+			return this.metadataByTag.get(tag.metadataId);
+		}
+		/**
+		* Extracts a value and returns winner-tag metadata alongside the value.
+		*/
+		async extractTagged(options) {
+			const path = normalizePath(options.path);
+			if (path === void 0) throw FigmentError.invalidValue("extractTagged requires a non-empty path");
+			await this.pending;
+			const selectedProfiles = options.profiles ? normalizeSelectedProfiles(options.profiles) : this.activeProfiles;
+			const interpret = options.interpret ?? "default";
+			const context = this.errorProfileContext(selectedProfiles);
+			const merged = await this.mergedState(selectedProfiles);
+			const rawValue = findValue(merged.value, path);
+			const tree = findTag(merged.tags, path);
+			const exists = rawValue !== void 0;
+			const tag = unwrapTag(tree);
+			const metadata = tag === void 0 ? void 0 : this.metadataByTag.get(tag.metadataId);
+			const value = rawValue === void 0 ? resolveMissingValue(path, options, context, "throw") : interpret === "lossy" ? lossyValue(rawValue) : rawValue;
+			return {
+				path,
+				exists,
+				value: cloneResolvable(options.deser ? runDecoder(value, options.deser, describeScope(path, interpret), {
+					path,
+					context: {
+						tag,
+						...context,
+						metadata
+					},
+					decodeContext: createDecodeContext({
+						path,
+						tree,
+						tag,
+						metadata,
+						profileContext: context,
+						metadataByTag: this.metadataByTag
+					})
+				}) : value),
+				tag,
+				metadata,
+				...context
+			};
+		}
+		async explain(options = {}) {
+			const path = normalizePath(options.path);
+			await this.pending;
+			const selectedProfiles = options.profiles ? normalizeSelectedProfiles(options.profiles) : this.activeProfiles;
+			const interpret = options.interpret ?? "default";
+			const includeMetadata = options.includeMetadata ?? "winner";
+			const context = this.errorProfileContext(selectedProfiles);
+			const merged = await this.mergedState(selectedProfiles);
+			const rawValue = path ? findValue(merged.value, path) : merged.value;
+			const tree = path ? findTag(merged.tags, path) : merged.tags;
+			const exists = rawValue !== void 0;
+			const tag = unwrapTag(tree);
+			const winnerMetadata = tag === void 0 ? void 0 : this.metadataByTag.get(tag.metadataId);
+			const value = rawValue === void 0 ? resolveMissingValue(path, options, context, "undefined") : applyInterpret(rawValue, interpret);
+			const resolved = options.deser ? runDecoder(value, options.deser, describeScope(path, interpret), {
+				path,
+				context: {
+					tag,
+					...context,
+					metadata: winnerMetadata
+				},
+				decodeContext: createDecodeContext({
+					path,
+					tree,
+					tag,
+					metadata: winnerMetadata,
+					profileContext: context,
+					metadataByTag: this.metadataByTag
+				})
+			}) : value;
+			const metadata = includeMetadata === "none" ? void 0 : winnerMetadata;
+			const metadataAll = includeMetadata === "all" ? collectMetadata(tree, this.metadataByTag) : void 0;
+			return {
+				path: path ?? "",
+				exists,
+				value: cloneResolvable(resolved),
+				tag,
+				metadata,
+				metadataAll,
+				...context
+			};
+		}
+		select(profile) {
+			return this.selectProfiles([profile]);
+		}
+		selectProfiles(profiles) {
+			const normalized = normalizeSelectedProfiles(profiles);
+			const next = this.fork();
+			next.activeProfiles = normalized;
+			next.pending = next.pending.then(() => {
+				if (next.failure) return;
+				next.activeProfiles = normalized;
+			});
+			return next;
+		}
+		spliceProfiles(start, deleteCount, ...profiles) {
+			const next = this.fork();
+			const selected = [...this.activeProfiles];
+			if (deleteCount === void 0) selected.splice(start);
+			else selected.splice(start, deleteCount, ...profiles);
+			const normalized = normalizeSelectedProfiles(selected);
+			next.activeProfiles = normalized;
+			next.pending = next.pending.then(() => {
+				if (next.failure) return;
+				next.activeProfiles = normalized;
+			});
+			return next;
+		}
+		providerProfileSelection(mode) {
+			const next = this.fork();
+			next.providerProfileSelectionMode = mode;
+			next.pending = next.pending.then(() => {
+				if (next.failure) return;
+				next.providerProfileSelectionMode = mode;
+			});
+			return next;
+		}
+		join(provider) {
+			return this.provide(provider, "join", captureProvideLocation());
+		}
+		adjoin(provider) {
+			return this.provide(provider, "adjoin", captureProvideLocation());
+		}
+		zipjoin(provider) {
+			return this.provide(provider, "zipjoin", captureProvideLocation());
+		}
+		merge(provider) {
+			return this.provide(provider, "merge", captureProvideLocation());
+		}
+		admerge(provider) {
+			return this.provide(provider, "admerge", captureProvideLocation());
+		}
+		zipmerge(provider) {
+			return this.provide(provider, "zipmerge", captureProvideLocation());
+		}
+		derive(input, options) {
+			ensureBuiltinOperationHandlersRegistered();
+			const operators = Array.isArray(input) ? input : [input];
+			const resolvedOptions = resolveDeriveOptions(options);
+			const provideLocation = captureProvideLocation();
+			const next = this.fork();
+			next.pending = next.pending.then(async () => {
+				const preservedFailure = next.failure;
+				if (preservedFailure && resolvedOptions.policy.previousFailure === "stop") return;
+				if (preservedFailure && resolvedOptions.policy.previousFailure === "continue") next.failure = void 0;
+				const boundaryId = next.allocateBoundaryId();
+				const contextId = next.captureContextSnapshot(resolvedOptions);
+				const hooks = resolvedOptions.observe.hooks;
+				const snapshotHashCache = /* @__PURE__ */ new WeakMap();
+				const baseContext = {
+					boundaryId,
+					operatorIndex: 0,
+					contextId,
+					provideLocation,
+					options: resolvedOptions
+				};
+				const applyOperatorIntents = async (context, operatorName, intents) => {
+					for (let intentIndex = 0; intentIndex < intents.length; intentIndex += 1) {
+						const intent = intents[intentIndex];
+						if (!intent) continue;
+						try {
+							const record = await next.applyOperation(intent, next.createApplyContext({
+								context,
+								operatorName,
+								intentIndex,
+								scopeDepth: 0,
+								provideLocation,
+								throwOnFailure: true
+							}));
+							await hooks?.onOperationApply?.(record);
+						} catch (error) {
+							const appliedFailure = error instanceof AppliedOperationFailure ? error : void 0;
+							if (appliedFailure?.record) await hooks?.onOperationApply?.(appliedFailure.record);
+							const failure = normalizeFailure(appliedFailure?.failure ?? error, next.errorProfileContext());
+							switch (resolvedOptions.policy.providerError) {
+								case "stop":
+									next.failure = mergeFigmentFailures(failure, next.failure);
+									return true;
+								case "skip":
+									next.failure = mergeFigmentFailures(failure, next.failure);
+									continue;
+								case "collect": continue;
+							}
+						}
+					}
+					return false;
+				};
+				const recordOperatorFailure = async (context, operatorName, failure) => {
+					const record = createOperatorFailureRecord({
+						id: next.allocateOperationRecordId(),
+						boundaryId,
+						contextId,
+						operatorIndex: context.operatorIndex,
+						operatorName,
+						provideLocation,
+						error: failure
+					});
+					next.appendOperationRecord(record);
+					await hooks?.onOperationApply?.(record);
+				};
+				const runOneOperator = async (operatorIndex, snapshot) => {
+					const operator = operators[operatorIndex];
+					const operatorName = operator ? resolveOperatorName(operator, resolvedOptions, boundaryId) : `derive#${boundaryId}`;
+					const context = {
+						...baseContext,
+						operatorIndex
+					};
+					if (operator && shouldGuardMetadataMutation(operator, resolvedOptions)) switch (resolvedOptions.policy.metadataMutationGuard) {
+						case "error": return {
+							context,
+							operatorName,
+							failure: FigmentError.invalidValue(`operator '${operatorName}' declares metadata mutation but shared isolation is active`).withContext(next.errorProfileContext())
+						};
+						case "warn": {
+							const warningRecord = createGuardWarningRecord({
+								id: next.allocateOperationRecordId(),
+								boundaryId,
+								contextId,
+								operatorIndex,
+								operatorName,
+								provideLocation
+							});
+							next.appendOperationRecord(warningRecord);
+							await hooks?.onOperationApply?.(warningRecord);
+						}
+					}
+					await hooks?.onOperatorStart?.(context);
+					try {
+						if (!operator) return {
+							context,
+							operatorName,
+							intents: []
+						};
+						const memoKey = resolvedOptions.cache.mode === "memoize" ? buildOperatorMemoKey({
+							cacheKey: resolvedOptions.cache.key,
+							options: resolvedOptions,
+							operatorName,
+							operatorIndex,
+							snapshot,
+							snapshotHash: getSnapshotHash(snapshot, snapshotHashCache)
+						}) : void 0;
+						if (memoKey) {
+							const cached = operatorMemoCache.get(memoKey);
+							if (cached?.intents) return {
+								context,
+								operatorName,
+								intents: cloneOperationIntents(cached.intents)
+							};
+						}
+						const intents = normalizeOperatorResult(await operator(snapshot, context));
+						if (memoKey) memoizeOperatorIntents(memoKey, cloneOperationIntents(intents));
+						return {
+							context,
+							operatorName,
+							intents
+						};
+					} catch (error) {
+						return {
+							context,
+							operatorName,
+							failure: normalizeFailure(error, next.errorProfileContext())
+						};
+					} finally {
+						await hooks?.onOperatorFinish?.(context);
+					}
+				};
+				await hooks?.onDeriveStart?.(baseContext);
+				try {
+					const hasStatefulOperator = operators.some((operator) => operator ? !isStatelessOperator(operator) : false);
+					const statelessSnapshot = new Figment();
+					if (resolvedOptions.exec.parallel && operators.length > 1) {
+						const sharedSnapshot = hasStatefulOperator ? this.fork() : void 0;
+						if (sharedSnapshot && preservedFailure && resolvedOptions.policy.previousFailure === "continue") sharedSnapshot.failure = void 0;
+						if (sharedSnapshot) await sharedSnapshot.pending;
+						const isolatedSnapshots = resolvedOptions.exec.isolation === "isolated" && hasStatefulOperator ? await Promise.all(operators.map(async (operator) => {
+							if (!operator || isStatelessOperator(operator)) return;
+							const isolated = this.fork();
+							if (preservedFailure && resolvedOptions.policy.previousFailure === "continue") isolated.failure = void 0;
+							await isolated.pending;
+							return isolated;
+						})) : void 0;
+						const runResults = await runWithConcurrency(operators.length, resolvedOptions.exec.maxConcurrency, async (operatorIndex) => {
+							const operator = operators[operatorIndex];
+							if (operator && isStatelessOperator(operator)) return runOneOperator(operatorIndex, statelessSnapshot);
+							const snapshot = resolvedOptions.exec.isolation === "isolated" ? isolatedSnapshots?.[operatorIndex] ?? sharedSnapshot ?? statelessSnapshot : sharedSnapshot ?? statelessSnapshot;
+							return runOneOperator(operatorIndex, snapshot);
+						});
+						for (const runResult of runResults) {
+							if (runResult.failure) {
+								await recordOperatorFailure(runResult.context, runResult.operatorName, runResult.failure);
+								switch (resolvedOptions.policy.operatorError) {
+									case "stop":
+										next.failure = mergeFigmentFailures(runResult.failure, next.failure);
+										return;
+									case "skip":
+										next.failure = mergeFigmentFailures(runResult.failure, next.failure);
+										continue;
+									case "collect": continue;
+								}
+							}
+							if (runResult.intents) {
+								if (await applyOperatorIntents(runResult.context, runResult.operatorName, runResult.intents)) return;
+							}
+						}
+					} else {
+						const snapshot = hasStatefulOperator ? this.fork() : statelessSnapshot;
+						if (hasStatefulOperator && preservedFailure && resolvedOptions.policy.previousFailure === "continue") snapshot.failure = void 0;
+						if (hasStatefulOperator) await snapshot.pending;
+						for (let operatorIndex = 0; operatorIndex < operators.length; operatorIndex += 1) {
+							const operator = operators[operatorIndex];
+							const runSnapshot = operator && isStatelessOperator(operator) ? statelessSnapshot : snapshot;
+							const runResult = await runOneOperator(operatorIndex, runSnapshot);
+							if (runResult.failure) {
+								await recordOperatorFailure(runResult.context, runResult.operatorName, runResult.failure);
+								switch (resolvedOptions.policy.operatorError) {
+									case "stop":
+										next.failure = mergeFigmentFailures(runResult.failure, next.failure);
+										return;
+									case "skip":
+										next.failure = mergeFigmentFailures(runResult.failure, next.failure);
+										continue;
+									case "collect": continue;
+								}
+							}
+							if (runResult.intents) {
+								if (await applyOperatorIntents(runResult.context, runResult.operatorName, runResult.intents)) return;
+							}
+						}
+					}
+				} finally {
+					await hooks?.onDeriveFinish?.(baseContext);
+					if (preservedFailure && resolvedOptions.policy.previousFailure === "continue") next.failure = next.failure ? mergeFigmentFailures(next.failure, preservedFailure) : preservedFailure;
+				}
+			});
+			return next;
+		}
+		async operationRecords(query = {}) {
+			await this.pending;
+			return this.operationRecordLog.filter((record) => {
+				if (query.boundaryId !== void 0 && record.boundaryId !== query.boundaryId) return false;
+				if (query.operatorIndex !== void 0 && record.operatorIndex !== query.operatorIndex) return false;
+				if (query.contextId !== void 0 && record.contextId !== query.contextId) return false;
+				if (query.parentRecordId !== void 0 && record.parentRecordId !== query.parentRecordId) return false;
+				if (query.kind !== void 0 && record.kind !== query.kind) return false;
+				if (query.status !== void 0 && record.status !== query.status) return false;
+				return true;
+			});
+		}
+		async contextSnapshot(contextId) {
+			await this.pending;
+			const snapshot = this.contextSnapshots.get(contextId);
+			if (!snapshot) return;
+			return cloneContextSnapshot(snapshot);
+		}
+		async contextSnapshotsList() {
+			await this.pending;
+			return [...cloneContextSnapshots(this.contextSnapshots).values()].sort((a, b) => a.id - b.id);
+		}
+		async operationStats() {
+			await this.pending;
+			const byStatus = {
+				applied: 0,
+				noop: 0,
+				failed: 0
+			};
+			const byKind = {};
+			for (const record of this.operationRecordLog) {
+				byStatus[record.status] += 1;
+				byKind[record.kind] = (byKind[record.kind] ?? 0) + 1;
+			}
+			return {
+				total: this.operationRecordLog.length,
+				byStatus,
+				byKind
+			};
+		}
+		async operationFailureReport(query = {}) {
+			await this.pending;
+			const grouped = /* @__PURE__ */ new Map();
+			for (const record of this.operationRecordLog) {
+				if (record.status !== "failed") continue;
+				if (query.boundaryId !== void 0 && record.boundaryId !== query.boundaryId) continue;
+				if (query.operatorIndex !== void 0 && record.operatorIndex !== query.operatorIndex) continue;
+				const key = `${record.boundaryId}:${record.operatorIndex}`;
+				const failureMessage = record.error?.message ?? "operation failed";
+				const existing = grouped.get(key);
+				if (existing) {
+					existing.count += 1;
+					existing.latestRecordId = Math.max(existing.latestRecordId, record.id);
+					if (!existing.messages.includes(failureMessage)) existing.messages.push(failureMessage);
+				} else grouped.set(key, {
+					boundaryId: record.boundaryId,
+					operatorIndex: record.operatorIndex,
+					operatorName: record.operatorName,
+					count: 1,
+					latestRecordId: record.id,
+					messages: [failureMessage]
+				});
+			}
+			return [...grouped.values()].sort((left, right) => {
+				if (left.boundaryId !== right.boundaryId) return left.boundaryId - right.boundaryId;
+				return left.operatorIndex - right.operatorIndex;
+			});
+		}
+		async profiles() {
+			await this.ready();
+			return Object.keys(this.values);
+		}
+		async extract(options) {
+			const path = normalizePath(options.path);
+			if (path === void 0) throw FigmentError.invalidValue("extract requires a non-empty path");
+			await this.pending;
+			const selectedProfiles = options.profiles ? normalizeSelectedProfiles(options.profiles) : this.activeProfiles;
+			const interpret = options.interpret ?? "default";
+			const context = this.errorProfileContext(selectedProfiles);
+			const merged = await this.mergedState(selectedProfiles);
+			const rawValue = findValue(merged.value, path);
+			const tree = findTag(merged.tags, path);
+			const tag = unwrapTag(tree);
+			const metadata = tag === void 0 ? void 0 : this.metadataByTag.get(tag.metadataId);
+			const value = rawValue === void 0 ? resolveMissingValue(path, options, context, "throw") : interpret === "lossy" ? lossyValue(rawValue) : rawValue;
+			return cloneResolvable(options.deser ? runDecoder(value, options.deser, describeScope(path, interpret), {
+				path,
+				context: {
+					tag,
+					...context,
+					metadata
+				},
+				decodeContext: createDecodeContext({
+					path,
+					tree,
+					tag,
+					metadata,
+					profileContext: context,
+					metadataByTag: this.metadataByTag
+				})
+			}) : value);
+		}
+		async build(options = {}) {
+			await this.pending;
+			const selectedProfiles = options.profiles ? normalizeSelectedProfiles(options.profiles) : this.activeProfiles;
+			const interpret = options.interpret ?? "default";
+			const context = this.errorProfileContext(selectedProfiles);
+			const merged = await this.mergedState(selectedProfiles);
+			const tag = unwrapTag(merged.tags);
+			const metadata = tag === void 0 ? void 0 : this.metadataByTag.get(tag.metadataId);
+			const value = interpret === "lossy" ? lossyConfig(merged.value) : merged.value;
+			return cloneResolvable(options.deser === void 0 ? value : runDecoder(value, options.deser, describeScope(void 0, interpret), {
+				context: {
+					tag,
+					...context,
+					metadata
+				},
+				decodeContext: createDecodeContext({
+					path: void 0,
+					tree: merged.tags,
+					tag,
+					metadata,
+					profileContext: context,
+					metadataByTag: this.metadataByTag
+				})
+			}));
+		}
+		async contains(path) {
+			return await this.extract({
+				path,
+				missing: "undefined"
+			}) !== void 0;
+		}
+		focus(path) {
+			const focused = this.fork();
+			focused.pending = focused.pending.then(() => {
+				if (focused.failure) return;
+				const map = {};
+				const tags = {};
+				for (const [profile, dict] of Object.entries(focused.values)) {
+					const value = findValue(dict, path);
+					const tree = focused.tags[profile] ? findTag(focused.tags[profile], path) : void 0;
+					if (isConfigDict(value)) {
+						map[profile] = deepClone(value);
+						if (tree && isTagDictNode(tree)) tags[profile] = cloneTagDictNode(tree);
+					}
+				}
+				focused.values = map;
+				focused.tags = tags;
+			});
+			return focused;
+		}
+		async ready() {
+			await this.pending;
+			if (this.failure) throw this.failure;
+		}
+		provide(provider, order, provideLocation) {
+			const next = this.fork();
+			const providerProfile = normalizeProvidable(provider).selectedProfile?.();
+			const normalizedProviderProfile = providerProfile ? normalizeProfile(providerProfile) : void 0;
+			if (normalizedProviderProfile) next.activeProfiles = applyProviderProfileSelection(next.activeProfiles, normalizedProviderProfile, order, this.providerProfileSelectionMode);
+			next.pending = next.pending.then(async () => {
+				if (next.failure) return;
+				try {
+					await next.applyProvidable(provider, order, provideLocation);
+				} catch (error) {
+					next.failure = mergeFigmentFailures(normalizeFailure(error, next.errorProfileContext()), next.failure);
+				}
+			});
+			return next;
+		}
+		async applyOperation(intent, context) {
+			const handler = getOperationHandler(intent.kind);
+			if (!handler) throw FigmentError.invalidValue(`no operation handler registered for kind '${intent.kind}'`);
+			const normalized = handler.normalize(intent, { context: context.context });
+			try {
+				const record = await handler.apply(normalized, context);
+				context.appendRecord(record);
+				if (record.status === "failed" && record.error && context.throwOnFailure !== false) throw new AppliedOperationFailure(record.error, record);
+				return record;
+			} catch (error) {
+				if (error instanceof AppliedOperationFailure) throw error;
+				const failure = normalizeFailure(error, this.errorProfileContext());
+				const failedRecord = {
+					id: context.allocateRecordId(),
+					kind: normalized.kind,
+					status: "failed",
+					boundaryId: context.context.boundaryId,
+					parentRecordId: context.parentRecordId,
+					contextId: context.context.contextId,
+					operatorIndex: context.context.operatorIndex,
+					intentIndex: context.intentIndex,
+					operatorName: context.operatorName,
+					provideLocation: context.provideLocation,
+					intent: normalized,
+					error: failure
+				};
+				context.appendRecord(failedRecord);
+				if (context.throwOnFailure === false) return failedRecord;
+				throw new AppliedOperationFailure(failure, failedRecord);
+			}
+		}
+		createApplyContext(options) {
+			return {
+				context: options.context,
+				operatorName: options.operatorName,
+				intentIndex: options.intentIndex,
+				scopeDepth: options.scopeDepth,
+				provideLocation: options.provideLocation,
+				parentRecordId: options.parentRecordId,
+				getSelectedProfiles: () => [...this.activeProfiles],
+				setSelectedProfiles: (profiles) => {
+					this.activeProfiles = profiles;
+				},
+				hasPath: (path) => this.pathExistsInCurrentMerged(path),
+				applyProvidable: (provider, order, provideLocation) => this.applyProvidable(provider, order, provideLocation),
+				applyOperation: (intent, nestedOptions) => this.applyOperation(intent, this.createApplyContext({
+					context: options.context,
+					operatorName: options.operatorName,
+					intentIndex: nestedOptions.intentIndex,
+					scopeDepth: nestedOptions.scopeDepth ?? options.scopeDepth,
+					provideLocation: options.provideLocation,
+					parentRecordId: nestedOptions.parentRecordId,
+					throwOnFailure: nestedOptions.throwOnFailure
+				})),
+				appendRecord: (record) => {
+					this.appendOperationRecord(record);
+				},
+				allocateRecordId: () => this.allocateOperationRecordId(),
+				throwOnFailure: options.throwOnFailure
+			};
+		}
+		async applyProvidable(provider, order, provideLocation) {
+			const resolvedProvider = normalizeProvidable(provider);
+			const providerProfile = resolvedProvider.selectedProfile?.();
+			const normalizedProviderProfile = providerProfile ? normalizeProfile(providerProfile) : void 0;
+			if (normalizedProviderProfile) this.activeProfiles = applyProviderProfileSelection(this.activeProfiles, normalizedProviderProfile, order, this.providerProfileSelectionMode);
+			let contextTag;
+			let contextMetadata;
+			try {
+				let incoming;
+				let incomingTags;
+				let metadataIds = [];
+				if (resolvedProvider instanceof Figment) {
+					await resolvedProvider.ready();
+					const remap = this.importMetadataMap(resolvedProvider.metadataByTag);
+					metadataIds = [...resolvedProvider.metadataByTag.keys()].map((metadataId) => remap.get(metadataId) ?? metadataId);
+					incoming = normalizeProfiles(resolvedProvider.values);
+					incomingTags = remapProfileTagMap(cloneProfileTagMap(resolvedProvider.tags), remap);
+				} else {
+					const importedMetadataMap = resolvedProvider.metadataMap?.();
+					const importedTagMap = resolvedProvider.tagMap?.();
+					if (importedMetadataMap && importedTagMap) {
+						const remap = this.importMetadataMap(importedMetadataMap);
+						metadataIds = [...importedMetadataMap.keys()].map((metadataId) => remap.get(metadataId) ?? metadataId);
+						incoming = normalizeProfiles(await resolvedProvider.data());
+						incomingTags = remapProfileTagMap(cloneProfileTagMap(importedTagMap), remap);
+					} else {
+						contextTag = this.allocateTag(this.primaryProfile());
+						contextMetadata = resolvedProvider.metadata();
+						contextMetadata.provideLocation = provideLocation;
+						this.metadataByTag.set(contextTag.metadataId, contextMetadata);
+						metadataIds = [contextTag.metadataId];
+						incoming = normalizeProfiles(await resolvedProvider.data());
+						incomingTags = buildTagProfileMap(incoming, contextTag);
+					}
+				}
+				this.values = coalesceProfiles(this.values, incoming, order);
+				this.tags = coalesceTagProfiles(this.tags, incomingTags, order);
+				return { metadataIds };
+			} catch (error) {
+				throw normalizeFailure(error, {
+					...this.errorProfileContext(),
+					metadata: contextMetadata,
+					tag: contextTag
+				});
+			}
+		}
+		appendOperationRecord(record) {
+			this.operationRecordLog.push(record);
+		}
+		allocateOperationRecordId() {
+			const id = this.nextOperationRecordId;
+			this.nextOperationRecordId += 1;
+			return id;
+		}
+		allocateContextId() {
+			const id = this.nextContextId;
+			this.nextContextId += 1;
+			return id;
+		}
+		allocateBoundaryId() {
+			const id = this.nextBoundaryId;
+			this.nextBoundaryId += 1;
+			return id;
+		}
+		captureContextSnapshot(options) {
+			const contextId = this.allocateContextId();
+			const profileContext = this.errorProfileContext();
+			this.contextSnapshots.set(contextId, {
+				id: contextId,
+				selectedProfiles: [...profileContext.selectedProfiles],
+				primaryProfile: profileContext.profile,
+				effectiveProfileOrder: [...profileContext.effectiveProfileOrder],
+				providerProfileSelectionMode: this.providerProfileSelectionMode,
+				activePolicies: {
+					providerError: options.policy.providerError,
+					operatorError: options.policy.operatorError,
+					previousFailure: options.policy.previousFailure
+				}
+			});
+			return contextId;
+		}
+		fork() {
+			const next = new Figment();
+			next.activeProfiles = [...this.activeProfiles];
+			next.providerProfileSelectionMode = this.providerProfileSelectionMode;
+			next.pending = this.pending.then(() => {
+				next.activeProfiles = [...this.activeProfiles];
+				next.providerProfileSelectionMode = this.providerProfileSelectionMode;
+				next.values = deepClone(this.values);
+				next.tags = cloneProfileTagMap(this.tags);
+				next.failure = this.failure;
+				next.nextTag = this.nextTag;
+				next.operationRecordLog = this.operationRecordLog.map(cloneOperationRecord);
+				next.nextOperationRecordId = this.nextOperationRecordId;
+				next.contextSnapshots = cloneContextSnapshots(this.contextSnapshots);
+				next.nextContextId = this.nextContextId;
+				next.nextBoundaryId = this.nextBoundaryId;
+				for (const [metadataId, metadata] of this.metadataByTag.entries()) next.metadataByTag.set(metadataId, metadata);
+			});
+			return next;
+		}
+		allocateTag(profile) {
+			while (this.metadataByTag.has(this.nextTag)) this.nextTag += 1;
+			const metadataId = this.nextTag;
+			this.nextTag += 1;
+			return makeTag(metadataId, profile);
+		}
+		importMetadataMap(map) {
+			const remap = /* @__PURE__ */ new Map();
+			for (const [metadataId, metadata] of map.entries()) {
+				if (!this.metadataByTag.has(metadataId)) {
+					this.metadataByTag.set(metadataId, metadata);
+					if (metadataId >= this.nextTag) this.nextTag = metadataId + 1;
+					continue;
+				}
+				const replacement = this.allocateTag(this.primaryProfile());
+				remap.set(metadataId, replacement.metadataId);
+				this.metadataByTag.set(replacement.metadataId, metadata);
+			}
+			return remap;
+		}
+		async mergedState(selectedProfiles = this.activeProfiles) {
+			await this.ready();
+			return this.resolveMergedState(selectedProfiles);
+		}
+		resolveMergedState(selectedProfiles = this.activeProfiles) {
+			const defaults = this.values["default"] ?? {};
+			const globals = this.values["global"] ?? {};
+			const defaultTags = this.tags["default"] ?? emptyTagDictNode();
+			const globalTags = this.tags["global"] ?? emptyTagDictNode();
+			let value = deepClone(defaults);
+			let tags = cloneTagDictNode(defaultTags);
+			for (const profile of selectedProfiles) {
+				const selected = this.values[profile];
+				if (selected && isCustomProfile(profile)) value = coalesceDict(value, selected, "merge");
+				const selectedTags = this.tags[profile];
+				if (selectedTags && isCustomProfile(profile)) tags = coalesceTagDictNode(tags, selectedTags, "merge");
+			}
+			return {
+				value: coalesceDict(value, globals, "merge"),
+				tags: coalesceTagDictNode(tags, globalTags, "merge")
+			};
+		}
+		pathExistsInCurrentMerged(path) {
+			const normalizedPath = normalizePath(path);
+			if (normalizedPath === void 0) throw FigmentError.invalidValue("assert.require requires a non-empty path");
+			return findValue(this.resolveMergedState().value, normalizedPath) !== void 0;
+		}
+		primaryProfile(selectedProfiles = this.activeProfiles) {
+			return selectedProfiles[0] ?? "default";
+		}
+		effectiveProfileOrder(selectedProfiles = this.activeProfiles) {
+			return [
+				DEFAULT_PROFILE,
+				...selectedProfiles,
+				GLOBAL_PROFILE
+			];
+		}
+		errorProfileContext(selectedProfiles = this.activeProfiles) {
+			return {
+				profile: this.primaryProfile(selectedProfiles),
+				selectedProfiles: [...selectedProfiles],
+				effectiveProfileOrder: this.effectiveProfileOrder(selectedProfiles)
+			};
+		}
+	};
+	Object.defineProperty(Figment.prototype, FIGMENTS_STATE, {
+		configurable: true,
+		value: Figment.prototype.state,
+		writable: true
+	});
+	builtinOperationHandlersRegistered = false;
+	OPERATOR_MEMO_CACHE_LIMIT = 256;
+	operatorMemoCache = /* @__PURE__ */ new Map();
+	AppliedOperationFailure = class extends Error {
+		failure;
+		record;
+		constructor(failure, record) {
+			super("applied operation failure");
+			this.failure = failure;
+			this.record = record;
+		}
+	};
+}));
+//#endregion
+//#region ../figments/src/discovery/entries.ts
+function nullDevice() {
+	nullDeviceIdentity ??= stat(NULL_DEVICE).then((stats) => ({
+		dev: stats.dev,
+		ino: stats.ino
+	}), () => void 0);
+	return nullDeviceIdentity;
+}
+/**
+* Scans one or more drop-in roots and returns topology-aware observations
+* without loading, parsing or following anything: the reusable inventory
+* beneath `dropIns()` and a building block for registry tools that inspect
+* owned declarations (regular files and symlinks to producer-owned
+* manifests alike) without activating them.
+*
+* Only `readdir`/`lstat`/`readlink`/`stat` metadata is consulted. Symlink
+* referents are classified lexically and by `stat` — never read. A root is
+* `missing` only for genuine ENOENT absence (distinguishing a dangling root
+* symlink); every other failure (ENOTDIR, EACCES, ELOOP, …) is a `failed`
+* root carrying errno provenance. Entry-level acquisition failures attach
+* `error` to the observation instead of vanishing.
+*/
+async function discoverDropIns(options) {
+	const dirs = typeof options.dir === "string" ? [options.dir] : [...options.dir];
+	const extensions = options.naming?.extensions?.map(normalizeToken);
+	const disabledSuffixes = (options.naming?.disabledSuffixes ?? []).map(normalizeToken).sort((left, right) => right.length - left.length);
+	const roots = [];
+	const entries = [];
+	for (const [rootIndex, configured] of dirs.entries()) {
+		const root = resolve(configured);
+		let dirents;
+		try {
+			dirents = await readdir(root, { withFileTypes: true });
+		} catch (error) {
+			roots.push(await reportRootFailure(root, configured, error));
+			continue;
+		}
+		roots.push({
+			root,
+			configured,
+			status: "ok"
+		});
+		const observed = [];
+		for (const dirent of dirents) observed.push(await observeEntry(root, rootIndex, dirent, {
+			extensions,
+			disabledSuffixes
+		}));
+		observed.sort((left, right) => compareNames(left.physicalName, right.physicalName));
+		entries.push(...observed);
+	}
+	return {
+		roots,
+		entries
+	};
+}
+async function reportRootFailure(root, configured, error) {
+	if (errnoCode$1(error) !== "ENOENT") return {
+		root,
+		configured,
+		status: "failed",
+		error: observationError(error)
+	};
+	let lst;
+	try {
+		lst = await lstat(root);
+	} catch (probe) {
+		if (errnoCode$1(probe) === "ENOENT") return {
+			root,
+			configured,
+			status: "missing",
+			detail: "absent"
+		};
+		return {
+			root,
+			configured,
+			status: "failed",
+			error: observationError(probe)
+		};
+	}
+	if (lst.isSymbolicLink()) try {
+		await stat(root);
+	} catch (probe) {
+		if (errnoCode$1(probe) === "ENOENT" || errnoCode$1(probe) === "ENOTDIR") return {
+			root,
+			configured,
+			status: "missing",
+			detail: "dangling-symlink"
+		};
+		return {
+			root,
+			configured,
+			status: "failed",
+			error: observationError(probe)
+		};
+	}
+	return {
+		root,
+		configured,
+		status: "missing",
+		detail: "absent"
+	};
+}
+async function observeEntry(root, rootIndex, dirent, naming) {
+	const physicalName = dirent.name;
+	const hidden = physicalName.startsWith(".");
+	const classified = classifyName(physicalName, naming.disabledSuffixes);
+	const kind = dirent.isSymbolicLink() ? "symlink" : dirent.isFile() ? "file" : dirent.isDirectory() ? "directory" : "other";
+	const path = join(root, physicalName);
+	const observation = {
+		root,
+		rootIndex,
+		path,
+		physicalName,
+		logicalName: classified.logicalName,
+		stem: classified.stem,
+		extension: classified.extension,
+		disabled: classified.disabled,
+		kind,
+		hidden,
+		mask: false,
+		matched: namingEligible({
+			hidden,
+			kind,
+			extension: classified.extension,
+			extensions: naming.extensions
+		})
+	};
+	if (kind !== "symlink") return observation;
+	try {
+		const linkTarget = await readlink(path);
+		const referentPath = resolve(root, linkTarget);
+		observation.linkTarget = linkTarget;
+		observation.referentPath = referentPath;
+		let statConfirmedNullDevice = false;
+		try {
+			const followed = await stat(path);
+			observation.referent = followed.isFile() ? "file" : followed.isDirectory() ? "directory" : "special";
+			const nullIdentity = await nullDevice();
+			statConfirmedNullDevice = nullIdentity !== void 0 && followed.dev === nullIdentity.dev && followed.ino === nullIdentity.ino;
+		} catch (error) {
+			if (errnoCode$1(error) === "ENOENT" || errnoCode$1(error) === "ENOTDIR") observation.referent = "broken";
+			else {
+				observation.referent = "unknown";
+				observation.error = observationError(error);
+			}
+		}
+		observation.mask = referentPath === NULL_DEVICE && statConfirmedNullDevice;
+	} catch (error) {
+		observation.referent = "unknown";
+		observation.error = observationError(error);
+	}
+	return observation;
+}
+function classifyName(physicalName, disabledSuffixes) {
+	let logicalName = physicalName;
+	let disabled = false;
+	for (const suffix of disabledSuffixes) if (suffix !== "" && logicalName.toLowerCase().endsWith(suffix)) {
+		logicalName = logicalName.slice(0, logicalName.length - suffix.length);
+		disabled = true;
+		break;
+	}
+	const extension = extname(logicalName).toLowerCase();
+	const stem = extension === "" ? logicalName : logicalName.slice(0, logicalName.length - extension.length);
+	return {
+		logicalName,
+		stem,
+		extension,
+		disabled
+	};
+}
+function namingEligible(input) {
+	if (input.hidden || input.kind !== "file" && input.kind !== "symlink") return false;
+	return input.extensions === void 0 || input.extensions.includes(input.extension);
+}
+function normalizeToken(token) {
+	const trimmed = token.trim().toLowerCase();
+	return trimmed.startsWith(".") ? trimmed : `.${trimmed}`;
+}
+function errnoCode$1(error) {
+	if (typeof error === "object" && error !== null && "code" in error) {
+		const code = error.code;
+		if (typeof code === "string") return code;
+	}
+}
+function observationError(error) {
+	return {
+		code: errnoCode$1(error) ?? "UNKNOWN",
+		message: error instanceof Error ? error.message : String(error)
+	};
+}
+function compareNames(left, right) {
+	return left < right ? -1 : left > right ? 1 : 0;
+}
+var NULL_DEVICE, nullDeviceIdentity;
+var init_entries = __esmMin((() => {
+	NULL_DEVICE = "/dev/null";
+}));
+//#endregion
+//#region ../figments/src/discovery/resolve.ts
+/**
+* Resolves a discovery inventory into whole-entry registry identities.
+*
+* This is a **view**, not a loader: it never reads payloads and never
+* decides what ordinary layered drop-in merging should do. Registry callers
+* use it to answer "which identities exist, in which state, from which
+* sources" — including retained disabled declarations, layered masks and
+* diagnosed conflicts — while loading, validation and admission stay with
+* the caller.
+*
+* Resolution order per identity:
+*
+* 1. group naming-eligible observations (`matched`) by identity;
+* 2. filter participation by the symlink/mask policy (participation
+*    precedes precedence);
+* 3. the effective layer is the highest participating observation. An
+*    ambiguous winner occurrence (two or more declarations, including a
+*    mask paired with another format/disabled declaration) is `conflict`;
+*    otherwise its own state decides: a cleanly observed mask → `masked`,
+*    a broken / unsupported / failed-acquisition winner → `invalid`;
+* 4. otherwise the winner's participation decides `disabled`/`active`.
+*
+* Conflicts **below** the effective layer never block it — they stay
+* recorded in `conflictLayers`/`conflicts` as inspectable diagnostics, so
+* a valid higher definition or mask can replace a conflicting lower
+* identity while the ambiguity remains explainable.
+*
+* A higher layer always shadows lower layers as a whole entry — including a
+* higher *disabled* entry, which must not reveal a lower enabled file.
+*/
+function resolveDropIns(result, options) {
+	const identityOf = options?.identity === "filename" ? logicalIdentity : stemIdentity;
+	const masks = options?.masks ?? false;
+	const symlinks = options?.symlinks ?? "skip";
+	const groups = /* @__PURE__ */ new Map();
+	for (const observation of result.entries) {
+		if (!observation.matched) continue;
+		const identity = identityOf(observation);
+		const group = groups.get(identity);
+		if (group) group.push(observation);
+		else groups.set(identity, [observation]);
+	}
+	const entries = [];
+	for (const [identity, observations] of groups) {
+		const participating = observations.filter((observation) => participates(observation, symlinks, masks));
+		if (participating.length === 0) continue;
+		const winner = participating[participating.length - 1];
+		const conflictLayers = findConflictLayers(participating);
+		const winnerConflicted = conflictLayers.some((layer) => layer.rootIndex === winner.rootIndex);
+		let state;
+		let effectiveMask;
+		if (winnerConflicted) state = "conflict";
+		else if (masks && winner.mask && winner.error === void 0) {
+			state = "masked";
+			effectiveMask = winner;
+		} else if (unusable(winner, masks)) state = "invalid";
+		else state = winner.disabled ? "disabled" : "active";
+		entries.push({
+			identity,
+			state,
+			winner,
+			effectiveMask,
+			observations,
+			participating,
+			conflictLayers,
+			conflicts: conflictLayers.map((layer) => describeConflict(identity, layer))
+		});
+	}
+	entries.sort((left, right) => left.identity < right.identity ? -1 : left.identity > right.identity ? 1 : 0);
+	return {
+		roots: result.roots,
+		entries
+	};
+}
+/**
+* Participation precedes precedence. Regular files always participate.
+* Symlinks participate under `"follow"`, or — independently of the payload
+* policy — when they are cleanly observed `/dev/null` control markers and
+* `masks` is enabled. An acquisition-failed marker is not a control: its
+* error must stay visible instead of hiding behind mask classification.
+*/
+function participates(observation, symlinks, masks) {
+	if (observation.kind === "file") return true;
+	if (observation.kind !== "symlink") return false;
+	if (symlinks === "follow") return true;
+	return masks && observation.mask && observation.error === void 0;
+}
+/**
+* Conflicts are grouped per **source occurrence** (`rootIndex`), not per
+* root path: the same configured root supplied twice is one occurrence
+* repeated, not two directories, and must not invent a duplicate
+* declaration that does not exist on disk.
+*/
+function findConflictLayers(participating) {
+	const byOccurrence = /* @__PURE__ */ new Map();
+	for (const observation of participating) {
+		const group = byOccurrence.get(observation.rootIndex);
+		if (group) group.push(observation);
+		else byOccurrence.set(observation.rootIndex, [observation]);
+	}
+	const layers = [];
+	for (const [rootIndex, group] of byOccurrence) if (group.length > 1) layers.push({
+		rootIndex,
+		root: group[0].root,
+		observations: group
+	});
+	return layers;
+}
+function describeConflict(identity, layer) {
+	const names = layer.observations.map((observation) => observation.physicalName).join(" and ");
+	return `drop-in root ${layer.root}: ${names} both declare '${identity}'`;
+}
+function stemIdentity(observation) {
+	return observation.stem;
+}
+function logicalIdentity(observation) {
+	return observation.logicalName;
+}
+/**
+* A winner is unusable when its acquisition failed or when it is a symlink
+* that neither points at a regular file nor counts as an enabled mask.
+* Broken links, directory links, other special referents (`/dev/zero`,
+* FIFOs, sockets) and `/dev/null` links without `masks` are all explained
+* invalid input — never active entries that disappear at read time, and
+* never silently skipped.
+*/
+function unusable(winner, masks) {
+	if (winner.error !== void 0) return true;
+	if (winner.kind !== "symlink") return false;
+	if (winner.referent === "file") return false;
+	return !(masks && winner.mask);
+}
+var init_resolve = __esmMin((() => {}));
+//#endregion
+//#region ../figments/src/core/fs.ts
+async function resolvePath(path, search) {
+	if (isAbsolute(path)) return await exists(path) ? path : void 0;
+	if (!search) {
+		const exact = resolve(process.cwd(), path);
+		return await exists(exact) ? exact : void 0;
+	}
+	let current = process.cwd();
+	while (true) {
+		const candidate = resolve(current, path);
+		if (await exists(candidate)) return candidate;
+		const parent = dirname(current);
+		if (parent === current) return;
+		current = parent;
+	}
+}
+async function exists(path) {
+	try {
+		await access(path);
+		return true;
+	} catch {
+		return false;
+	}
+}
+var init_fs = __esmMin((() => {}));
+//#endregion
+//#region ../figments/node_modules/.pnpm/confbox@0.2.4/node_modules/confbox/dist/_chunks/libs/detect-indent.mjs
+function n$4(e, n, r) {
+	return e && n === t$4 && r === 1;
+}
+function r$4(r, a) {
+	let o = /* @__PURE__ */ new Map(), s = 0, c, l;
+	for (let u of r.split(/\n/g)) {
+		if (!u) continue;
+		let r = u.match(e$2);
+		if (r === null) s = 0, c = ``;
+		else {
+			let e = r[0].length, u = r[1] ? t$4 : `tab`;
+			if (n$4(a, u, e)) continue;
+			u !== c && (s = 0), c = u;
+			let d = 1, f = 0, p = e - s;
+			if (s = e, p === 0) d = 0, f = 1;
+			else {
+				let e = Math.abs(p);
+				if (n$4(a, u, e)) continue;
+				l = i$7(u, e);
+			}
+			let m = o.get(l);
+			o.set(l, m === void 0 ? [1, 0] : [m[0] + d, m[1] + f]);
+		}
+	}
+	return o;
+}
+function i$7(e, n) {
+	return (e === t$4 ? `s` : `t`) + String(n);
+}
+function a$6(e) {
+	return {
+		type: e[0] === `s` ? t$4 : `tab`,
+		amount: Number(e.slice(1))
+	};
+}
+function o$4(e) {
+	let t, n = 0, r = 0;
+	for (let [i, [a, o]] of e) (a > n || a === n && o > r) && (n = a, r = o, t = i);
+	return t;
+}
+function s$3(e, n) {
+	return (e === t$4 ? ` ` : `	`).repeat(n);
+}
+function c$3(e) {
+	if (typeof e != `string`) throw TypeError(`Expected a string`);
+	let t = r$4(e, !0);
+	t.size === 0 && (t = r$4(e, !1));
+	let n = o$4(t), i, c = 0, l = ``;
+	return n !== void 0 && ({type: i, amount: c} = a$6(n), l = s$3(i, c)), {
+		amount: c,
+		type: i,
+		indent: l
+	};
+}
+var e$2, t$4;
+var init_detect_indent = __esmMin((() => {
+	e$2 = /^(?:( )+|\t+)/;
+	t$4 = `space`;
+}));
+//#endregion
+//#region ../figments/node_modules/.pnpm/confbox@0.2.4/node_modules/confbox/dist/_chunks/_format.mjs
+function i$6(e, t = {}) {
+	return {
+		sample: t.indent === void 0 && t.preserveIndentation !== !1 && e.slice(0, t?.sampleSize || 1024),
+		whiteSpace: t.preserveWhitespace === !1 ? void 0 : {
+			start: n$3.exec(e)?.[0] || ``,
+			end: r$3.exec(e)?.[0] || ``
+		}
+	};
+}
+function a$5(e, n, r) {
+	!n || typeof n != `object` || Object.defineProperty(n, t$3, {
+		enumerable: !1,
+		configurable: !0,
+		writable: !0,
+		value: i$6(e, r)
+	});
+}
+function o$3(n, r) {
+	if (!n || typeof n != `object` || !(t$3 in n)) return {
+		indent: r?.indent ?? 2,
+		whitespace: {
+			start: ``,
+			end: ``
+		}
+	};
+	let i = n[t$3];
+	return {
+		indent: r?.indent || c$3(i.sample || ``).indent,
+		whitespace: i.whiteSpace || {
+			start: ``,
+			end: ``
+		}
+	};
+}
+var t$3, n$3, r$3;
+var init__format = __esmMin((() => {
+	init_detect_indent();
+	t$3 = Symbol.for(`__confbox_fmt__`);
+	n$3 = /^(\s+)/;
+	r$3 = /(\s+)$/;
+}));
+//#endregion
+//#region ../figments/node_modules/.pnpm/confbox@0.2.4/node_modules/confbox/dist/_chunks/libs/smol-toml.mjs
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function e$1(e, t) {
+	let n = e.slice(0, t).split(/\r\n|\n|\r/g);
+	return [n.length, n.pop().length + 1];
+}
+function t$2(e, t, n) {
+	let r = e.split(/\r\n|\n|\r/g), i = ``, a = (Math.log10(t + 1) | 0) + 1;
+	for (let e = t - 1; e <= t + 1; e++) {
+		let o = r[e - 1];
+		o && (i += e.toString().padEnd(a, ` `), i += `:  `, i += o, i += `
+`, e === t && (i += ` `.repeat(a + n + 2), i += `^
+`));
+	}
+	return i;
+}
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function r$2(e, t) {
+	let n = 0;
+	for (; e[t - ++n] === `\\`;);
+	return --n && n % 2;
+}
+function i$5(e, t = 0, n = e.length) {
+	let r = e.indexOf(`
+`, t);
+	return e[r - 1] === `\r` && r--, r <= n ? r : -1;
+}
+function a$4(e, t) {
+	for (let r = t; r < e.length; r++) {
+		let i = e[r];
+		if (i === `
+`) return r;
+		if (i === `\r` && e[r + 1] === `
+`) return r + 1;
+		if (i < ` ` && i !== `	` || i === ``) throw new n$2(`control characters are not allowed in comments`, {
+			toml: e,
+			ptr: t
+		});
+	}
+	return e.length;
+}
+function o$2(e, t, n, r) {
+	let i;
+	for (; (i = e[t]) === ` ` || i === `	` || !n && (i === `
+` || i === `\r` && e[t + 1] === `
+`);) t++;
+	return r || i !== `#` ? t : o$2(e, a$4(e, t), n);
+}
+function s$2(e, t, r, a, o = !1) {
+	if (!a) return t = i$5(e, t), t < 0 ? e.length : t;
+	for (let n = t; n < e.length; n++) {
+		let t = e[n];
+		if (t === `#`) n = i$5(e, n);
+		else if (t === r) return n + 1;
+		else if (t === a || o && (t === `
+` || t === `\r` && e[n + 1] === `
+`)) return n;
+	}
+	throw new n$2(`cannot find end of structure`, {
+		toml: e,
+		ptr: t
+	});
+}
+function c$2(e, t) {
+	let n = e[t], i = n === e[t + 1] && e[t + 1] === e[t + 2] ? e.slice(t, t + 3) : n;
+	t += i.length - 1;
+	do
+		t = e.indexOf(i, ++t);
+	while (t > -1 && n !== `'` && r$2(e, t));
+	return t > -1 && (t += i.length, i.length > 1 && (e[t] === n && t++, e[t] === n && t++)), t;
+}
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function g$1(e, t = 0, r = e.length) {
+	let i = e[t] === `'`, a = e[t++] === e[t] && e[t] === e[t + 1];
+	a && (r -= 2, e[t += 2] === `\r` && t++, e[t] === `
+` && t++);
+	let s = 0, c, l = ``, u = t;
+	for (; t < r - 1;) {
+		let r = e[t++];
+		if (r === `
+` || r === `\r` && e[t] === `
+`) {
+			if (!a) throw new n$2(`newlines are not allowed in strings`, {
+				toml: e,
+				ptr: t - 1
+			});
+		} else if (r < ` ` && r !== `	` || r === ``) throw new n$2(`control characters are not allowed in strings`, {
+			toml: e,
+			ptr: t - 1
+		});
+		if (c) {
+			if (c = !1, r === `x` || r === `u` || r === `U`) {
+				let i = e.slice(t, t += r === `x` ? 2 : r === `u` ? 4 : 8);
+				if (!m$1.test(i)) throw new n$2(`invalid unicode escape`, {
+					toml: e,
+					ptr: s
+				});
+				try {
+					l += String.fromCodePoint(parseInt(i, 16));
+				} catch {
+					throw new n$2(`invalid unicode escape`, {
+						toml: e,
+						ptr: s
+					});
+				}
+			} else if (a && (r === `
+` || r === ` ` || r === `	` || r === `\r`)) {
+				if (t = o$2(e, t - 1, !0), e[t] !== `
+` && e[t] !== `\r`) throw new n$2(`invalid escape: only line-ending whitespace may be escaped`, {
+					toml: e,
+					ptr: s
+				});
+				t = o$2(e, t);
+			} else if (r in h$1) l += h$1[r];
+			else throw new n$2(`unrecognized escape sequence`, {
+				toml: e,
+				ptr: s
+			});
+			u = t;
+		} else !i && r === `\\` && (s = t - 1, c = !0, l += e.slice(u, s));
+	}
+	return l + e.slice(u, r - 1);
+}
+function _$1(e, t, r, i) {
+	if (e === `true`) return !0;
+	if (e === `false`) return !1;
+	if (e === `-inf`) return -1 / 0;
+	if (e === `inf` || e === `+inf`) return 1 / 0;
+	if (e === `nan` || e === `+nan` || e === `-nan`) return NaN;
+	if (e === `-0`) return i ? 0n : 0;
+	let a = d$1.test(e);
+	if (a || f$1.test(e)) {
+		if (p$1.test(e)) throw new n$2(`leading zeroes are not allowed`, {
+			toml: t,
+			ptr: r
+		});
+		e = e.replace(/_/g, ``);
+		let o = +e;
+		if (isNaN(o)) throw new n$2(`invalid number`, {
+			toml: t,
+			ptr: r
+		});
+		if (a) {
+			if ((a = !Number.isSafeInteger(o)) && !i) throw new n$2(`integer value cannot be represented losslessly`, {
+				toml: t,
+				ptr: r
+			});
+			(a || i === !0) && (o = BigInt(e));
+		}
+		return o;
+	}
+	let o = new u$2(e);
+	if (!o.isValid()) throw new n$2(`invalid value`, {
+		toml: t,
+		ptr: r
+	});
+	return o;
+}
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function v$1(e, t, n) {
+	let r = e.slice(t, n), i = r.indexOf(`#`);
+	return i > -1 && (a$4(e, i), r = r.slice(0, i)), [r.trimEnd(), i];
+}
+function y$1(e, t, r, i, a) {
+	if (i === 0) throw new n$2(`document contains excessively nested structures. aborting.`, {
+		toml: e,
+		ptr: t
+	});
+	let l = e[t];
+	if (l === `[` || l === `{`) {
+		let [s, c] = l === `[` ? C$1(e, t, i, a) : S$1(e, t, i, a);
+		if (r) {
+			if (c = o$2(e, c), e[c] === `,`) c++;
+			else if (e[c] !== r) throw new n$2(`expected comma or end of structure`, {
+				toml: e,
+				ptr: c
+			});
+		}
+		return [s, c];
+	}
+	let u;
+	if (l === `"` || l === `'`) {
+		u = c$2(e, t);
+		let i = g$1(e, t, u);
+		if (r) {
+			if (u = o$2(e, u), e[u] && e[u] !== `,` && e[u] !== r && e[u] !== `
+` && e[u] !== `\r`) throw new n$2(`unexpected character encountered`, {
+				toml: e,
+				ptr: u
+			});
+			u += +(e[u] === `,`);
+		}
+		return [i, u];
+	}
+	u = s$2(e, t, `,`, r);
+	let d = v$1(e, t, u - +(e[u - 1] === `,`));
+	if (!d[0]) throw new n$2(`incomplete key-value declaration: no value specified`, {
+		toml: e,
+		ptr: t
+	});
+	return r && d[1] > -1 && (u = o$2(e, t + d[1]), u += +(e[u] === `,`)), [_$1(d[0], e, t, a), u];
+}
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function x$1(e, t, r = `=`) {
+	let a = t - 1, s = [], l = e.indexOf(r, t);
+	if (l < 0) throw new n$2(`incomplete key-value: cannot find end of key`, {
+		toml: e,
+		ptr: t
+	});
+	do {
+		let o = e[t = ++a];
+		if (o !== ` ` && o !== `	`) if (o === `"` || o === `'`) {
+			if (o === e[t + 1] && o === e[t + 2]) throw new n$2(`multiline strings are not allowed in keys`, {
+				toml: e,
+				ptr: t
+			});
+			let u = c$2(e, t);
+			if (u < 0) throw new n$2(`unfinished string encountered`, {
+				toml: e,
+				ptr: t
+			});
+			a = e.indexOf(`.`, u);
+			let d = e.slice(u, a < 0 || a > l ? l : a), f = i$5(d);
+			if (f > -1) throw new n$2(`newlines are not allowed in keys`, {
+				toml: e,
+				ptr: t + a + f
+			});
+			if (d.trimStart()) throw new n$2(`found extra tokens after the string part`, {
+				toml: e,
+				ptr: u
+			});
+			if (l < u && (l = e.indexOf(r, u), l < 0)) throw new n$2(`incomplete key-value: cannot find end of key`, {
+				toml: e,
+				ptr: t
+			});
+			s.push(g$1(e, t, u));
+		} else {
+			a = e.indexOf(`.`, t);
+			let r = e.slice(t, a < 0 || a > l ? l : a);
+			if (!b$1.test(r)) throw new n$2(`only letter, numbers, dashes and underscores are allowed in keys`, {
+				toml: e,
+				ptr: t
+			});
+			s.push(r.trimEnd());
+		}
+	} while (a + 1 && a < l);
+	return [s, o$2(e, l + 1, !0, !0)];
+}
+function S$1(e, t, r, i) {
+	let o = {}, s = /* @__PURE__ */ new Set(), c;
+	for (t++; (c = e[t++]) !== `}` && c;) if (c === `,`) throw new n$2(`expected value, found comma`, {
+		toml: e,
+		ptr: t - 1
+	});
+	else if (c === `#`) t = a$4(e, t);
+	else if (c !== ` ` && c !== `	` && c !== `
+` && c !== `\r`) {
+		let a, c = o, l = !1, [u, d] = x$1(e, t - 1);
+		for (let r = 0; r < u.length; r++) {
+			if (r && (c = l ? c[a] : c[a] = {}), a = u[r], (l = Object.hasOwn(c, a)) && (typeof c[a] != `object` || s.has(c[a]))) throw new n$2(`trying to redefine an already defined value`, {
+				toml: e,
+				ptr: t
+			});
+			!l && a === `__proto__` && Object.defineProperty(c, a, {
+				enumerable: !0,
+				configurable: !0,
+				writable: !0
+			});
+		}
+		if (l) throw new n$2(`trying to redefine an already defined value`, {
+			toml: e,
+			ptr: t
+		});
+		let [f, p] = y$1(e, d, `}`, r - 1, i);
+		s.add(f), c[a] = f, t = p;
+	}
+	if (!c) throw new n$2(`unfinished table encountered`, {
+		toml: e,
+		ptr: t
+	});
+	return [o, t];
+}
+function C$1(e, t, r, i) {
+	let o = [], s;
+	for (t++; (s = e[t++]) !== `]` && s;) if (s === `,`) throw new n$2(`expected value, found comma`, {
+		toml: e,
+		ptr: t - 1
+	});
+	else if (s === `#`) t = a$4(e, t);
+	else if (s !== ` ` && s !== `	` && s !== `
+` && s !== `\r`) {
+		let n = y$1(e, t - 1, `]`, r - 1, i);
+		o.push(n[0]), t = n[1];
+	}
+	if (!s) throw new n$2(`unfinished array encountered`, {
+		toml: e,
+		ptr: t
+	});
+	return [o, t];
+}
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function w$1(e, t, n, r) {
+	let i = t, a = n, o, s = !1, c;
+	for (let t = 0; t < e.length; t++) {
+		if (t) {
+			if (i = s ? i[o] : i[o] = {}, a = (c = a[o]).c, r === 0 && (c.t === 1 || c.t === 2)) return null;
+			if (c.t === 2) {
+				let e = i.length - 1;
+				i = i[e], a = a[e].c;
+			}
+		}
+		if (o = e[t], (s = Object.hasOwn(i, o)) && a[o]?.t === 0 && a[o]?.d) return null;
+		s || (o === `__proto__` && (Object.defineProperty(i, o, {
+			enumerable: !0,
+			configurable: !0,
+			writable: !0
+		}), Object.defineProperty(a, o, {
+			enumerable: !0,
+			configurable: !0,
+			writable: !0
+		})), a[o] = {
+			t: t < e.length - 1 && r === 2 ? 3 : r,
+			d: !1,
+			i: 0,
+			c: {}
+		});
+	}
+	if (c = a[o], c.t !== r && !(r === 1 && c.t === 3) || (r === 2 && (c.d || (c.d = !0, i[o] = []), i[o].push(i = {}), c.c[c.i++] = c = {
+		t: 1,
+		d: !1,
+		i: 0,
+		c: {}
+	}), c.d)) return null;
+	if (c.d = !0, r === 1) i = s ? i[o] : i[o] = {};
+	else if (r === 0 && s) return null;
+	return [
+		o,
+		i,
+		c.c
+	];
+}
+function T$1(e, { maxDepth: t = 1e3, integersAsBigInt: r } = {}) {
+	let i = {}, a = {}, s = i, c = a;
+	for (let l = o$2(e, 0); l < e.length;) {
+		if (e[l] === `[`) {
+			let t = e[++l] === `[`, r = x$1(e, l += +t, `]`);
+			if (t) {
+				if (e[r[1] - 1] !== `]`) throw new n$2(`expected end of table declaration`, {
+					toml: e,
+					ptr: r[1] - 1
+				});
+				r[1]++;
+			}
+			let o = w$1(r[0], i, a, t ? 2 : 1);
+			if (!o) throw new n$2(`trying to redefine an already defined table or value`, {
+				toml: e,
+				ptr: l
+			});
+			c = o[2], s = o[1], l = r[1];
+		} else {
+			let i = x$1(e, l), a = w$1(i[0], s, c, 0);
+			if (!a) throw new n$2(`trying to redefine an already defined table or value`, {
+				toml: e,
+				ptr: l
+			});
+			let o = y$1(e, i[1], void 0, t, r);
+			a[1][a[0]] = o[0], l = o[1];
+		}
+		if (l = o$2(e, l, !0), e[l] && e[l] !== `
+` && e[l] !== `\r`) throw new n$2(`each key-value declaration must be followed by an end-of-line`, {
+			toml: e,
+			ptr: l
+		});
+		l = o$2(e, l);
+	}
+	return i;
+}
+/*!
+* Copyright (c) Squirrel Chat et al., All rights reserved.
+* SPDX-License-Identifier: BSD-3-Clause
+*
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+* 1. Redistributions of source code must retain the above copyright notice, this
+*    list of conditions and the following disclaimer.
+* 2. Redistributions in binary form must reproduce the above copyright notice,
+*    this list of conditions and the following disclaimer in the
+*    documentation and/or other materials provided with the distribution.
+* 3. Neither the name of the copyright holder nor the names of its contributors
+*    may be used to endorse or promote products derived from this software without
+*    specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+function D$1(e) {
+	let t = typeof e;
+	if (t === `object`) {
+		if (Array.isArray(e)) return `array`;
+		if (e instanceof Date) return `date`;
+	}
+	return t;
+}
+function O$1(e) {
+	for (let t = 0; t < e.length; t++) if (D$1(e[t]) !== `object`) return !1;
+	return e.length != 0;
+}
+function k$1(e) {
+	return JSON.stringify(e).replace(/\x7f/g, `\\u007f`);
+}
+function A$1(e, t, n, r) {
+	if (n === 0) throw Error(`Could not stringify the object: maximum object depth exceeded`);
+	if (t === `number`) return isNaN(e) ? `nan` : e === 1 / 0 ? `inf` : e === -1 / 0 ? `-inf` : r && Number.isInteger(e) ? e.toFixed(1) : e.toString();
+	if (t === `bigint` || t === `boolean`) return e.toString();
+	if (t === `string`) return k$1(e);
+	if (t === `date`) {
+		if (isNaN(e.getTime())) throw TypeError(`cannot serialize invalid date`);
+		return e.toISOString();
+	}
+	if (t === `object`) return j$1(e, n, r);
+	if (t === `array`) return M$1(e, n, r);
+}
+function j$1(e, t, n) {
+	let r = Object.keys(e);
+	if (r.length === 0) return `{}`;
+	let i = `{ `;
+	for (let a = 0; a < r.length; a++) {
+		let o = r[a];
+		a && (i += `, `), i += E$1.test(o) ? o : k$1(o), i += ` = `, i += A$1(e[o], D$1(e[o]), t - 1, n);
+	}
+	return i + ` }`;
+}
+function M$1(e, t, n) {
+	if (e.length === 0) return `[]`;
+	let r = `[ `;
+	for (let i = 0; i < e.length; i++) {
+		if (i && (r += `, `), e[i] === null || e[i] === void 0) throw TypeError(`arrays cannot contain null or undefined values`);
+		r += A$1(e[i], D$1(e[i]), t - 1, n);
+	}
+	return r + ` ]`;
+}
+function N$1(e, t, n, r) {
+	if (n === 0) throw Error(`Could not stringify the object: maximum object depth exceeded`);
+	let i = ``;
+	for (let a = 0; a < e.length; a++) i += `${i && `
+`}[[${t}]]\n`, i += P$1(0, e[a], t, n, r);
+	return i;
+}
+function P$1(e, t, n, r, i) {
+	if (r === 0) throw Error(`Could not stringify the object: maximum object depth exceeded`);
+	let a = ``, o = ``, s = Object.keys(t);
+	for (let e = 0; e < s.length; e++) {
+		let c = s[e];
+		if (t[c] !== null && t[c] !== void 0) {
+			let e = D$1(t[c]);
+			if (e === `symbol` || e === `function`) throw TypeError(`cannot serialize values of type '${e}'`);
+			let s = E$1.test(c) ? c : k$1(c);
+			if (e === `array` && O$1(t[c])) o += (o && `
+`) + N$1(t[c], n ? `${n}.${s}` : s, r - 1, i);
+			else if (e === `object`) {
+				let e = n ? `${n}.${s}` : s;
+				o += (o && `
+`) + P$1(e, t[c], e, r - 1, i);
+			} else a += s, a += ` = `, a += A$1(t[c], e, r, i), a += `
+`;
+		}
+	}
+	return e && (a || !o) && (a = a ? `[${e}]\n${a}` : `[${e}]`), a && o ? `${a}\n${o}` : a || o;
+}
+function F$1(e, { maxDepth: t = 1e3, numbersAsFloat: n = !1 } = {}) {
+	if (D$1(e) !== `object`) throw TypeError(`stringify can only be called with an object`);
+	let r = P$1(0, e, ``, t, n);
+	return r[r.length - 1] === `
+` ? r : r + `
+`;
+}
+var n$2, l$2, u$2, d$1, f$1, p$1, m$1, h$1, b$1, E$1;
+var init_smol_toml = __esmMin((() => {
+	n$2 = class extends Error {
+		line;
+		column;
+		codeblock;
+		constructor(n, r) {
+			let [i, a] = e$1(r.toml, r.ptr), o = t$2(r.toml, i, a);
+			super(`Invalid TOML document: ${n}\n\n${o}`, r), this.line = i, this.column = a, this.codeblock = o;
+		}
+	};
+	l$2 = /^(\d{4}-\d{2}-\d{2})?[T ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[-+]\d{2}:\d{2})?$/i;
+	u$2 = class e extends Date {
+		#e = !1;
+		#t = !1;
+		#n = null;
+		constructor(e) {
+			let t = !0, n = !0, r = `Z`;
+			if (typeof e == `string`) {
+				let i = e.match(l$2);
+				i ? (i[1] || (t = !1, e = `0000-01-01T${e}`), n = !!i[2], n && e[10] === ` ` && (e = e.replace(` `, `T`)), i[2] && +i[2] > 23 ? e = `` : (r = i[3] || null, e = e.toUpperCase(), !r && n && (e += `Z`))) : e = ``;
+			}
+			super(e), isNaN(this.getTime()) || (this.#e = t, this.#t = n, this.#n = r);
+		}
+		isDateTime() {
+			return this.#e && this.#t;
+		}
+		isLocal() {
+			return !this.#e || !this.#t || !this.#n;
+		}
+		isDate() {
+			return this.#e && !this.#t;
+		}
+		isTime() {
+			return this.#t && !this.#e;
+		}
+		isValid() {
+			return this.#e || this.#t;
+		}
+		toISOString() {
+			let e = super.toISOString();
+			if (this.isDate()) return e.slice(0, 10);
+			if (this.isTime()) return e.slice(11, 23);
+			if (this.#n === null) return e.slice(0, -1);
+			if (this.#n === `Z`) return e;
+			let t = this.#n.slice(1, 3) * 60 + +this.#n.slice(4, 6);
+			return t = this.#n[0] === `-` ? t : -t, (/* @__PURE__ */ new Date(this.getTime() - t * 6e4)).toISOString().slice(0, -1) + this.#n;
+		}
+		static wrapAsOffsetDateTime(t, n = `Z`) {
+			let r = new e(t);
+			return r.#n = n, r;
+		}
+		static wrapAsLocalDateTime(t) {
+			let n = new e(t);
+			return n.#n = null, n;
+		}
+		static wrapAsLocalDate(t) {
+			let n = new e(t);
+			return n.#t = !1, n.#n = null, n;
+		}
+		static wrapAsLocalTime(t) {
+			let n = new e(t);
+			return n.#e = !1, n.#n = null, n;
+		}
+	};
+	d$1 = /^((0x[0-9a-fA-F](_?[0-9a-fA-F])*)|(([+-]|0[ob])?\d(_?\d)*))$/;
+	f$1 = /^[+-]?\d(_?\d)*(\.\d(_?\d)*)?([eE][+-]?\d(_?\d)*)?$/;
+	p$1 = /^[+-]?0[0-9_]/;
+	m$1 = /^[0-9a-f]{2,8}$/i;
+	h$1 = {
+		b: `\b`,
+		t: `	`,
+		n: `
+`,
+		f: `\f`,
+		r: `\r`,
+		e: `\x1B`,
+		"\"": `"`,
+		"\\": `\\`
+	};
+	b$1 = /^[a-zA-Z0-9-_]+[ \t]*$/;
+	E$1 = /^[a-z0-9-_]+$/i;
+}));
+//#endregion
+//#region ../figments/node_modules/.pnpm/confbox@0.2.4/node_modules/confbox/dist/toml.mjs
+var toml_exports = /* @__PURE__ */ __exportAll({
+	parseTOML: () => i$4,
+	stringifyTOML: () => a$3
+});
+function i$4(t) {
+	let r = T$1(t);
+	return a$5(t, r, { preserveIndentation: !1 }), r;
+}
+function a$3(e) {
+	let n = o$3(e, { preserveIndentation: !1 }), i = F$1(e);
+	return n.whitespace.start + i + n.whitespace.end;
+}
+var init_toml = __esmMin((() => {
+	init__format();
+	init_smol_toml();
+}));
+//#endregion
+//#region ../figments/node_modules/.pnpm/confbox@0.2.4/node_modules/confbox/dist/_chunks/libs/js-yaml.mjs
+/*! js-yaml 4.1.1 https://github.com/nodeca/js-yaml @license MIT */
+function e(e) {
+	return e == null;
+}
+function t$1(e) {
+	return typeof e == `object` && !!e;
+}
+function n$1(t) {
+	return Array.isArray(t) ? t : e(t) ? [] : [t];
+}
+function r$1(e, t) {
+	var n, r, i, a;
+	if (t) for (a = Object.keys(t), n = 0, r = a.length; n < r; n += 1) i = a[n], e[i] = t[i];
+	return e;
+}
+function i$3(e, t) {
+	var n = ``, r = 0;
+	for (; r < t; r += 1) n += e;
+	return n;
+}
+function a$2(e) {
+	return e === 0 && 1 / e == -1 / 0;
+}
+function s$1(e, t) {
+	var n = ``, r = e.reason || `(unknown reason)`;
+	return e.mark ? (e.mark.name && (n += `in "` + e.mark.name + `" `), n += `(` + (e.mark.line + 1) + `:` + (e.mark.column + 1) + `)`, !t && e.mark.snippet && (n += `
+
+` + e.mark.snippet), r + ` ` + n) : r;
+}
+function c$1(e, t) {
+	Error.call(this), this.name = `YAMLException`, this.reason = e, this.mark = t, this.message = s$1(this, !1), Error.captureStackTrace ? Error.captureStackTrace(this, this.constructor) : this.stack = Error().stack || ``;
+}
+function u$1(e, t, n, r, i) {
+	var a = ``, o = ``, s = Math.floor(i / 2) - 1;
+	return r - t > s && (a = ` ... `, t = r - s + a.length), n - r > s && (o = ` ...`, n = r + s - o.length), {
+		str: a + e.slice(t, n).replace(/\t/g, `→`) + o,
+		pos: r - t + a.length
+	};
+}
+function d(e, t) {
+	return o$1.repeat(` `, t - e.length) + e;
+}
+function f(e, t) {
+	if (t = Object.create(t || null), !e.buffer) return null;
+	t.maxLength ||= 79, typeof t.indent != `number` && (t.indent = 1), typeof t.linesBefore != `number` && (t.linesBefore = 3), typeof t.linesAfter != `number` && (t.linesAfter = 2);
+	for (var n = /\r?\n|\r|\0/g, r = [0], i = [], a, s = -1; a = n.exec(e.buffer);) i.push(a.index), r.push(a.index + a[0].length), e.position <= a.index && s < 0 && (s = r.length - 2);
+	s < 0 && (s = r.length - 1);
+	var c = ``, l, f, p = Math.min(e.line + t.linesAfter, i.length).toString().length, m = t.maxLength - (t.indent + p + 3);
+	for (l = 1; l <= t.linesBefore && !(s - l < 0); l++) f = u$1(e.buffer, r[s - l], i[s - l], e.position - (r[s] - r[s - l]), m), c = o$1.repeat(` `, t.indent) + d((e.line - l + 1).toString(), p) + ` | ` + f.str + `
+` + c;
+	for (f = u$1(e.buffer, r[s], i[s], e.position, m), c += o$1.repeat(` `, t.indent) + d((e.line + 1).toString(), p) + ` | ` + f.str + `
+`, c += o$1.repeat(`-`, t.indent + p + 3 + f.pos) + `^
+`, l = 1; l <= t.linesAfter && !(s + l >= i.length); l++) f = u$1(e.buffer, r[s + l], i[s + l], e.position - (r[s] - r[s + l]), m), c += o$1.repeat(` `, t.indent) + d((e.line + l + 1).toString(), p) + ` | ` + f.str + `
+`;
+	return c.replace(/\n$/, ``);
+}
+function g(e) {
+	var t = {};
+	return e !== null && Object.keys(e).forEach(function(n) {
+		e[n].forEach(function(e) {
+			t[String(e)] = n;
+		});
+	}), t;
+}
+function _(e, t) {
+	if (t ||= {}, Object.keys(t).forEach(function(t) {
+		if (m.indexOf(t) === -1) throw new l$1(`Unknown option "` + t + `" is met in definition of "` + e + `" YAML type.`);
+	}), this.options = t, this.tag = e, this.kind = t.kind || null, this.resolve = t.resolve || function() {
+		return !0;
+	}, this.construct = t.construct || function(e) {
+		return e;
+	}, this.instanceOf = t.instanceOf || null, this.predicate = t.predicate || null, this.represent = t.represent || null, this.representName = t.representName || null, this.defaultStyle = t.defaultStyle || null, this.multi = t.multi || !1, this.styleAliases = g(t.styleAliases || null), h.indexOf(this.kind) === -1) throw new l$1(`Unknown kind "` + this.kind + `" is specified for "` + e + `" YAML type.`);
+}
+function ee(e, t) {
+	var n = [];
+	return e[t].forEach(function(e) {
+		var t = n.length;
+		n.forEach(function(n, r) {
+			n.tag === e.tag && n.kind === e.kind && n.multi === e.multi && (t = r);
+		}), n[t] = e;
+	}), n;
+}
+function te() {
+	var e = {
+		scalar: {},
+		sequence: {},
+		mapping: {},
+		fallback: {},
+		multi: {
+			scalar: [],
+			sequence: [],
+			mapping: [],
+			fallback: []
+		}
+	}, t, n;
+	function r(t) {
+		t.multi ? (e.multi[t.kind].push(t), e.multi.fallback.push(t)) : e[t.kind][t.tag] = e.fallback[t.tag] = t;
+	}
+	for (t = 0, n = arguments.length; t < n; t += 1) arguments[t].forEach(r);
+	return e;
+}
+function y(e) {
+	return this.extend(e);
+}
+function re(e) {
+	if (e === null) return !0;
+	var t = e.length;
+	return t === 1 && e === `~` || t === 4 && (e === `null` || e === `Null` || e === `NULL`);
+}
+function ie() {
+	return null;
+}
+function ae(e) {
+	return e === null;
+}
+function se(e) {
+	if (e === null) return !1;
+	var t = e.length;
+	return t === 4 && (e === `true` || e === `True` || e === `TRUE`) || t === 5 && (e === `false` || e === `False` || e === `FALSE`);
+}
+function ce(e) {
+	return e === `true` || e === `True` || e === `TRUE`;
+}
+function le(e) {
+	return Object.prototype.toString.call(e) === `[object Boolean]`;
+}
+function de(e) {
+	return 48 <= e && e <= 57 || 65 <= e && e <= 70 || 97 <= e && e <= 102;
+}
+function fe(e) {
+	return 48 <= e && e <= 55;
+}
+function pe(e) {
+	return 48 <= e && e <= 57;
+}
+function me(e) {
+	if (e === null) return !1;
+	var t = e.length, n = 0, r = !1, i;
+	if (!t) return !1;
+	if (i = e[n], (i === `-` || i === `+`) && (i = e[++n]), i === `0`) {
+		if (n + 1 === t) return !0;
+		if (i = e[++n], i === `b`) {
+			for (n++; n < t; n++) if (i = e[n], i !== `_`) {
+				if (i !== `0` && i !== `1`) return !1;
+				r = !0;
+			}
+			return r && i !== `_`;
+		}
+		if (i === `x`) {
+			for (n++; n < t; n++) if (i = e[n], i !== `_`) {
+				if (!de(e.charCodeAt(n))) return !1;
+				r = !0;
+			}
+			return r && i !== `_`;
+		}
+		if (i === `o`) {
+			for (n++; n < t; n++) if (i = e[n], i !== `_`) {
+				if (!fe(e.charCodeAt(n))) return !1;
+				r = !0;
+			}
+			return r && i !== `_`;
+		}
+	}
+	if (i === `_`) return !1;
+	for (; n < t; n++) if (i = e[n], i !== `_`) {
+		if (!pe(e.charCodeAt(n))) return !1;
+		r = !0;
+	}
+	return !(!r || i === `_`);
+}
+function he(e) {
+	var t = e, n = 1, r;
+	if (t.indexOf(`_`) !== -1 && (t = t.replace(/_/g, ``)), r = t[0], (r === `-` || r === `+`) && (r === `-` && (n = -1), t = t.slice(1), r = t[0]), t === `0`) return 0;
+	if (r === `0`) {
+		if (t[1] === `b`) return n * parseInt(t.slice(2), 2);
+		if (t[1] === `x`) return n * parseInt(t.slice(2), 16);
+		if (t[1] === `o`) return n * parseInt(t.slice(2), 8);
+	}
+	return n * parseInt(t, 10);
+}
+function ge(e) {
+	return Object.prototype.toString.call(e) === `[object Number]` && e % 1 == 0 && !o$1.isNegativeZero(e);
+}
+function ye(e) {
+	return !(e === null || !ve.test(e) || e[e.length - 1] === `_`);
+}
+function be(e) {
+	var t = e.replace(/_/g, ``).toLowerCase(), n = t[0] === `-` ? -1 : 1;
+	return `+-`.indexOf(t[0]) >= 0 && (t = t.slice(1)), t === `.inf` ? n === 1 ? 1 / 0 : -1 / 0 : t === `.nan` ? NaN : n * parseFloat(t, 10);
+}
+function Se(e, t) {
+	var n;
+	if (isNaN(e)) switch (t) {
+		case `lowercase`: return `.nan`;
+		case `uppercase`: return `.NAN`;
+		case `camelcase`: return `.NaN`;
+	}
+	else if (e === 1 / 0) switch (t) {
+		case `lowercase`: return `.inf`;
+		case `uppercase`: return `.INF`;
+		case `camelcase`: return `.Inf`;
+	}
+	else if (e === -1 / 0) switch (t) {
+		case `lowercase`: return `-.inf`;
+		case `uppercase`: return `-.INF`;
+		case `camelcase`: return `-.Inf`;
+	}
+	else if (o$1.isNegativeZero(e)) return `-0.0`;
+	return n = e.toString(10), xe.test(n) ? n.replace(`e`, `.e`) : n;
+}
+function Ce(e) {
+	return Object.prototype.toString.call(e) === `[object Number]` && (e % 1 != 0 || o$1.isNegativeZero(e));
+}
+function Oe(e) {
+	return e === null ? !1 : Ee.exec(e) !== null || De.exec(e) !== null;
+}
+function ke(e) {
+	var t, n, r, i, a, o, s, c = 0, l = null, u, d, f;
+	if (t = Ee.exec(e), t === null && (t = De.exec(e)), t === null) throw Error(`Date resolve error`);
+	if (n = +t[1], r = t[2] - 1, i = +t[3], !t[4]) return new Date(Date.UTC(n, r, i));
+	if (a = +t[4], o = +t[5], s = +t[6], t[7]) {
+		for (c = t[7].slice(0, 3); c.length < 3;) c += `0`;
+		c = +c;
+	}
+	return t[9] && (u = +t[10], d = +(t[11] || 0), l = (u * 60 + d) * 6e4, t[9] === `-` && (l = -l)), f = new Date(Date.UTC(n, r, i, a, o, s, c)), l && f.setTime(f.getTime() - l), f;
+}
+function Ae(e) {
+	return e.toISOString();
+}
+function Me(e) {
+	return e === `<<` || e === null;
+}
+function Pe(e) {
+	if (e === null) return !1;
+	var t, n, r = 0, i = e.length, a = b;
+	for (n = 0; n < i; n++) if (t = a.indexOf(e.charAt(n)), !(t > 64)) {
+		if (t < 0) return !1;
+		r += 6;
+	}
+	return r % 8 == 0;
+}
+function Fe(e) {
+	var t, n, r = e.replace(/[\r\n=]/g, ``), i = r.length, a = b, o = 0, s = [];
+	for (t = 0; t < i; t++) t % 4 == 0 && t && (s.push(o >> 16 & 255), s.push(o >> 8 & 255), s.push(o & 255)), o = o << 6 | a.indexOf(r.charAt(t));
+	return n = i % 4 * 6, n === 0 ? (s.push(o >> 16 & 255), s.push(o >> 8 & 255), s.push(o & 255)) : n === 18 ? (s.push(o >> 10 & 255), s.push(o >> 2 & 255)) : n === 12 && s.push(o >> 4 & 255), new Uint8Array(s);
+}
+function Ie(e) {
+	var t = ``, n = 0, r, i, a = e.length, o = b;
+	for (r = 0; r < a; r++) r % 3 == 0 && r && (t += o[n >> 18 & 63], t += o[n >> 12 & 63], t += o[n >> 6 & 63], t += o[n & 63]), n = (n << 8) + e[r];
+	return i = a % 3, i === 0 ? (t += o[n >> 18 & 63], t += o[n >> 12 & 63], t += o[n >> 6 & 63], t += o[n & 63]) : i === 2 ? (t += o[n >> 10 & 63], t += o[n >> 4 & 63], t += o[n << 2 & 63], t += o[64]) : i === 1 && (t += o[n >> 2 & 63], t += o[n << 4 & 63], t += o[64], t += o[64]), t;
+}
+function Le(e) {
+	return Object.prototype.toString.call(e) === `[object Uint8Array]`;
+}
+function Ve(e) {
+	if (e === null) return !0;
+	var t = [], n, r, i, a, o, s = e;
+	for (n = 0, r = s.length; n < r; n += 1) {
+		if (i = s[n], o = !1, Be.call(i) !== `[object Object]`) return !1;
+		for (a in i) if (ze.call(i, a)) if (!o) o = !0;
+		else return !1;
+		if (!o) return !1;
+		if (t.indexOf(a) === -1) t.push(a);
+		else return !1;
+	}
+	return !0;
+}
+function He(e) {
+	return e === null ? [] : e;
+}
+function Ge(e) {
+	if (e === null) return !0;
+	var t, n, r, i, a, o = e;
+	for (a = Array(o.length), t = 0, n = o.length; t < n; t += 1) {
+		if (r = o[t], We.call(r) !== `[object Object]` || (i = Object.keys(r), i.length !== 1)) return !1;
+		a[t] = [i[0], r[i[0]]];
+	}
+	return !0;
+}
+function Ke(e) {
+	if (e === null) return [];
+	var t, n, r, i, a, o = e;
+	for (a = Array(o.length), t = 0, n = o.length; t < n; t += 1) r = o[t], i = Object.keys(r), a[t] = [i[0], r[i[0]]];
+	return a;
+}
+function Ye(e) {
+	if (e === null) return !0;
+	var t, n = e;
+	for (t in n) if (Je.call(n, t) && n[t] !== null) return !1;
+	return !0;
+}
+function Xe(e) {
+	return e === null ? {} : e;
+}
+function ct(e) {
+	return Object.prototype.toString.call(e);
+}
+function T(e) {
+	return e === 10 || e === 13;
+}
+function E(e) {
+	return e === 9 || e === 32;
+}
+function D(e) {
+	return e === 9 || e === 32 || e === 10 || e === 13;
+}
+function O(e) {
+	return e === 44 || e === 91 || e === 93 || e === 123 || e === 125;
+}
+function lt(e) {
+	var t;
+	return 48 <= e && e <= 57 ? e - 48 : (t = e | 32, 97 <= t && t <= 102 ? t - 97 + 10 : -1);
+}
+function ut(e) {
+	return e === 120 ? 2 : e === 117 ? 4 : e === 85 ? 8 : 0;
+}
+function dt(e) {
+	return 48 <= e && e <= 57 ? e - 48 : -1;
+}
+function ft(e) {
+	return e === 48 ? `\0` : e === 97 ? `\x07` : e === 98 ? `\b` : e === 116 || e === 9 ? `	` : e === 110 ? `
+` : e === 118 ? `\v` : e === 102 ? `\f` : e === 114 ? `\r` : e === 101 ? `\x1B` : e === 32 ? ` ` : e === 34 ? `"` : e === 47 ? `/` : e === 92 ? `\\` : e === 78 ? `` : e === 95 ? `\xA0` : e === 76 ? `\u2028` : e === 80 ? `\u2029` : ``;
+}
+function pt(e) {
+	return e <= 65535 ? String.fromCharCode(e) : String.fromCharCode((e - 65536 >> 10) + 55296, (e - 65536 & 1023) + 56320);
+}
+function mt(e, t, n) {
+	t === `__proto__` ? Object.defineProperty(e, t, {
+		configurable: !0,
+		enumerable: !0,
+		writable: !0,
+		value: n
+	}) : e[t] = n;
+}
+function _t(e, t) {
+	this.input = e, this.filename = t.filename || null, this.schema = t.schema || Qe, this.onWarning = t.onWarning || null, this.legacy = t.legacy || !1, this.json = t.json || !1, this.listener = t.listener || null, this.implicitTypes = this.schema.compiledImplicit, this.typeMap = this.schema.compiledTypeMap, this.length = e.length, this.position = 0, this.line = 0, this.lineStart = 0, this.lineIndent = 0, this.firstTabInLine = -1, this.documents = [];
+}
+function vt(e, t) {
+	var n = {
+		name: e.filename,
+		buffer: e.input.slice(0, -1),
+		position: e.position,
+		line: e.line,
+		column: e.position - e.lineStart
+	};
+	return n.snippet = p(n), new l$1(t, n);
+}
+function A(e, t) {
+	throw vt(e, t);
+}
+function j(e, t) {
+	e.onWarning && e.onWarning.call(null, vt(e, t));
+}
+function M(e, t, n, r) {
+	var i, a, o, s;
+	if (t < n) {
+		if (s = e.input.slice(t, n), r) for (i = 0, a = s.length; i < a; i += 1) o = s.charCodeAt(i), o === 9 || 32 <= o && o <= 1114111 || A(e, `expected valid JSON character`);
+		else rt.test(s) && A(e, `the stream contains non-printable characters`);
+		e.result += s;
+	}
+}
+function bt(e, t, n, r) {
+	var i, a, s, c;
+	for (o$1.isObject(n) || A(e, `cannot merge mappings; the provided source object is unacceptable`), i = Object.keys(n), s = 0, c = i.length; s < c; s += 1) a = i[s], x.call(t, a) || (mt(t, a, n[a]), r[a] = !0);
+}
+function N(e, t, n, r, i, a, o, s, c) {
+	var l, u;
+	if (Array.isArray(i)) for (i = Array.prototype.slice.call(i), l = 0, u = i.length; l < u; l += 1) Array.isArray(i[l]) && A(e, `nested arrays are not supported inside keys`), typeof i == `object` && ct(i[l]) === `[object Object]` && (i[l] = `[object Object]`);
+	if (typeof i == `object` && ct(i) === `[object Object]` && (i = `[object Object]`), i = String(i), t === null && (t = {}), r === `tag:yaml.org,2002:merge`) if (Array.isArray(a)) for (l = 0, u = a.length; l < u; l += 1) bt(e, t, a[l], n);
+	else bt(e, t, a, n);
+	else !e.json && !x.call(n, i) && x.call(t, i) && (e.line = o || e.line, e.lineStart = s || e.lineStart, e.position = c || e.position, A(e, `duplicated mapping key`)), mt(t, i, a), delete n[i];
+	return t;
+}
+function P(e) {
+	var t = e.input.charCodeAt(e.position);
+	t === 10 ? e.position++ : t === 13 ? (e.position++, e.input.charCodeAt(e.position) === 10 && e.position++) : A(e, `a line break is expected`), e.line += 1, e.lineStart = e.position, e.firstTabInLine = -1;
+}
+function F(e, t, n) {
+	for (var r = 0, i = e.input.charCodeAt(e.position); i !== 0;) {
+		for (; E(i);) i === 9 && e.firstTabInLine === -1 && (e.firstTabInLine = e.position), i = e.input.charCodeAt(++e.position);
+		if (t && i === 35) do
+			i = e.input.charCodeAt(++e.position);
+		while (i !== 10 && i !== 13 && i !== 0);
+		if (T(i)) for (P(e), i = e.input.charCodeAt(e.position), r++, e.lineIndent = 0; i === 32;) e.lineIndent++, i = e.input.charCodeAt(++e.position);
+		else break;
+	}
+	return n !== -1 && r !== 0 && e.lineIndent < n && j(e, `deficient indentation`), r;
+}
+function I(e) {
+	var t = e.position, n = e.input.charCodeAt(t);
+	return !!((n === 45 || n === 46) && n === e.input.charCodeAt(t + 1) && n === e.input.charCodeAt(t + 2) && (t += 3, n = e.input.charCodeAt(t), n === 0 || D(n)));
+}
+function L(e, t) {
+	t === 1 ? e.result += ` ` : t > 1 && (e.result += o$1.repeat(`
+`, t - 1));
+}
+function xt(e, t, n) {
+	var r, i, a, o, s, c, l, u, d = e.kind, f = e.result, p = e.input.charCodeAt(e.position);
+	if (D(p) || O(p) || p === 35 || p === 38 || p === 42 || p === 33 || p === 124 || p === 62 || p === 39 || p === 34 || p === 37 || p === 64 || p === 96 || (p === 63 || p === 45) && (i = e.input.charCodeAt(e.position + 1), D(i) || n && O(i))) return !1;
+	for (e.kind = `scalar`, e.result = ``, a = o = e.position, s = !1; p !== 0;) {
+		if (p === 58) {
+			if (i = e.input.charCodeAt(e.position + 1), D(i) || n && O(i)) break;
+		} else if (p === 35) {
+			if (r = e.input.charCodeAt(e.position - 1), D(r)) break;
+		} else if (e.position === e.lineStart && I(e) || n && O(p)) break;
+		else if (T(p)) if (c = e.line, l = e.lineStart, u = e.lineIndent, F(e, !1, -1), e.lineIndent >= t) {
+			s = !0, p = e.input.charCodeAt(e.position);
+			continue;
+		} else {
+			e.position = o, e.line = c, e.lineStart = l, e.lineIndent = u;
+			break;
+		}
+		s &&= (M(e, a, o, !1), L(e, e.line - c), a = o = e.position, !1), E(p) || (o = e.position + 1), p = e.input.charCodeAt(++e.position);
+	}
+	return M(e, a, o, !1), e.result ? !0 : (e.kind = d, e.result = f, !1);
+}
+function St(e, t) {
+	var n = e.input.charCodeAt(e.position), r, i;
+	if (n !== 39) return !1;
+	for (e.kind = `scalar`, e.result = ``, e.position++, r = i = e.position; (n = e.input.charCodeAt(e.position)) !== 0;) if (n === 39) if (M(e, r, e.position, !0), n = e.input.charCodeAt(++e.position), n === 39) r = e.position, e.position++, i = e.position;
+	else return !0;
+	else T(n) ? (M(e, r, i, !0), L(e, F(e, !1, t)), r = i = e.position) : e.position === e.lineStart && I(e) ? A(e, `unexpected end of the document within a single quoted scalar`) : (e.position++, i = e.position);
+	A(e, `unexpected end of the stream within a single quoted scalar`);
+}
+function Ct(e, t) {
+	var n, r, i, a, o, s = e.input.charCodeAt(e.position);
+	if (s !== 34) return !1;
+	for (e.kind = `scalar`, e.result = ``, e.position++, n = r = e.position; (s = e.input.charCodeAt(e.position)) !== 0;) if (s === 34) return M(e, n, e.position, !0), e.position++, !0;
+	else if (s === 92) {
+		if (M(e, n, e.position, !0), s = e.input.charCodeAt(++e.position), T(s)) F(e, !1, t);
+		else if (s < 256 && ht[s]) e.result += gt[s], e.position++;
+		else if ((o = ut(s)) > 0) {
+			for (i = o, a = 0; i > 0; i--) s = e.input.charCodeAt(++e.position), (o = lt(s)) >= 0 ? a = (a << 4) + o : A(e, `expected hexadecimal character`);
+			e.result += pt(a), e.position++;
+		} else A(e, `unknown escape sequence`);
+		n = r = e.position;
+	} else T(s) ? (M(e, n, r, !0), L(e, F(e, !1, t)), n = r = e.position) : e.position === e.lineStart && I(e) ? A(e, `unexpected end of the document within a double quoted scalar`) : (e.position++, r = e.position);
+	A(e, `unexpected end of the stream within a double quoted scalar`);
+}
+function wt(e, t) {
+	var n = !0, r, i, a, o = e.tag, s, c = e.anchor, l, u, d, f, p, m = Object.create(null), h, g, _, v = e.input.charCodeAt(e.position);
+	if (v === 91) u = 93, p = !1, s = [];
+	else if (v === 123) u = 125, p = !0, s = {};
+	else return !1;
+	for (e.anchor !== null && (e.anchorMap[e.anchor] = s), v = e.input.charCodeAt(++e.position); v !== 0;) {
+		if (F(e, !0, t), v = e.input.charCodeAt(e.position), v === u) return e.position++, e.tag = o, e.anchor = c, e.kind = p ? `mapping` : `sequence`, e.result = s, !0;
+		n ? v === 44 && A(e, `expected the node content, but found ','`) : A(e, `missed comma between flow collection entries`), g = h = _ = null, d = f = !1, v === 63 && (l = e.input.charCodeAt(e.position + 1), D(l) && (d = f = !0, e.position++, F(e, !0, t))), r = e.line, i = e.lineStart, a = e.position, R(e, t, S, !1, !0), g = e.tag, h = e.result, F(e, !0, t), v = e.input.charCodeAt(e.position), (f || e.line === r) && v === 58 && (d = !0, v = e.input.charCodeAt(++e.position), F(e, !0, t), R(e, t, S, !1, !0), _ = e.result), p ? N(e, s, m, g, h, _, r, i, a) : d ? s.push(N(e, null, m, g, h, _, r, i, a)) : s.push(h), F(e, !0, t), v = e.input.charCodeAt(e.position), v === 44 ? (n = !0, v = e.input.charCodeAt(++e.position)) : n = !1;
+	}
+	A(e, `unexpected end of the stream within a flow collection`);
+}
+function Tt(e, t) {
+	var n, r, i = w, a = !1, s = !1, c = t, l = 0, u = !1, d, f = e.input.charCodeAt(e.position);
+	if (f === 124) r = !1;
+	else if (f === 62) r = !0;
+	else return !1;
+	for (e.kind = `scalar`, e.result = ``; f !== 0;) if (f = e.input.charCodeAt(++e.position), f === 43 || f === 45) w === i ? i = f === 43 ? nt : tt : A(e, `repeat of a chomping mode identifier`);
+	else if ((d = dt(f)) >= 0) d === 0 ? A(e, `bad explicit indentation width of a block scalar; it cannot be less than one`) : s ? A(e, `repeat of an indentation width identifier`) : (c = t + d - 1, s = !0);
+	else break;
+	if (E(f)) {
+		do
+			f = e.input.charCodeAt(++e.position);
+		while (E(f));
+		if (f === 35) do
+			f = e.input.charCodeAt(++e.position);
+		while (!T(f) && f !== 0);
+	}
+	for (; f !== 0;) {
+		for (P(e), e.lineIndent = 0, f = e.input.charCodeAt(e.position); (!s || e.lineIndent < c) && f === 32;) e.lineIndent++, f = e.input.charCodeAt(++e.position);
+		if (!s && e.lineIndent > c && (c = e.lineIndent), T(f)) {
+			l++;
+			continue;
+		}
+		if (e.lineIndent < c) {
+			i === nt ? e.result += o$1.repeat(`
+`, a ? 1 + l : l) : i === w && a && (e.result += `
+`);
+			break;
+		}
+		for (r ? E(f) ? (u = !0, e.result += o$1.repeat(`
+`, a ? 1 + l : l)) : u ? (u = !1, e.result += o$1.repeat(`
+`, l + 1)) : l === 0 ? a && (e.result += ` `) : e.result += o$1.repeat(`
+`, l) : e.result += o$1.repeat(`
+`, a ? 1 + l : l), a = !0, s = !0, l = 0, n = e.position; !T(f) && f !== 0;) f = e.input.charCodeAt(++e.position);
+		M(e, n, e.position, !1);
+	}
+	return !0;
+}
+function Et(e, t) {
+	var n, r = e.tag, i = e.anchor, a = [], o, s = !1, c;
+	if (e.firstTabInLine !== -1) return !1;
+	for (e.anchor !== null && (e.anchorMap[e.anchor] = a), c = e.input.charCodeAt(e.position); c !== 0 && (e.firstTabInLine !== -1 && (e.position = e.firstTabInLine, A(e, `tab characters must not be used in indentation`)), !(c !== 45 || (o = e.input.charCodeAt(e.position + 1), !D(o))));) {
+		if (s = !0, e.position++, F(e, !0, -1) && e.lineIndent <= t) {
+			a.push(null), c = e.input.charCodeAt(e.position);
+			continue;
+		}
+		if (n = e.line, R(e, t, et, !1, !0), a.push(e.result), F(e, !0, -1), c = e.input.charCodeAt(e.position), (e.line === n || e.lineIndent > t) && c !== 0) A(e, `bad indentation of a sequence entry`);
+		else if (e.lineIndent < t) break;
+	}
+	return s ? (e.tag = r, e.anchor = i, e.kind = `sequence`, e.result = a, !0) : !1;
+}
+function Dt(e, t, n) {
+	var r, i, a, o, s, c, l = e.tag, u = e.anchor, d = {}, f = Object.create(null), p = null, m = null, h = null, g = !1, _ = !1, v;
+	if (e.firstTabInLine !== -1) return !1;
+	for (e.anchor !== null && (e.anchorMap[e.anchor] = d), v = e.input.charCodeAt(e.position); v !== 0;) {
+		if (!g && e.firstTabInLine !== -1 && (e.position = e.firstTabInLine, A(e, `tab characters must not be used in indentation`)), r = e.input.charCodeAt(e.position + 1), a = e.line, (v === 63 || v === 58) && D(r)) v === 63 ? (g && (N(e, d, f, p, m, null, o, s, c), p = m = h = null), _ = !0, g = !0, i = !0) : g ? (g = !1, i = !0) : A(e, `incomplete explicit mapping pair; a key node is missed; or followed by a non-tabulated empty line`), e.position += 1, v = r;
+		else {
+			if (o = e.line, s = e.lineStart, c = e.position, !R(e, n, $e, !1, !0)) break;
+			if (e.line === a) {
+				for (v = e.input.charCodeAt(e.position); E(v);) v = e.input.charCodeAt(++e.position);
+				if (v === 58) v = e.input.charCodeAt(++e.position), D(v) || A(e, `a whitespace character is expected after the key-value separator within a block mapping`), g && (N(e, d, f, p, m, null, o, s, c), p = m = h = null), _ = !0, g = !1, i = !1, p = e.tag, m = e.result;
+				else if (_) A(e, `can not read an implicit mapping pair; a colon is missed`);
+				else return e.tag = l, e.anchor = u, !0;
+			} else if (_) A(e, `can not read a block mapping entry; a multiline key may not be an implicit key`);
+			else return e.tag = l, e.anchor = u, !0;
+		}
+		if ((e.line === a || e.lineIndent > t) && (g && (o = e.line, s = e.lineStart, c = e.position), R(e, t, C, !0, i) && (g ? m = e.result : h = e.result), g || (N(e, d, f, p, m, h, o, s, c), p = m = h = null), F(e, !0, -1), v = e.input.charCodeAt(e.position)), (e.line === a || e.lineIndent > t) && v !== 0) A(e, `bad indentation of a mapping entry`);
+		else if (e.lineIndent < t) break;
+	}
+	return g && N(e, d, f, p, m, null, o, s, c), _ && (e.tag = l, e.anchor = u, e.kind = `mapping`, e.result = d), _;
+}
+function Ot(e) {
+	var t, n = !1, r = !1, i, a, o = e.input.charCodeAt(e.position);
+	if (o !== 33) return !1;
+	if (e.tag !== null && A(e, `duplication of a tag property`), o = e.input.charCodeAt(++e.position), o === 60 ? (n = !0, o = e.input.charCodeAt(++e.position)) : o === 33 ? (r = !0, i = `!!`, o = e.input.charCodeAt(++e.position)) : i = `!`, t = e.position, n) {
+		do
+			o = e.input.charCodeAt(++e.position);
+		while (o !== 0 && o !== 62);
+		e.position < e.length ? (a = e.input.slice(t, e.position), o = e.input.charCodeAt(++e.position)) : A(e, `unexpected end of the stream within a verbatim tag`);
+	} else {
+		for (; o !== 0 && !D(o);) o === 33 && (r ? A(e, `tag suffix cannot contain exclamation marks`) : (i = e.input.slice(t - 1, e.position + 1), ot.test(i) || A(e, `named tag handle cannot contain such characters`), r = !0, t = e.position + 1)), o = e.input.charCodeAt(++e.position);
+		a = e.input.slice(t, e.position), at.test(a) && A(e, `tag suffix cannot contain flow indicator characters`);
+	}
+	a && !st.test(a) && A(e, `tag name cannot contain such characters: ` + a);
+	try {
+		a = decodeURIComponent(a);
+	} catch {
+		A(e, `tag name is malformed: ` + a);
+	}
+	return n ? e.tag = a : x.call(e.tagMap, i) ? e.tag = e.tagMap[i] + a : i === `!` ? e.tag = `!` + a : i === `!!` ? e.tag = `tag:yaml.org,2002:` + a : A(e, `undeclared tag handle "` + i + `"`), !0;
+}
+function kt(e) {
+	var t, n = e.input.charCodeAt(e.position);
+	if (n !== 38) return !1;
+	for (e.anchor !== null && A(e, `duplication of an anchor property`), n = e.input.charCodeAt(++e.position), t = e.position; n !== 0 && !D(n) && !O(n);) n = e.input.charCodeAt(++e.position);
+	return e.position === t && A(e, `name of an anchor node must contain at least one character`), e.anchor = e.input.slice(t, e.position), !0;
+}
+function At(e) {
+	var t, n, r = e.input.charCodeAt(e.position);
+	if (r !== 42) return !1;
+	for (r = e.input.charCodeAt(++e.position), t = e.position; r !== 0 && !D(r) && !O(r);) r = e.input.charCodeAt(++e.position);
+	return e.position === t && A(e, `name of an alias node must contain at least one character`), n = e.input.slice(t, e.position), x.call(e.anchorMap, n) || A(e, `unidentified alias "` + n + `"`), e.result = e.anchorMap[n], F(e, !0, -1), !0;
+}
+function R(e, t, n, r, i) {
+	var a, o, s, c = 1, l = !1, u = !1, d, f, p, m, h, g;
+	if (e.listener !== null && e.listener(`open`, e), e.tag = null, e.anchor = null, e.kind = null, e.result = null, a = o = s = C === n || et === n, r && F(e, !0, -1) && (l = !0, e.lineIndent > t ? c = 1 : e.lineIndent === t ? c = 0 : e.lineIndent < t && (c = -1)), c === 1) for (; Ot(e) || kt(e);) F(e, !0, -1) ? (l = !0, s = a, e.lineIndent > t ? c = 1 : e.lineIndent === t ? c = 0 : e.lineIndent < t && (c = -1)) : s = !1;
+	if (s &&= l || i, (c === 1 || C === n) && (h = S === n || $e === n ? t : t + 1, g = e.position - e.lineStart, c === 1 ? s && (Et(e, g) || Dt(e, g, h)) || wt(e, h) ? u = !0 : (o && Tt(e, h) || St(e, h) || Ct(e, h) ? u = !0 : At(e) ? (u = !0, (e.tag !== null || e.anchor !== null) && A(e, `alias node should not have any properties`)) : xt(e, h, S === n) && (u = !0, e.tag === null && (e.tag = `?`)), e.anchor !== null && (e.anchorMap[e.anchor] = e.result)) : c === 0 && (u = s && Et(e, g))), e.tag === null) e.anchor !== null && (e.anchorMap[e.anchor] = e.result);
+	else if (e.tag === `?`) {
+		for (e.result !== null && e.kind !== `scalar` && A(e, `unacceptable node kind for !<?> tag; it should be "scalar", not "` + e.kind + `"`), d = 0, f = e.implicitTypes.length; d < f; d += 1) if (m = e.implicitTypes[d], m.resolve(e.result)) {
+			e.result = m.construct(e.result), e.tag = m.tag, e.anchor !== null && (e.anchorMap[e.anchor] = e.result);
+			break;
+		}
+	} else if (e.tag !== `!`) {
+		if (x.call(e.typeMap[e.kind || `fallback`], e.tag)) m = e.typeMap[e.kind || `fallback`][e.tag];
+		else for (m = null, p = e.typeMap.multi[e.kind || `fallback`], d = 0, f = p.length; d < f; d += 1) if (e.tag.slice(0, p[d].tag.length) === p[d].tag) {
+			m = p[d];
+			break;
+		}
+		m || A(e, `unknown tag !<` + e.tag + `>`), e.result !== null && m.kind !== e.kind && A(e, `unacceptable node kind for !<` + e.tag + `> tag; it should be "` + m.kind + `", not "` + e.kind + `"`), m.resolve(e.result, e.tag) ? (e.result = m.construct(e.result, e.tag), e.anchor !== null && (e.anchorMap[e.anchor] = e.result)) : A(e, `cannot resolve a node with !<` + e.tag + `> explicit tag`);
+	}
+	return e.listener !== null && e.listener(`close`, e), e.tag !== null || e.anchor !== null || u;
+}
+function jt(e) {
+	var t = e.position, n, r, i, a = !1, o;
+	for (e.version = null, e.checkLineBreaks = e.legacy, e.tagMap = Object.create(null), e.anchorMap = Object.create(null); (o = e.input.charCodeAt(e.position)) !== 0 && (F(e, !0, -1), o = e.input.charCodeAt(e.position), !(e.lineIndent > 0 || o !== 37));) {
+		for (a = !0, o = e.input.charCodeAt(++e.position), n = e.position; o !== 0 && !D(o);) o = e.input.charCodeAt(++e.position);
+		for (r = e.input.slice(n, e.position), i = [], r.length < 1 && A(e, `directive name must not be less than one character in length`); o !== 0;) {
+			for (; E(o);) o = e.input.charCodeAt(++e.position);
+			if (o === 35) {
+				do
+					o = e.input.charCodeAt(++e.position);
+				while (o !== 0 && !T(o));
+				break;
+			}
+			if (T(o)) break;
+			for (n = e.position; o !== 0 && !D(o);) o = e.input.charCodeAt(++e.position);
+			i.push(e.input.slice(n, e.position));
+		}
+		o !== 0 && P(e), x.call(yt, r) ? yt[r](e, r, i) : j(e, `unknown document directive "` + r + `"`);
+	}
+	if (F(e, !0, -1), e.lineIndent === 0 && e.input.charCodeAt(e.position) === 45 && e.input.charCodeAt(e.position + 1) === 45 && e.input.charCodeAt(e.position + 2) === 45 ? (e.position += 3, F(e, !0, -1)) : a && A(e, `directives end mark is expected`), R(e, e.lineIndent - 1, C, !1, !0), F(e, !0, -1), e.checkLineBreaks && it.test(e.input.slice(t, e.position)) && j(e, `non-ASCII line breaks are interpreted as content`), e.documents.push(e.result), e.position === e.lineStart && I(e)) {
+		e.input.charCodeAt(e.position) === 46 && (e.position += 3, F(e, !0, -1));
+		return;
+	}
+	if (e.position < e.length - 1) A(e, `end of the stream or a document separator is expected`);
+	else return;
+}
+function Mt(e, t) {
+	e = String(e), t ||= {}, e.length !== 0 && (e.charCodeAt(e.length - 1) !== 10 && e.charCodeAt(e.length - 1) !== 13 && (e += `
+`), e.charCodeAt(0) === 65279 && (e = e.slice(1)));
+	var n = new _t(e, t), r = e.indexOf(`\0`);
+	for (r !== -1 && (n.position = r, A(n, `null byte is not allowed in input`)), n.input += `\0`; n.input.charCodeAt(n.position) === 32;) n.lineIndent += 1, n.position += 1;
+	for (; n.position < n.length - 1;) jt(n);
+	return n.documents;
+}
+function Nt(e, t, n) {
+	typeof t == `object` && t && n === void 0 && (n = t, t = null);
+	var r = Mt(e, n);
+	if (typeof t != `function`) return r;
+	for (var i = 0, a = r.length; i < a; i += 1) t(r[i]);
+}
+function Pt(e, t) {
+	var n = Mt(e, t);
+	if (n.length !== 0) {
+		if (n.length === 1) return n[0];
+		throw new l$1(`expected a single document in the stream, but found more`);
+	}
+}
+function cn(e, t) {
+	var n, r, i, a, o, s, c;
+	if (t === null) return {};
+	for (n = {}, r = Object.keys(t), i = 0, a = r.length; i < a; i += 1) o = r[i], s = String(t[o]), o.slice(0, 2) === `!!` && (o = `tag:yaml.org,2002:` + o.slice(2)), c = e.compiledTypeMap.fallback[o], c && Lt.call(c.styleAliases, s) && (s = c.styleAliases[s]), n[o] = s;
+	return n;
+}
+function ln(e) {
+	var t = e.toString(16).toUpperCase(), n, r;
+	if (e <= 255) n = `x`, r = 2;
+	else if (e <= 65535) n = `u`, r = 4;
+	else if (e <= 4294967295) n = `U`, r = 8;
+	else throw new l$1(`code point within a string may not be greater than 0xFFFFFFFF`);
+	return `\\` + n + o$1.repeat(`0`, r - t.length) + t;
+}
+function dn(e) {
+	this.schema = e.schema || Qe, this.indent = Math.max(1, e.indent || 2), this.noArrayIndent = e.noArrayIndent || !1, this.skipInvalid = e.skipInvalid || !1, this.flowLevel = o$1.isNothing(e.flowLevel) ? -1 : e.flowLevel, this.styleMap = cn(this.schema, e.styles || null), this.sortKeys = e.sortKeys || !1, this.lineWidth = e.lineWidth || 80, this.noRefs = e.noRefs || !1, this.noCompatMode = e.noCompatMode || !1, this.condenseFlow = e.condenseFlow || !1, this.quotingType = e.quotingType === `"` ? W : un, this.forceQuotes = e.forceQuotes || !1, this.replacer = typeof e.replacer == `function` ? e.replacer : null, this.implicitTypes = this.schema.compiledImplicit, this.explicitTypes = this.schema.compiledExplicit, this.tag = null, this.result = ``, this.duplicates = [], this.usedDuplicates = null;
+}
+function fn(e, t) {
+	for (var n = o$1.repeat(` `, t), r = 0, i = -1, a = ``, s, c = e.length; r < c;) i = e.indexOf(`
+`, r), i === -1 ? (s = e.slice(r), r = c) : (s = e.slice(r, i + 1), r = i + 1), s.length && s !== `
+` && (a += n), a += s;
+	return a;
+}
+function G(e, t) {
+	return `
+` + o$1.repeat(` `, e.indent * t);
+}
+function pn(e, t) {
+	var n = 0, r = e.implicitTypes.length, i;
+	for (; n < r; n += 1) if (i = e.implicitTypes[n], i.resolve(t)) return !0;
+	return !1;
+}
+function K(e) {
+	return e === Bt || e === Rt;
+}
+function q(e) {
+	return 32 <= e && e <= 126 || 161 <= e && e <= 55295 && e !== 8232 && e !== 8233 || 57344 <= e && e <= 65533 && e !== z || 65536 <= e && e <= 1114111;
+}
+function mn(e) {
+	return q(e) && e !== z && e !== zt && e !== B;
+}
+function hn(e, t, n) {
+	var r = mn(e), i = r && !K(e);
+	return (n ? r : r && e !== qt && e !== $t && e !== en && e !== nn && e !== an) && e !== V && !(t === H && !i) || mn(t) && !K(t) && e === V || t === H && i;
+}
+function gn(e) {
+	return q(e) && e !== z && !K(e) && e !== Jt && e !== Zt && e !== H && e !== qt && e !== $t && e !== en && e !== nn && e !== an && e !== V && e !== Wt && e !== Kt && e !== Vt && e !== rn && e !== Yt && e !== Xt && e !== Gt && e !== Ht && e !== Ut && e !== Qt && e !== tn;
+}
+function _n(e) {
+	return !K(e) && e !== H;
+}
+function J(e, t) {
+	var n = e.charCodeAt(t), r;
+	return n >= 55296 && n <= 56319 && t + 1 < e.length && (r = e.charCodeAt(t + 1), r >= 56320 && r <= 57343) ? (n - 55296) * 1024 + r - 56320 + 65536 : n;
+}
+function vn(e) {
+	return /^\n* /.test(e);
+}
+function Sn(e, t, n, r, i, a, o, s) {
+	var c, l = 0, u = null, d = !1, f = !1, p = r !== -1, m = -1, h = gn(J(e, 0)) && _n(J(e, e.length - 1));
+	if (t || o) for (c = 0; c < e.length; l >= 65536 ? c += 2 : c++) {
+		if (l = J(e, c), !q(l)) return X;
+		h &&= hn(l, u, s), u = l;
+	}
+	else {
+		for (c = 0; c < e.length; l >= 65536 ? c += 2 : c++) {
+			if (l = J(e, c), l === B) d = !0, p && (f ||= c - m - 1 > r && e[m + 1] !== ` `, m = c);
+			else if (!q(l)) return X;
+			h &&= hn(l, u, s), u = l;
+		}
+		f ||= p && c - m - 1 > r && e[m + 1] !== ` `;
+	}
+	return !d && !f ? h && !o && !i(e) ? yn : a === W ? X : Y : n > 9 && vn(e) ? X : o ? a === W ? X : Y : f ? xn : bn;
+}
+function Cn(e, t, n, r, i) {
+	e.dump = function() {
+		if (t.length === 0) return e.quotingType === W ? `""` : `''`;
+		if (!e.noCompatMode && (on.indexOf(t) !== -1 || sn.test(t))) return e.quotingType === W ? `"` + t + `"` : `'` + t + `'`;
+		var a = e.indent * Math.max(1, n), o = e.lineWidth === -1 ? -1 : Math.max(Math.min(e.lineWidth, 40), e.lineWidth - a), s = r || e.flowLevel > -1 && n >= e.flowLevel;
+		function c(t) {
+			return pn(e, t);
+		}
+		switch (Sn(t, s, e.indent, o, c, e.quotingType, e.forceQuotes && !r, i)) {
+			case yn: return t;
+			case Y: return `'` + t.replace(/'/g, `''`) + `'`;
+			case bn: return `|` + wn(t, e.indent) + Tn(fn(t, a));
+			case xn: return `>` + wn(t, e.indent) + Tn(fn(En(t, o), a));
+			case X: return `"` + Dn(t) + `"`;
+			default: throw new l$1(`impossible error: invalid scalar style`);
+		}
+	}();
+}
+function wn(e, t) {
+	var n = vn(e) ? String(t) : ``, r = e[e.length - 1] === `
+`;
+	return n + (r && (e[e.length - 2] === `
+` || e === `
+`) ? `+` : r ? `` : `-`) + `
+`;
+}
+function Tn(e) {
+	return e[e.length - 1] === `
+` ? e.slice(0, -1) : e;
+}
+function En(e, t) {
+	for (var n = /(\n+)([^\n]*)/g, r = function() {
+		var r = e.indexOf(`
+`);
+		return r = r === -1 ? e.length : r, n.lastIndex = r, Z(e.slice(0, r), t);
+	}(), i = e[0] === `
+` || e[0] === ` `, a, o; o = n.exec(e);) {
+		var s = o[1], c = o[2];
+		a = c[0] === ` `, r += s + (!i && !a && c !== `` ? `
+` : ``) + Z(c, t), i = a;
+	}
+	return r;
+}
+function Z(e, t) {
+	if (e === `` || e[0] === ` `) return e;
+	for (var n = / [^ ]/g, r, i = 0, a, o = 0, s = 0, c = ``; r = n.exec(e);) s = r.index, s - i > t && (a = o > i ? o : s, c += `
+` + e.slice(i, a), i = a + 1), o = s;
+	return c += `
+`, e.length - i > t && o > i ? c += e.slice(i, o) + `
+` + e.slice(o + 1) : c += e.slice(i), c.slice(1);
+}
+function Dn(e) {
+	for (var t = ``, n = 0, r, i = 0; i < e.length; n >= 65536 ? i += 2 : i++) n = J(e, i), r = U[n], !r && q(n) ? (t += e[i], n >= 65536 && (t += e[i + 1])) : t += r || ln(n);
+	return t;
+}
+function On(e, t, n) {
+	var r = ``, i = e.tag, a = 0, o = n.length, s;
+	for (; a < o; a += 1) s = n[a], e.replacer && (s = e.replacer.call(n, String(a), s)), (Q(e, t, s, !1, !1) || s === void 0 && Q(e, t, null, !1, !1)) && (r !== `` && (r += `,` + (e.condenseFlow ? `` : ` `)), r += e.dump);
+	e.tag = i, e.dump = `[` + r + `]`;
+}
+function kn(e, t, n, r) {
+	var i = ``, a = e.tag, o = 0, s = n.length, c;
+	for (; o < s; o += 1) c = n[o], e.replacer && (c = e.replacer.call(n, String(o), c)), (Q(e, t + 1, c, !0, !0, !1, !0) || c === void 0 && Q(e, t + 1, null, !0, !0, !1, !0)) && ((!r || i !== ``) && (i += G(e, t)), e.dump && B === e.dump.charCodeAt(0) ? i += `-` : i += `- `, i += e.dump);
+	e.tag = a, e.dump = i || `[]`;
+}
+function An(e, t, n) {
+	var r = ``, i = e.tag, a = Object.keys(n), o = 0, s = a.length, c, l, u;
+	for (; o < s; o += 1) u = ``, r !== `` && (u += `, `), e.condenseFlow && (u += `"`), c = a[o], l = n[c], e.replacer && (l = e.replacer.call(n, c, l)), Q(e, t, c, !1, !1) && (e.dump.length > 1024 && (u += `? `), u += e.dump + (e.condenseFlow ? `"` : ``) + `:` + (e.condenseFlow ? `` : ` `), Q(e, t, l, !1, !1) && (u += e.dump, r += u));
+	e.tag = i, e.dump = `{` + r + `}`;
+}
+function jn(e, t, n, r) {
+	var i = ``, a = e.tag, o = Object.keys(n), s, c, u, d, f, p;
+	if (e.sortKeys === !0) o.sort();
+	else if (typeof e.sortKeys == `function`) o.sort(e.sortKeys);
+	else if (e.sortKeys) throw new l$1(`sortKeys must be a boolean or a function`);
+	for (s = 0, c = o.length; s < c; s += 1) p = ``, (!r || i !== ``) && (p += G(e, t)), u = o[s], d = n[u], e.replacer && (d = e.replacer.call(n, u, d)), Q(e, t + 1, u, !0, !0, !0) && (f = e.tag !== null && e.tag !== `?` || e.dump && e.dump.length > 1024, f && (e.dump && B === e.dump.charCodeAt(0) ? p += `?` : p += `? `), p += e.dump, f && (p += G(e, t)), Q(e, t + 1, d, !0, f) && (e.dump && B === e.dump.charCodeAt(0) ? p += `:` : p += `: `, p += e.dump, i += p));
+	e.tag = a, e.dump = i || `{}`;
+}
+function Mn(e, t, n) {
+	var r, i = n ? e.explicitTypes : e.implicitTypes, a = 0, o = i.length, s, c;
+	for (; a < o; a += 1) if (s = i[a], (s.instanceOf || s.predicate) && (!s.instanceOf || typeof t == `object` && t instanceof s.instanceOf) && (!s.predicate || s.predicate(t))) {
+		if (n ? s.multi && s.representName ? e.tag = s.representName(t) : e.tag = s.tag : e.tag = `?`, s.represent) {
+			if (c = e.styleMap[s.tag] || s.defaultStyle, It.call(s.represent) === `[object Function]`) r = s.represent(t, c);
+			else if (Lt.call(s.represent, c)) r = s.represent[c](t, c);
+			else throw new l$1(`!<` + s.tag + `> tag resolver accepts not "` + c + `" style`);
+			e.dump = r;
+		}
+		return !0;
+	}
+	return !1;
+}
+function Q(e, t, n, r, i, a, o) {
+	e.tag = null, e.dump = n, Mn(e, n, !1) || Mn(e, n, !0);
+	var s = It.call(e.dump), c = r, u;
+	r &&= e.flowLevel < 0 || e.flowLevel > t;
+	var d = s === `[object Object]` || s === `[object Array]`, f, p;
+	if (d && (f = e.duplicates.indexOf(n), p = f !== -1), (e.tag !== null && e.tag !== `?` || p || e.indent !== 2 && t > 0) && (i = !1), p && e.usedDuplicates[f]) e.dump = `*ref_` + f;
+	else {
+		if (d && p && !e.usedDuplicates[f] && (e.usedDuplicates[f] = !0), s === `[object Object]`) r && Object.keys(e.dump).length !== 0 ? (jn(e, t, e.dump, i), p && (e.dump = `&ref_` + f + e.dump)) : (An(e, t, e.dump), p && (e.dump = `&ref_` + f + ` ` + e.dump));
+		else if (s === `[object Array]`) r && e.dump.length !== 0 ? (e.noArrayIndent && !o && t > 0 ? kn(e, t - 1, e.dump, i) : kn(e, t, e.dump, i), p && (e.dump = `&ref_` + f + e.dump)) : (On(e, t, e.dump), p && (e.dump = `&ref_` + f + ` ` + e.dump));
+		else if (s === `[object String]`) e.tag !== `?` && Cn(e, e.dump, t, a, c);
+		else if (s === `[object Undefined]`) return !1;
+		else {
+			if (e.skipInvalid) return !1;
+			throw new l$1(`unacceptable kind of an object to dump ` + s);
+		}
+		e.tag !== null && e.tag !== `?` && (u = encodeURI(e.tag[0] === `!` ? e.tag.slice(1) : e.tag).replace(/!/g, `%21`), u = e.tag[0] === `!` ? `!` + u : u.slice(0, 18) === `tag:yaml.org,2002:` ? `!!` + u.slice(18) : `!<` + u + `>`, e.dump = u + ` ` + e.dump);
+	}
+	return !0;
+}
+function Nn(e, t) {
+	var n = [], r = [], i, a;
+	for ($(e, n, r), i = 0, a = r.length; i < a; i += 1) t.duplicates.push(n[r[i]]);
+	t.usedDuplicates = Array(a);
+}
+function $(e, t, n) {
+	var r, i, a;
+	if (typeof e == `object` && e) if (i = t.indexOf(e), i !== -1) n.indexOf(i) === -1 && n.push(i);
+	else if (t.push(e), Array.isArray(e)) for (i = 0, a = e.length; i < a; i += 1) $(e[i], t, n);
+	else for (r = Object.keys(e), i = 0, a = r.length; i < a; i += 1) $(e[r[i]], t, n);
+}
+function Pn(e, t) {
+	t ||= {};
+	var n = new dn(t);
+	n.noRefs || Nn(e, n);
+	var r = e;
+	return n.replacer && (r = n.replacer.call({ "": r }, ``, r)), Q(n, 0, r, !0, !0) ? n.dump + `
+` : ``;
+}
+var o$1, l$1, p, m, h, v, ne, oe, ue, _e, ve, xe, we, Te, Ee, De, je, Ne, b, Re, ze, Be, Ue, We, qe, Je, Ze, Qe, x, S, $e, et, C, w, tt, nt, rt, it, at, ot, st, ht, gt, k, yt, Ft, It, Lt, z, Rt, B, zt, Bt, Vt, Ht, V, Ut, Wt, Gt, Kt, qt, Jt, H, Yt, Xt, Zt, Qt, $t, en, tn, nn, rn, an, U, on, sn, un, W, yn, Y, bn, xn, X, Fn, In, Ln;
+var init_js_yaml = __esmMin((() => {
+	o$1 = {
+		isNothing: e,
+		isObject: t$1,
+		toArray: n$1,
+		repeat: i$3,
+		isNegativeZero: a$2,
+		extend: r$1
+	};
+	c$1.prototype = Object.create(Error.prototype), c$1.prototype.constructor = c$1, c$1.prototype.toString = function(e) {
+		return this.name + `: ` + s$1(this, e);
+	};
+	l$1 = c$1;
+	p = f;
+	m = [
+		`kind`,
+		`multi`,
+		`resolve`,
+		`construct`,
+		`instanceOf`,
+		`predicate`,
+		`represent`,
+		`representName`,
+		`defaultStyle`,
+		`styleAliases`
+	];
+	h = [
+		`scalar`,
+		`sequence`,
+		`mapping`
+	];
+	v = _;
+	y.prototype.extend = function(e) {
+		var t = [], n = [];
+		if (e instanceof v) n.push(e);
+		else if (Array.isArray(e)) n = n.concat(e);
+		else if (e && (Array.isArray(e.implicit) || Array.isArray(e.explicit))) e.implicit && (t = t.concat(e.implicit)), e.explicit && (n = n.concat(e.explicit));
+		else throw new l$1(`Schema.extend argument should be a Type, [ Type ], or a schema definition ({ implicit: [...], explicit: [...] })`);
+		t.forEach(function(e) {
+			if (!(e instanceof v)) throw new l$1(`Specified list of YAML types (or a single Type object) contains a non-Type object.`);
+			if (e.loadKind && e.loadKind !== `scalar`) throw new l$1(`There is a non-scalar type in the implicit list of a schema. Implicit resolving of such types is not supported.`);
+			if (e.multi) throw new l$1(`There is a multi type in the implicit list of a schema. Multi tags can only be listed as explicit.`);
+		}), n.forEach(function(e) {
+			if (!(e instanceof v)) throw new l$1(`Specified list of YAML types (or a single Type object) contains a non-Type object.`);
+		});
+		var r = Object.create(y.prototype);
+		return r.implicit = (this.implicit || []).concat(t), r.explicit = (this.explicit || []).concat(n), r.compiledImplicit = ee(r, `implicit`), r.compiledExplicit = ee(r, `explicit`), r.compiledTypeMap = te(r.compiledImplicit, r.compiledExplicit), r;
+	};
+	ne = new y({ explicit: [
+		new v(`tag:yaml.org,2002:str`, {
+			kind: `scalar`,
+			construct: function(e) {
+				return e === null ? `` : e;
+			}
+		}),
+		new v(`tag:yaml.org,2002:seq`, {
+			kind: `sequence`,
+			construct: function(e) {
+				return e === null ? [] : e;
+			}
+		}),
+		new v(`tag:yaml.org,2002:map`, {
+			kind: `mapping`,
+			construct: function(e) {
+				return e === null ? {} : e;
+			}
+		})
+	] });
+	oe = new v(`tag:yaml.org,2002:null`, {
+		kind: `scalar`,
+		resolve: re,
+		construct: ie,
+		predicate: ae,
+		represent: {
+			canonical: function() {
+				return `~`;
+			},
+			lowercase: function() {
+				return `null`;
+			},
+			uppercase: function() {
+				return `NULL`;
+			},
+			camelcase: function() {
+				return `Null`;
+			},
+			empty: function() {
+				return ``;
+			}
+		},
+		defaultStyle: `lowercase`
+	});
+	ue = new v(`tag:yaml.org,2002:bool`, {
+		kind: `scalar`,
+		resolve: se,
+		construct: ce,
+		predicate: le,
+		represent: {
+			lowercase: function(e) {
+				return e ? `true` : `false`;
+			},
+			uppercase: function(e) {
+				return e ? `TRUE` : `FALSE`;
+			},
+			camelcase: function(e) {
+				return e ? `True` : `False`;
+			}
+		},
+		defaultStyle: `lowercase`
+	});
+	_e = new v(`tag:yaml.org,2002:int`, {
+		kind: `scalar`,
+		resolve: me,
+		construct: he,
+		predicate: ge,
+		represent: {
+			binary: function(e) {
+				return e >= 0 ? `0b` + e.toString(2) : `-0b` + e.toString(2).slice(1);
+			},
+			octal: function(e) {
+				return e >= 0 ? `0o` + e.toString(8) : `-0o` + e.toString(8).slice(1);
+			},
+			decimal: function(e) {
+				return e.toString(10);
+			},
+			hexadecimal: function(e) {
+				return e >= 0 ? `0x` + e.toString(16).toUpperCase() : `-0x` + e.toString(16).toUpperCase().slice(1);
+			}
+		},
+		defaultStyle: `decimal`,
+		styleAliases: {
+			binary: [2, `bin`],
+			octal: [8, `oct`],
+			decimal: [10, `dec`],
+			hexadecimal: [16, `hex`]
+		}
+	});
+	ve = RegExp(`^(?:[-+]?(?:[0-9][0-9_]*)(?:\\.[0-9_]*)?(?:[eE][-+]?[0-9]+)?|\\.[0-9_]+(?:[eE][-+]?[0-9]+)?|[-+]?\\.(?:inf|Inf|INF)|\\.(?:nan|NaN|NAN))$`);
+	xe = /^[-+]?[0-9]+e/;
+	we = new v(`tag:yaml.org,2002:float`, {
+		kind: `scalar`,
+		resolve: ye,
+		construct: be,
+		predicate: Ce,
+		represent: Se,
+		defaultStyle: `lowercase`
+	});
+	Te = ne.extend({ implicit: [
+		oe,
+		ue,
+		_e,
+		we
+	] });
+	Ee = RegExp(`^([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])$`);
+	De = RegExp(`^([0-9][0-9][0-9][0-9])-([0-9][0-9]?)-([0-9][0-9]?)(?:[Tt]|[ \\t]+)([0-9][0-9]?):([0-9][0-9]):([0-9][0-9])(?:\\.([0-9]*))?(?:[ \\t]*(Z|([-+])([0-9][0-9]?)(?::([0-9][0-9]))?))?$`);
+	je = new v(`tag:yaml.org,2002:timestamp`, {
+		kind: `scalar`,
+		resolve: Oe,
+		construct: ke,
+		instanceOf: Date,
+		represent: Ae
+	});
+	Ne = new v(`tag:yaml.org,2002:merge`, {
+		kind: `scalar`,
+		resolve: Me
+	});
+	b = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=
+\r`;
+	Re = new v(`tag:yaml.org,2002:binary`, {
+		kind: `scalar`,
+		resolve: Pe,
+		construct: Fe,
+		predicate: Le,
+		represent: Ie
+	});
+	ze = Object.prototype.hasOwnProperty;
+	Be = Object.prototype.toString;
+	Ue = new v(`tag:yaml.org,2002:omap`, {
+		kind: `sequence`,
+		resolve: Ve,
+		construct: He
+	});
+	We = Object.prototype.toString;
+	qe = new v(`tag:yaml.org,2002:pairs`, {
+		kind: `sequence`,
+		resolve: Ge,
+		construct: Ke
+	});
+	Je = Object.prototype.hasOwnProperty;
+	Ze = new v(`tag:yaml.org,2002:set`, {
+		kind: `mapping`,
+		resolve: Ye,
+		construct: Xe
+	});
+	Qe = Te.extend({
+		implicit: [je, Ne],
+		explicit: [
+			Re,
+			Ue,
+			qe,
+			Ze
+		]
+	});
+	x = Object.prototype.hasOwnProperty;
+	S = 1;
+	$e = 2;
+	et = 3;
+	C = 4;
+	w = 1;
+	tt = 2;
+	nt = 3;
+	rt = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x84\x86-\x9F\uFFFE\uFFFF]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:[^\uD800-\uDBFF]|^)[\uDC00-\uDFFF]/;
+	it = /[\x85\u2028\u2029]/;
+	at = /[,\[\]\{\}]/;
+	ot = /^(?:!|!!|![a-z\-]+!)$/i;
+	st = /^(?:!|[^,\[\]\{\}])(?:%[0-9a-f]{2}|[0-9a-z\-#;\/\?:@&=\+\$,_\.!~\*'\(\)\[\]])*$/i;
+	for (ht = Array(256), gt = Array(256), k = 0; k < 256; k++) ht[k] = ft(k) ? 1 : 0, gt[k] = ft(k);
+	yt = {
+		YAML: function(e, t, n) {
+			var r, i, a;
+			e.version !== null && A(e, `duplication of %YAML directive`), n.length !== 1 && A(e, `YAML directive accepts exactly one argument`), r = /^([0-9]+)\.([0-9]+)$/.exec(n[0]), r === null && A(e, `ill-formed argument of the YAML directive`), i = parseInt(r[1], 10), a = parseInt(r[2], 10), i !== 1 && A(e, `unacceptable YAML version of the document`), e.version = n[0], e.checkLineBreaks = a < 2, a !== 1 && a !== 2 && j(e, `unsupported YAML version of the document`);
+		},
+		TAG: function(e, t, n) {
+			var r, i;
+			n.length !== 2 && A(e, `TAG directive accepts exactly two arguments`), r = n[0], i = n[1], ot.test(r) || A(e, `ill-formed tag handle (first argument) of the TAG directive`), x.call(e.tagMap, r) && A(e, `there is a previously declared suffix for "` + r + `" tag handle`), st.test(i) || A(e, `ill-formed tag prefix (second argument) of the TAG directive`);
+			try {
+				i = decodeURIComponent(i);
+			} catch {
+				A(e, `tag prefix is malformed: ` + i);
+			}
+			e.tagMap[r] = i;
+		}
+	};
+	Ft = {
+		loadAll: Nt,
+		load: Pt
+	};
+	It = Object.prototype.toString;
+	Lt = Object.prototype.hasOwnProperty;
+	z = 65279;
+	Rt = 9;
+	B = 10;
+	zt = 13;
+	Bt = 32;
+	Vt = 33;
+	Ht = 34;
+	V = 35;
+	Ut = 37;
+	Wt = 38;
+	Gt = 39;
+	Kt = 42;
+	qt = 44;
+	Jt = 45;
+	H = 58;
+	Yt = 61;
+	Xt = 62;
+	Zt = 63;
+	Qt = 64;
+	$t = 91;
+	en = 93;
+	tn = 96;
+	nn = 123;
+	rn = 124;
+	an = 125;
+	U = {};
+	U[0] = `\\0`, U[7] = `\\a`, U[8] = `\\b`, U[9] = `\\t`, U[10] = `\\n`, U[11] = `\\v`, U[12] = `\\f`, U[13] = `\\r`, U[27] = `\\e`, U[34] = `\\"`, U[92] = `\\\\`, U[133] = `\\N`, U[160] = `\\_`, U[8232] = `\\L`, U[8233] = `\\P`;
+	on = [
+		`y`,
+		`Y`,
+		`yes`,
+		`Yes`,
+		`YES`,
+		`on`,
+		`On`,
+		`ON`,
+		`n`,
+		`N`,
+		`no`,
+		`No`,
+		`NO`,
+		`off`,
+		`Off`,
+		`OFF`
+	];
+	sn = /^[-+]?[0-9_]+(?::[0-9_]+)+(?:\.[0-9_]*)?$/;
+	un = 1;
+	W = 2;
+	yn = 1;
+	Y = 2;
+	bn = 3;
+	xn = 4;
+	X = 5;
+	Fn = { dump: Pn };
+	In = Ft.load;
+	Ft.loadAll;
+	Ln = Fn.dump;
+}));
+//#endregion
+//#region ../figments/node_modules/.pnpm/confbox@0.2.4/node_modules/confbox/dist/yaml.mjs
+var yaml_exports = /* @__PURE__ */ __exportAll({
+	parseYAML: () => i$2,
+	stringifyYAML: () => a$1
+});
+function i$2(t, r) {
+	let i = In(t, r);
+	return a$5(t, i, r), i;
+}
+function a$1(e, n) {
+	let i = o$3(e, { preserveIndentation: !1 }), a = Ln(e, {
+		indent: typeof i.indent == `string` ? i.indent.length : i.indent,
+		...n
+	});
+	return i.whitespace.start + a.trim() + i.whitespace.end;
+}
+var init_yaml = __esmMin((() => {
+	init__format();
+	init_js_yaml();
+}));
+//#endregion
+//#region ../figments/src/providers/lazy-codecs.ts
+function loadToml() {
+	if (!_toml) _toml = Promise.resolve().then(() => (init_toml(), toml_exports));
+	return _toml;
+}
+function loadYaml() {
+	if (!_yaml) _yaml = Promise.resolve().then(() => (init_yaml(), yaml_exports));
+	return _yaml;
+}
+var _toml, _yaml;
+var init_lazy_codecs = __esmMin((() => {}));
+//#endregion
+//#region ../figments/src/providers/data.ts
+function createFormatProvider(format) {
+	return {
+		file(path) {
+			return Data.file(format, path);
+		},
+		string(source) {
+			return Data.string(format, source);
+		},
+		profile(path, name) {
+			const profileName = name ?? normalizeProfile(basename(path, extname(path)));
+			return Data.file(format, path).profile(profileName);
+		}
+	};
+}
+function createFileSource(path) {
+	return {
+		type: "file",
+		path,
+		required: false,
+		search: true
+	};
+}
+function createStringSource(source) {
+	return {
+		type: "string",
+		source
+	};
+}
+function isFileDataSource(source) {
+	return source.type === "file";
+}
+function metadataForSource(formatName, source) {
+	if (isFileDataSource(source)) return metadataFromFile(`${formatName} file`, source.path);
+	return metadataFromInline(`${formatName} source string`, `${formatName} inline string`);
+}
+async function loadDataSource(format, source) {
+	if (!isFileDataSource(source)) return { value: toConfigValue(await format.parse(source.source)) };
+	const path = await resolvePath(source.path, source.search);
+	if (!path) {
+		if (!source.required) return { value: {} };
+		throw new Error(`required file '${source.path}' not found`);
+	}
+	const fileSource = await readFile(path, "utf8");
+	return {
+		value: toConfigValue(await format.parse(fileSource)),
+		resolvedPath: path
+	};
+}
+function asProfileMap(value, profileName, formatName) {
+	if (profileName) {
+		if (!isConfigDict(value)) throw new Error(`${formatName} source must decode to a dictionary when nesting is disabled`);
+		return { [profileName]: value };
+	}
+	if (!isConfigDict(value)) throw new Error(`${formatName} nested source must decode to a profile dictionary`);
+	const output = {};
+	for (const [profile, profileValue] of Object.entries(value)) if (isConfigDict(profileValue)) output[normalizeProfile(profile)] = profileValue;
+	return output;
+}
+function toConfigValue(value, path = []) {
+	if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+	if (Array.isArray(value)) return value.map((item, index) => toConfigValue(item, [...path, index]));
+	if (typeof value === "object") {
+		const dict = {};
+		for (const [key, item] of Object.entries(value)) dict[key] = toConfigValue(item, [...path, key]);
+		return dict;
+	}
+	const error = FigmentError.unsupported(value);
+	throw path.length > 0 ? error.withPath(path.join(".")) : error;
+}
+var Data, JsonFormat, TomlFormat, YamlFormat, Json;
+var init_data = __esmMin((() => {
+	init_fs();
+	init_error$2();
+	init_types$1();
+	init_profile$1();
+	init_metadata();
+	init_lazy_codecs();
+	Data = class Data {
+		format;
+		source;
+		profileName;
+		metadataValue;
+		constructor(format, source, profileName) {
+			this.format = format;
+			this.source = source;
+			this.profileName = profileName;
+			this.metadataValue = metadataForSource(this.format.name, this.source);
+		}
+		static file(format, path) {
+			return new Data(format, createFileSource(path), DEFAULT_PROFILE);
+		}
+		static string(format, source) {
+			return new Data(format, createStringSource(source), DEFAULT_PROFILE);
+		}
+		nested() {
+			return this.withProfile(void 0);
+		}
+		required(required) {
+			if (!isFileDataSource(this.source)) return this;
+			if (this.source.required === required) return this;
+			return this.withSource({
+				...this.source,
+				required
+			});
+		}
+		search(search) {
+			if (!isFileDataSource(this.source)) return this;
+			if (this.source.search === search) return this;
+			return this.withSource({
+				...this.source,
+				search
+			});
+		}
+		profile(profile) {
+			const normalized = normalizeProfile(profile);
+			if (this.profileName === normalized) return this;
+			return this.withProfile(normalized);
+		}
+		selectedProfile() {
+			return this.profileName;
+		}
+		metadata() {
+			return this.metadataValue;
+		}
+		async data() {
+			const loaded = await loadDataSource(this.format, this.source);
+			if (loaded.resolvedPath && this.metadataValue.source?.kind === "file") this.metadataValue.source.path = loaded.resolvedPath;
+			return asProfileMap(loaded.value, this.profileName, this.format.name);
+		}
+		withSource(source) {
+			return new Data(this.format, source, this.profileName);
+		}
+		withProfile(profileName) {
+			return new Data(this.format, this.source, profileName);
+		}
+	};
+	JsonFormat = {
+		name: "JSON",
+		parse: async (source) => JSON.parse(source)
+	};
+	TomlFormat = {
+		name: "TOML",
+		parse: async (source) => {
+			const { parseTOML } = await loadToml();
+			return parseTOML(source);
+		}
+	};
+	YamlFormat = {
+		name: "YAML",
+		parse: async (source) => {
+			const { parseYAML } = await loadYaml();
+			return parseYAML(source);
+		}
+	};
+	Json = createFormatProvider(JsonFormat);
+}));
+//#endregion
+//#region ../figments/src/discovery/capture.ts
+/**
+* Freezes an inspected registry selection for loading.
+*
+* Accepts `active` entries and `disabled` entries — capturing a disabled
+* winner is the explicit caller choice to load that retained declaration.
+* `masked`, `conflict` and `invalid` entries are refused with an error
+* naming each refused identity and state: they are not loadable, and
+* silently dropping them would hide exactly the states inspection exists
+* to explain.
+*
+* The capture is detached: later mutations of the caller's arrays or entry
+* objects cannot change what will be loaded. `dropIns({ source })` loads
+* the captured selection without rescanning; see `verifyCapturedSource`
+* for the pre-read guard applied there.
+*/
+function captureDropIns(entries, options = {}) {
+	const profile = normalizeProfile(options.profile ?? "default");
+	const prefix = options.registryKey ? options.registryKey.split(".").map((segment) => segment.trim()).filter(Boolean) : [];
+	const captured = [];
+	const refused = [];
+	for (const entry of entries) {
+		if (entry.state === "masked" || entry.state === "conflict" || entry.state === "invalid") {
+			refused.push(`${entry.identity} (${entry.state})`);
+			continue;
+		}
+		captured.push({
+			observation: { ...entry.winner },
+			profile,
+			keyPath: prefix.length > 0 ? [...prefix, entry.identity] : void 0,
+			format: options.format
+		});
+	}
+	if (refused.length > 0) throw FigmentError.invalidValue(`cannot capture non-loadable registry entries: ${refused.join(", ")}`);
+	return { entries: captured };
+}
+/**
+* Verifies a captured source immediately before it is read: still present,
+* same entry kind, symlinks not retargeted, and a **regular-file** referent
+* (a `/dev/null` or other special replacement is refused rather than read;
+* a target that became a directory is refused too). Failures name the
+* observed path so the caller can attribute the change to the exact
+* registration that was captured.
+*
+* Honest race contract: this check runs inside the provider's `data()`,
+* directly before the read it guards — not at planning time, so a source
+* changed after intent planning is still caught. It is nevertheless
+* advisory: the filesystem can change *between* verification and the read
+* that follows, and a replacement by another regular file would then be
+* read as that file's content. Capturing names does not promise immutable
+* bytes or any multi-file transaction isolation.
+*/
+async function verifyCapturedSource(observation) {
+	let current;
+	try {
+		current = await lstat(observation.path);
+	} catch (error) {
+		if (errnoCode(error) === "ENOENT") throw FigmentError.invalidValue(`captured source no longer exists: ${observation.path} (observed ${observation.physicalName} in ${observation.root})`);
+		throw FigmentError.invalidValue(`captured source could not be verified: ${observation.path} (${errnoCode(error) ?? "unknown"}: ${errorMessage(error)})`);
+	}
+	const kind = entryKind(current);
+	if (kind !== observation.kind) throw FigmentError.invalidValue(`captured source changed kind: ${observation.path} observed '${observation.kind}' now '${kind}'`);
+	if (kind === "symlink") {
+		const target = await readlink(observation.path);
+		if (target !== observation.linkTarget) throw FigmentError.invalidValue(`captured symlink was retargeted: ${observation.path} observed '${observation.linkTarget}' now '${target}'`);
+	}
+	const followed = await stat(observation.path);
+	if (!followed.isFile()) {
+		const shape = followed.isDirectory() ? "directory" : "special file";
+		throw FigmentError.invalidValue(`captured source does not refer to a regular file, refusing to read: ${observation.path} (${shape})`);
+	}
+}
+function entryKind(stats) {
+	if (stats.isSymbolicLink()) return "symlink";
+	if (stats.isFile()) return "file";
+	if (stats.isDirectory()) return "directory";
+	return "other";
+}
+function errnoCode(error) {
+	if (typeof error === "object" && error !== null && "code" in error) {
+		const code = error.code;
+		if (typeof code === "string") return code;
+	}
+}
+function errorMessage(error) {
+	return error instanceof Error ? error.message : String(error);
+}
+var VerifiedFile;
+var init_capture = __esmMin((() => {
+	init_error$2();
+	init_profile$1();
+	init_data();
+	VerifiedFile = class {
+		observation;
+		inner;
+		constructor(observation, format, profile) {
+			this.observation = observation;
+			this.inner = Data.file(format, observation.path).required(true).search(false).profile(profile);
+		}
+		metadata() {
+			return this.inner.metadata();
+		}
+		async data() {
+			await verifyCapturedSource(this.observation);
+			return this.inner.data();
+		}
+	};
+}));
+//#endregion
+//#region ../figments/src/providers/keyed.ts
+function nestLiteralSegments(segments, value) {
+	let nested = value;
+	for (let index = segments.length - 1; index >= 0; index -= 1) nested = { [segments[index]]: nested };
+	return nested;
+}
+var Keyed;
+var init_keyed = __esmMin((() => {
+	init_error$2();
+	Keyed = class {
+		segments;
+		inner;
+		constructor(segments, inner) {
+			if (segments.length === 0) throw FigmentError.invalidValue("Keyed requires at least one key segment");
+			for (const segment of segments) if (segment === "") throw FigmentError.invalidValue("Keyed key segments must be non-empty strings");
+			this.segments = [...segments];
+			this.inner = inner;
+		}
+		metadata() {
+			return this.inner.metadata();
+		}
+		async data() {
+			const data = await this.inner.data();
+			const out = {};
+			for (const [profile, dict] of Object.entries(data)) out[profile] = nestLiteralSegments(this.segments, dict);
+			return out;
+		}
+	};
+}));
+//#endregion
+//#region ../figments/src/operators/drop-in.ts
+/**
+* Returns an operator that loads drop-in configuration from one or more
+* directories — the xdrog pattern from duragit's genesis doc: modular
+* config assembled from `*.d/` directories, optionally gated by the active
+* profiles, optionally collected into a keyed registry — or from a
+* captured, membership-frozen selection.
+*
+* Files load in sorted filename order, each as its own `provide` operation
+* with full per-file provenance. Skipped files and missing directories are
+* recorded as diagnostics, so `operationRecords()` answers "which drop-ins
+* loaded, and why not the others"; `discoverDropIns`/`resolveDropIns`
+* expose the full inventory for registry inspection without loading.
+*
+* The classic behavior — every regular non-hidden file, layered so fields
+* merge across roots — remains the default. The control policies
+* (`disabledSuffixes`, `masks`, `symlinks`, `selection`, `include`,
+* `keyFrom`, `conflict`, `unreadableDir`) are all opt-in.
+*
+* ```ts
+* const figment = Figment.new()
+*   .merge(Toml.file("config.toml"))
+*   .derive(selectProfileFromConfig)
+*   .derive(dropIns({ dir: xdgConfigDir("duragit"), extensions: [".conf"] }))
+*   .derive(dropIns({
+*     dir: join(xdgConfigDir("duragit"), "stream.profile.d"),
+*     profileGated: true,
+*   }))
+*   .derive(dropIns({
+*     dir: join(xdgConfigDir("duragit"), "repo.d"),
+*     registryKey: "repo",
+*     extensions: [".repo"],
+*   }));
+* ```
+*/
+function dropIns(options) {
+	const dirs = options.dir === void 0 ? [] : typeof options.dir === "string" ? [options.dir] : [...options.dir];
+	const profileGated = options.profileGated ?? false;
+	const registryKey = options.registryKey;
+	const extensions = options.naming?.extensions !== void 0 ? [...options.naming.extensions] : options.extensions !== void 0 ? [...options.extensions] : void 0;
+	const disabledSuffixes = options.naming?.disabledSuffixes !== void 0 ? [...options.naming.disabledSuffixes] : options.disabledSuffixes !== void 0 ? [...options.disabledSuffixes] : void 0;
+	const symlinks = options.symlinks ?? "skip";
+	const masks = options.masks ?? false;
+	const keyFrom = options.keyFrom ?? (registryKey !== void 0 ? "stem" : "filename");
+	const selection = options.selection ?? "layered";
+	const conflict = options.conflict ?? "error";
+	const fallbackFormat = options.format ?? TomlFormat;
+	const targetProfile = normalizeProfile(options.profile ?? "default");
+	const coalesce = options.coalesce ?? "merge";
+	const missingDir = options.missingDir ?? "note";
+	const unreadableDir = options.unreadableDir ?? "error";
+	const include = options.include;
+	const needsResolution = (disabledSuffixes?.length ?? 0) > 0 || masks || selection === "entry" || include !== void 0 || options.keyFrom !== void 0 || symlinks !== "skip";
+	if (options.source !== void 0) {
+		if (options.dir !== void 0) throw FigmentError.invalidValue("dropIns: supply either dir or source, not both");
+		if (profileGated) throw FigmentError.invalidValue("dropIns: captured selections cannot be profile-gated; capture already-resolved profiles instead");
+		if (registryKey !== void 0) throw FigmentError.invalidValue("dropIns: captured selections carry their own registry key paths from captureDropIns");
+	} else if (options.dir === void 0) throw FigmentError.invalidValue("dropIns: supply either dir or source");
+	const capturedSource = options.source === void 0 ? void 0 : { entries: options.source.entries.map(detachCapturedEntry) };
+	const prefixSegments = registryKey ? registryKey.split(".").map((segment) => segment.trim()).filter(Boolean) : [];
+	return defineOperator(async (snapshot, _context) => {
+		const selectedProfiles = profileGated ? snapshot.selectedProfiles() : [];
+		const intents = [];
+		if (capturedSource !== void 0) {
+			pushCapturedIntents(intents, capturedSource, coalesce, fallbackFormat);
+			return intents;
+		}
+		const discovery = await discoverDropIns({
+			dir: dirs,
+			naming: {
+				extensions,
+				disabledSuffixes
+			}
+		});
+		for (const report of discovery.roots) if (report.status === "missing") pushMissingDirIntents(intents, report, missingDir);
+		else if (report.status === "failed") {
+			const message = `drop-in directory unreadable: ${report.root} (${report.error?.code}: ${report.error?.message})`;
+			switch (unreadableDir) {
+				case "ignore": break;
+				case "note":
+					intents.push(note(message));
+					break;
+				case "warn":
+					intents.push(warn(message));
+					break;
+				case "error": throw FigmentError.invalidValue(message);
+			}
+		}
+		if (!needsResolution) {
+			for (const observation of discovery.entries) {
+				if (!observation.matched || observation.kind !== "file") continue;
+				pushLoadIntent(intents, observation, {
+					selectedProfiles,
+					profileGated,
+					targetProfile,
+					prefixSegments,
+					identityMode: keyFrom,
+					registryKey,
+					fallbackFormat,
+					coalesce,
+					strict: false
+				});
+			}
+			return intents;
+		}
+		if (symlinks === "reject") rejectSymlinks(discovery.entries, masks);
+		const view = resolveDropIns(discovery, {
+			identity: keyFrom,
+			masks,
+			symlinks: symlinks === "follow" ? "follow" : "skip"
+		});
+		const planned = [];
+		for (const entry of view.entries) planned.push(...resolvedEntryLoads(intents, entry, {
+			selectedProfiles,
+			profileGated,
+			targetProfile,
+			prefixSegments,
+			identityMode: keyFrom,
+			registryKey,
+			fallbackFormat,
+			coalesce,
+			strict: true,
+			selection,
+			conflict,
+			masks,
+			include
+		}));
+		planned.sort((left, right) => left.rootIndex - right.rootIndex || (left.physicalName < right.physicalName ? -1 : left.physicalName > right.physicalName ? 1 : 0));
+		for (const observation of planned) pushLoadIntent(intents, observation, {
+			selectedProfiles,
+			profileGated,
+			targetProfile,
+			prefixSegments,
+			identityMode: keyFrom,
+			registryKey,
+			fallbackFormat,
+			coalesce,
+			strict: true
+		});
+		return intents;
+	}, {
+		name: options.name ?? "drop-ins",
+		contract: { uses: {
+			values: false,
+			metadata: false,
+			profiles: profileGated
+		} }
+	});
+}
+function pushLoadIntent(intents, observation, context) {
+	let profile = context.targetProfile;
+	if (context.profileGated) {
+		const matched = matchProfile(observation.stem, context.selectedProfiles);
+		if (matched === void 0) {
+			intents.push(note(`skipped drop-in ${observation.path}: no active profile matches '${observation.stem}'`));
+			return;
+		}
+		profile = matched;
+	}
+	intents.push({
+		kind: "provide",
+		provider: providerFor(observation, profile, context),
+		coalesce: context.coalesce
+	});
+}
+function providerFor(observation, profile, context) {
+	const format = FORMAT_BY_EXTENSION[observation.extension] ?? context.fallbackFormat;
+	let provider = Data.file(format, observation.path).profile(profile);
+	if (context.strict) provider = new VerifiedFile(observation, format, profile);
+	if (context.registryKey !== void 0 && context.prefixSegments.length > 0) {
+		const identity = context.identityMode === "filename" ? observation.logicalName : observation.stem;
+		return new Keyed([...context.prefixSegments, identity], provider);
+	}
+	return provider;
+}
+function pushMissingDirIntents(intents, report, missingDir) {
+	const suffix = report.detail === "dangling-symlink" ? " (dangling symlink)" : "";
+	switch (missingDir) {
+		case "ignore": break;
+		case "note":
+			intents.push(note(`drop-in directory not found: ${report.root}${suffix}`));
+			break;
+		case "warn":
+			intents.push(warn(`drop-in directory not found: ${report.root}${suffix}`));
+			break;
+		case "error": throw FigmentError.invalidValue(`required drop-in directory not found: ${report.root}${suffix}`);
+	}
+}
+/**
+* Per-identity resolution: emits diagnostics (suppressions, conflicts,
+* refusals) and returns the observations that should load. The caller
+* re-orders the accumulated observations into global discovery order
+* before emitting provide intents.
+*/
+function resolvedEntryLoads(intents, entry, context) {
+	let included = context.include?.(entry) ?? entry.state === "active";
+	if (entry.state === "invalid") {
+		const reason = entry.winner.error !== void 0 ? `${entry.winner.error.code}: ${entry.winner.error.message}` : `${entry.winner.kind} symlink, referent ${entry.winner.referent ?? "unknown"}`;
+		const explicitlyExcluded = context.include !== void 0 && !included;
+		const gatedOut = context.profileGated && matchProfile(entry.winner.stem, context.selectedProfiles) === void 0;
+		if (explicitlyExcluded || gatedOut) {
+			const gateSuffix = gatedOut ? ` and no active profile matches '${entry.winner.stem}'` : "";
+			intents.push(note(`skipped drop-in '${entry.identity}': invalid${gateSuffix} — ${reason}`));
+			return [];
+		}
+		throw FigmentError.invalidValue(`unusable drop-in '${entry.identity}' cannot be loaded: ${reason} (${entry.winner.path})`);
+	}
+	if (entry.state === "masked") {
+		intents.push(note(`skipped drop-in '${entry.identity}': masked — masked by ${entry.effectiveMask?.path ?? entry.winner.path}`));
+		if (included) intents.push(warn(`cannot include masked drop-in '${entry.identity}'`));
+		return [];
+	}
+	let chain;
+	if (context.selection === "entry") chain = [entry.winner];
+	else {
+		let barrier = -1;
+		entry.participating.forEach((observation, index) => {
+			if (observation.disabled || context.masks && observation.mask && observation.error === void 0) barrier = index;
+		});
+		chain = entry.participating.slice(barrier + 1);
+	}
+	const chainOccurrences = new Set(chain.map((observation) => observation.rootIndex));
+	for (const layer of entry.conflictLayers) {
+		const description = describeConflictLayer(entry.identity, layer);
+		if (chainOccurrences.has(layer.rootIndex) || entry.state === "conflict" && layer.rootIndex === entry.winner.rootIndex) {
+			if (context.conflict === "error") throw FigmentError.invalidValue(`conflicting drop-in declarations for '${entry.identity}': ${description}`);
+			intents.push(warn(`conflicting drop-in declarations for '${entry.identity}': ${description}`));
+		} else intents.push(note(`suppressed conflicting layer for '${entry.identity}': ${description}`));
+	}
+	if (context.conflict === "warn" && entry.state === "conflict") {
+		const active = entry.conflictLayers.find((candidate) => candidate.rootIndex === entry.winner.rootIndex)?.observations.filter((observation) => !observation.disabled && !(context.masks && observation.mask));
+		const picked = active && active[active.length - 1];
+		if (picked) {
+			chain = [picked];
+			if (context.include === void 0) included = true;
+		}
+	}
+	if (entry.state === "disabled") chain = included ? [entry.winner] : [];
+	if (chain.length === 0) {
+		if (!included) intents.push(note(`skipped drop-in '${entry.identity}': disabled (${entry.winner.path})`));
+		return [];
+	}
+	if (!included) return [];
+	return chain;
+}
+function describeConflictLayer(identity, layer) {
+	const names = layer.observations.map((observation) => observation.physicalName).join(" and ");
+	return `${layer.root}: ${names} both declare '${identity}'`;
+}
+function rejectSymlinks(entries, masks) {
+	const offenders = entries.filter((observation) => observation.matched && observation.kind === "symlink" && !(masks && observation.mask && observation.error === void 0));
+	if (offenders.length > 0) throw FigmentError.invalidValue(`symlink drop-ins rejected: ${offenders.map((observation) => observation.path).join(", ")}`);
+}
+function detachCapturedEntry(entry) {
+	return {
+		observation: { ...entry.observation },
+		profile: entry.profile,
+		keyPath: entry.keyPath === void 0 ? void 0 : [...entry.keyPath],
+		format: entry.format
+	};
+}
+function pushCapturedIntents(intents, captured, coalesce, fallbackFormat) {
+	for (const entry of captured.entries) {
+		const format = entry.format ?? FORMAT_BY_EXTENSION[entry.observation.extension] ?? fallbackFormat;
+		const file = new VerifiedFile(entry.observation, format, entry.profile);
+		const provider = entry.keyPath !== void 0 ? new Keyed(entry.keyPath, file) : file;
+		intents.push({
+			kind: "provide",
+			provider,
+			coalesce
+		});
+	}
+}
+function note(message) {
+	return {
+		kind: "diagnostic",
+		level: "note",
+		message
+	};
+}
+function warn(message) {
+	return {
+		kind: "diagnostic",
+		level: "warn",
+		message
+	};
+}
+/**
+* Returns the longest active profile the stem matches, or undefined. A stem
+* matches profile `p` when it equals `p` or starts with `p` followed by a
+* `-`, `.` or `_` separator.
+*/
+function matchProfile(stem, selectedProfiles) {
+	const normalized = normalizeProfile(stem);
+	let best;
+	for (const profile of selectedProfiles) {
+		if (normalized !== profile && !isSeparatedPrefix(normalized, profile)) continue;
+		if (best === void 0 || profile.length > best.length) best = profile;
+	}
+	return best;
+}
+function isSeparatedPrefix(stem, profile) {
+	if (!stem.startsWith(profile)) return false;
+	const next = stem[profile.length];
+	return next === "-" || next === "." || next === "_";
+}
+var FORMAT_BY_EXTENSION;
+var init_drop_in = __esmMin((() => {
+	init_error$2();
+	init_entries();
+	init_resolve();
+	init_capture();
+	init_operator();
+	init_profile$1();
+	init_data();
+	init_keyed();
+	FORMAT_BY_EXTENSION = {
+		".json": JsonFormat,
+		".toml": TomlFormat,
+		".yaml": YamlFormat,
+		".yml": YamlFormat
+	};
+}));
+//#endregion
+//#region ../figments/src/core/xdg.ts
+/**
+* Returns the XDG config directories for `appName`, user directory first:
+* `$XDG_CONFIG_HOME/<appName>` (or `~/.config/<appName>`), followed by each
+* absolute entry of `$XDG_CONFIG_DIRS` (unset **or empty** defaults to
+* `/etc/xdg`, per the XDG Base Directory specification). Relative entries
+* are ignored.
+*
+* The list is highest-precedence first; figment merge order wants the
+* reverse — see [`doc/drop-ins.md`](/doc/drop-ins.md).
+*/
+function xdgConfigDirs(appName, options) {
+	return xdgDirs(appName, options, {
+		homeVar: "XDG_CONFIG_HOME",
+		listVar: "XDG_CONFIG_DIRS",
+		defaultList: DEFAULT_CONFIG_DIRS,
+		homeDefaultSegments: [".config"],
+		label: "xdgConfigDirs"
+	});
+}
+/**
+* Returns the XDG data directories for `appName`, user directory first:
+* `$XDG_DATA_HOME/<appName>` (or `~/.local/share/<appName>`), followed by
+* each absolute entry of `$XDG_DATA_DIRS` (unset or empty defaults to
+* `/usr/local/share:/usr/share`). Relative entries are ignored.
+*/
+function xdgDataDirs(appName, options) {
+	return xdgDirs(appName, options, {
+		homeVar: "XDG_DATA_HOME",
+		listVar: "XDG_DATA_DIRS",
+		defaultList: DEFAULT_DATA_DIRS,
+		homeDefaultSegments: [".local", "share"],
+		label: "xdgDataDirs"
+	});
+}
+function xdgDirs(appName, options, scope) {
+	validateAppName(appName, scope.label);
+	const explicit = options?.env !== void 0;
+	const env = options?.env ?? process.env;
+	const out = [userRoot(appName, env, explicit, scope)];
+	const rawList = env[scope.listVar];
+	const list = typeof rawList === "string" && rawList !== "" ? rawList : scope.defaultList;
+	for (const dir of list.split(":")) if (dir && isAbsolute(dir)) out.push(join(dir, appName));
+	return out;
+}
+function userRoot(appName, env, explicit, scope) {
+	const xdgHome = env[scope.homeVar];
+	if (typeof xdgHome === "string" && xdgHome !== "" && isAbsolute(xdgHome)) return join(xdgHome, appName);
+	const home = env["HOME"];
+	if (typeof home === "string" && home !== "" && isAbsolute(home)) return join(home, ...scope.homeDefaultSegments, appName);
+	if (explicit) throw FigmentError.invalidValue(`${scope.label}: neither ${scope.homeVar} nor HOME is an absolute path in the supplied env snapshot; refusing relative or ambient-home fallback`);
+	return join(homedir(), ...scope.homeDefaultSegments, appName);
+}
+function validateAppName(appName, label) {
+	if (appName === "" || appName === "." || appName === ".." || appName.includes("/") || appName.includes("\\")) throw FigmentError.invalidValue(`${label}: appName must be a single path segment: '${appName}'`);
+}
+var DEFAULT_CONFIG_DIRS, DEFAULT_DATA_DIRS;
+var init_xdg = __esmMin((() => {
+	init_error$2();
+	DEFAULT_CONFIG_DIRS = "/etc/xdg";
+	DEFAULT_DATA_DIRS = "/usr/local/share:/usr/share";
+}));
+//#endregion
+//#region runtime/discovery/figments.ts
+/** Roots are ordered LOW to HIGH precedence, matching Figments' resolution contract. */
+async function observe(roots) {
+	return resolveDropIns(await discoverDropIns({
+		dir: roots,
+		naming: {
+			extensions: [".json"],
+			disabledSuffixes: [".disabled"]
+		}
+	}), {
+		identity: "stem",
+		symlinks: "follow",
+		masks: true
+	});
+}
+/** Read exactly the observed winner, including retained disabled payloads. Never rescan. */
+async function load(entry) {
+	const source = captureDropIns([entry]);
+	return Figment.new().derive(dropIns({ source })).build();
+}
+/** Required exact owner descriptor, without optional-file fallback or ancestor search. */
+async function loadOwner(path) {
+	if (!(await stat(path)).isFile()) throw new Error(`owner descriptor must refer to a regular file: ${path}`);
+	return Figment.from(Json.file(path).required(true).search(false)).build();
+}
+var init_figments = __esmMin((() => {
+	init_figment();
+	init_entries();
+	init_resolve();
+	init_capture();
+	init_drop_in();
+	init_data();
+	init_xdg();
+}));
+//#endregion
+//#region runtime/registry/policy.ts
+/** Data registrations below root-major config policy; system audience is a separate namespace. */
+function registryPolicy(collection, scope, env = { ...process.env }) {
+	const segments = collection.split("/");
+	if (segments.length < 2 || segments.some((part) => !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(part) || part === "." || part === "..") || !collection.endsWith(".d")) throw new Error(`invalid rendezvous collection: ${collection}`);
+	const maskCollection = collection.replace(/\.d$/, ".mask.d");
+	if (scope === "system") return explicitPolicy(scope, [
+		join("/usr/share/compfuzor/system", collection),
+		join("/usr/local/share/compfuzor/system", collection),
+		join("/var/lib/compfuzor/system", collection),
+		join("/etc/compfuzor/system", collection),
+		join("/etc/compfuzor/system", maskCollection)
+	], join("/var/lib/compfuzor/system", collection));
+	const data = xdgDataDirs("compfuzor", { env });
+	const config = xdgConfigDirs("compfuzor", { env });
+	return explicitPolicy(scope, [...data.toReversed().map((root) => join(root, collection)), ...config.toReversed().flatMap((root) => [join(root, collection), join(root, maskCollection)])], join(data[0], collection));
+}
+/** Embedders/tests choose their own roots; absolute paths bind before effects. */
+function explicitPolicy(scope, roots, writeRoot) {
+	if (scope !== "user" && scope !== "system") throw new Error("registry policy requires user or system scope");
+	if (roots.length === 0 || ![...roots, writeRoot].every(isAbsolute)) throw new Error("registry policy requires absolute roots and a writable root");
+	const normalized = [...new Set(roots.map((root) => resolve(root)).toReversed())].toReversed();
+	const writable = resolve(writeRoot);
+	if (!normalized.includes(writable)) throw new Error("writeRoot must belong to registry roots");
+	return {
+		scope,
+		roots: normalized,
+		writeRoot: writable
+	};
+}
+var init_policy = __esmMin((() => {
+	init_figments();
+}));
+//#endregion
+//#region runtime/registry/model.ts
+/** IDs are literal filename stems; dots/numeric IDs never become key paths. */
+function assertId(id) {
+	if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(id) || id.endsWith(".disabled")) throw new Error(`unsafe registry identity: ${id}`);
+}
+var init_model$2 = __esmMin((() => {}));
+//#endregion
+//#region runtime/registry/read.ts
+/** Read-only whole-definition registry projection, not accepted native membership. */
+async function inspectRegistry(domain, policy) {
+	const bound = explicitPolicy(policy.scope, policy.roots, policy.writeRoot);
+	const view = await observe(bound.roots);
+	const records = await Promise.all(view.entries.map(async (source) => {
+		const record = {
+			id: source.identity,
+			state: source.state,
+			source
+		};
+		if (source.state !== "active" && source.state !== "disabled") return record;
+		try {
+			assertId(source.identity);
+			const payload = domain.decode(await load(source));
+			if (domain.identity(payload) !== source.identity) throw new Error("filename and declaration identity disagree");
+			const scope = domain.scope(payload);
+			if (scope !== void 0 && scope !== bound.scope) throw new Error(`declaration scope ${scope} disagrees with ${bound.scope} registry`);
+			record.payload = payload;
+			if (!domain.enabled(payload)) record.state = "disabled";
+		} catch (error) {
+			record.state = "invalid";
+			record.error = error instanceof Error ? error.message : String(error);
+		}
+		return record;
+	}));
+	return {
+		collection: domain.collection,
+		policy: bound,
+		complete: view.roots.every((root) => root.status !== "failed"),
+		roots: view.roots,
+		records
+	};
+}
+/** Lookup never treats an incomplete observation as proof of absence. */
+function lookup$1(snapshot, id) {
+	assertId(id);
+	if (!snapshot.complete) throw new Error(`incomplete registry ${snapshot.collection}: inspect root errors before lookup`);
+	const record = snapshot.records.find((entry) => entry.id === id);
+	if (!record) throw new Error(`missing registry identity ${id} in ${snapshot.collection}`);
+	return record;
+}
+var init_read$1 = __esmMin((() => {
+	init_figments();
+	init_model$2();
+	init_policy();
+}));
+//#endregion
+//#region runtime/registry/guard.ts
+function registryGuard(policy, entry) {
+	return {
+		roots: [...policy.roots],
+		id: entry.identity,
+		expected: JSON.stringify(entry)
+	};
+}
+async function assertRegistryGuards(guards) {
+	for (const guard of guards) {
+		const view = await observe(guard.roots);
+		if (view.roots.some((root) => root.status === "failed")) throw new Error(`registry root failure while verifying ${guard.id}`);
+		if ((JSON.stringify(view.entries.find((entry) => entry.identity === guard.id)) ?? "missing") !== guard.expected) throw new Error(`selected registration changed: ${guard.id}`);
+	}
+}
+var init_guard = __esmMin((() => {
+	init_figments();
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Pipeable.js
+var pipeArguments, Prototype$1, Class$1;
+var init_Pipeable = __esmMin((() => {
+	pipeArguments = (self, args) => {
+		switch (args.length) {
+			case 0: return self;
+			case 1: return args[0](self);
+			case 2: return args[1](args[0](self));
+			case 3: return args[2](args[1](args[0](self)));
+			case 4: return args[3](args[2](args[1](args[0](self))));
+			case 5: return args[4](args[3](args[2](args[1](args[0](self)))));
+			case 6: return args[5](args[4](args[3](args[2](args[1](args[0](self))))));
+			case 7: return args[6](args[5](args[4](args[3](args[2](args[1](args[0](self)))))));
+			case 8: return args[7](args[6](args[5](args[4](args[3](args[2](args[1](args[0](self))))))));
+			case 9: return args[8](args[7](args[6](args[5](args[4](args[3](args[2](args[1](args[0](self)))))))));
+			default: {
+				let ret = self;
+				for (let i = 0, len = args.length; i < len; i++) ret = args[i](ret);
+				return ret;
+			}
+		}
+	};
+	Prototype$1 = { pipe() {
+		return pipeArguments(this, arguments);
+	} };
+	Class$1 = /*#__PURE__*/ function() {
+		function PipeableBase() {}
+		PipeableBase.prototype = Prototype$1;
+		return PipeableBase;
+	}();
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Function.js
+/**
+* Creates a memoized function whose input is an object, caching results by
+* object identity.
+*
+* **When to use**
+*
+* Use to reuse the result of a synchronous computation whose output is stable
+* for a given object reference.
+*
+* **Details**
+*
+* Each memoized wrapper owns a private `WeakMap` keyed by object identity.
+*
+* **Gotchas**
+*
+* `undefined` is reserved to represent a cache miss and is therefore not
+* supported as a return value.
+*
+* Structurally equal objects do not share cache entries. If the same object is
+* mutated after its first call, later calls still return the cached result for
+* that reference.
+*
+* @category caching
+* @since 4.0.0
+*/
+function memoize(f) {
+	const cache = /* @__PURE__ */ new WeakMap();
+	return (a) => {
+		const cached = cache.get(a);
+		if (cached !== void 0) return cached;
+		const result = f(a);
+		cache.set(a, result);
+		return result;
+	};
+}
+/**
+* Creates a memoized idempotent object transformation that caches both inputs
+* and their outputs by object identity.
+*
+* **When to use**
+*
+* Use when an object transformation is idempotent and its output can be safely
+* reused as a fixed point.
+*
+* **Details**
+*
+* After computing an input, the returned function caches both the input and
+* the output. Calling it with either reference returns the output without
+* invoking the supplied function again.
+*
+* **Gotchas**
+*
+* The returned function treats each computed output as a fixed point. If
+* applying the supplied function to an output would produce an observably
+* different value, this memoization changes that behavior.
+*
+* @see {@link memoize} for memoizing functions without an idempotence requirement
+* @category caching
+* @since 4.0.0
+*/
+function memoizeIdempotent(f) {
+	const cache = /* @__PURE__ */ new WeakMap();
+	return (a) => {
+		const cached = cache.get(a);
+		if (cached !== void 0) return cached;
+		const result = f(a);
+		cache.set(a, result);
+		if (result !== a) cache.set(result, result);
+		return result;
+	};
+}
+var dual, identity, constant, constTrue, constUndefined, constVoid;
+var init_Function = __esmMin((() => {
+	dual = function(arity, body) {
+		if (typeof arity === "function") return function() {
+			return arity(arguments) ? body.apply(this, arguments) : (self) => body(self, ...arguments);
+		};
+		switch (arity) {
+			case 0:
+			case 1: throw new RangeError(`Invalid arity ${arity}`);
+			case 2: return function(a, b) {
+				if (arguments.length >= 2) return body(a, b);
+				return function(self) {
+					return body(self, a);
+				};
+			};
+			case 3: return function(a, b, c) {
+				if (arguments.length >= 3) return body(a, b, c);
+				return function(self) {
+					return body(self, a, b);
+				};
+			};
+			default: return function() {
+				if (arguments.length >= arity) return body.apply(this, arguments);
+				const args = arguments;
+				return function(self) {
+					return body(self, ...args);
+				};
+			};
+		}
+	};
+	identity = (a) => a;
+	constant = (value) => () => value;
+	constTrue = /*#__PURE__*/ constant(true);
+	constUndefined = /*#__PURE__*/ constant(void 0);
+	constVoid = constUndefined;
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/equal.js
+var getAllObjectKeys, byReferenceInstances, viewBytes;
+var init_equal = __esmMin((() => {
+	getAllObjectKeys = (obj) => {
+		const keys = new Set(Reflect.ownKeys(obj));
+		if (obj.constructor === Object) return keys;
+		if (obj instanceof Error) keys.delete("stack");
+		const proto = Object.getPrototypeOf(obj);
+		let current = proto;
+		while (current !== null && current !== Object.prototype) {
+			const ownKeys = Reflect.ownKeys(current);
+			for (let i = 0; i < ownKeys.length; i++) keys.add(ownKeys[i]);
+			current = Object.getPrototypeOf(current);
+		}
+		if (keys.has("constructor") && typeof obj.constructor === "function" && proto === obj.constructor.prototype) keys.delete("constructor");
+		return keys;
+	};
+	byReferenceInstances = /*#__PURE__*/ new WeakSet();
+	viewBytes = (view) => new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/hash.js
+var backEdges, addBackEdge;
+var init_hash = __esmMin((() => {
+	backEdges = 0;
+	addBackEdge = () => {
+		backEdges++;
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Predicate.js
+/**
+* Checks whether a value is a `string`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* string.
+*
+* **Details**
+*
+* Uses `typeof input === "string"`.
+*
+* **Example** (Guarding strings)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = "hi"
+*
+* if (Predicate.isString(data)) {
+*   data.toUpperCase() // => "HI"
+* }
+* ```
+*
+* @see {@link isNumber}
+* @see {@link isBoolean}
+* @see {@link Refinement}
+* @category guards
+* @since 2.0.0
+*/
+function isString(input) {
+	return typeof input === "string";
+}
+/**
+* Checks whether a value is a `number`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* number.
+*
+* **Details**
+*
+* Uses `typeof input === "number"` and does not exclude `NaN` or `Infinity`.
+*
+* **Example** (Guarding numbers)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = 42
+*
+* if (Predicate.isNumber(data)) {
+*   data + 1 // => 43
+* }
+* ```
+*
+* @see {@link isBigInt}
+* @see {@link isString}
+* @category guards
+* @since 2.0.0
+*/
+function isNumber(input) {
+	return typeof input === "number";
+}
+/**
+* Checks whether a value is a `boolean`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* boolean.
+*
+* **Details**
+*
+* Uses `typeof input === "boolean"`.
+*
+* **Example** (Guarding booleans)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = true
+*
+* if (Predicate.isBoolean(data)) {
+*   data ? "yes" : "no" // => "yes"
+* }
+* ```
+*
+* @see {@link isString}
+* @see {@link isNumber}
+* @category guards
+* @since 2.0.0
+*/
+function isBoolean(input) {
+	return typeof input === "boolean";
+}
+/**
+* Checks whether a value is a `function`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard to narrow an `unknown` value to a
+* callable function.
+*
+* **Details**
+*
+* Uses `typeof input === "function"`.
+*
+* **Example** (Guarding functions)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const data: unknown = () => 1
+*
+* if (Predicate.isFunction(data)) {
+*   data() // => 1
+* }
+* ```
+*
+* @see {@link isObjectKeyword}
+* @category guards
+* @since 2.0.0
+*/
+function isFunction(input) {
+	return typeof input === "function";
+}
+/**
+* Checks whether a value is not `null` and not `undefined`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` refinement that filters out nullish values
+* but keeps other falsy ones.
+*
+* **Details**
+*
+* Uses `input != null`.
+*
+* **Example** (Filtering non-nullish values)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* const values = [0, null, "", undefined]
+* const present = values.filter(Predicate.isNotNullish) // => [0, ""]
+* ```
+*
+* @see {@link isNullish}
+* @see {@link isNotNull}
+* @see {@link isNotUndefined}
+* @category guards
+* @since 4.0.0
+*/
+function isNotNullish(input) {
+	return input != null;
+}
+/**
+* Type guard that always returns `true`.
+*
+* **When to use**
+*
+* Use when you need a `Predicate` that always accepts, e.g. as a placeholder.
+*
+* **Example** (Matching every value)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* Predicate.isUnknown(123) // => true
+* ```
+*
+* @see {@link isNever}
+* @category guards
+* @since 2.0.0
+*/
+function isUnknown(_) {
+	return true;
+}
+/**
+* Checks whether a value is an `object` in the JavaScript sense (objects, arrays, functions).
+*
+* **When to use**
+*
+* Use when you need a `Predicate` guard that accepts arrays and functions as
+* well as objects.
+*
+* **Details**
+*
+* Returns `true` for arrays and functions, and `false` for `null`.
+*
+* **Example** (Checking object keywords)
+*
+* ```ts import.meta.vitest
+* import { Predicate } from "effect"
+*
+* Predicate.isObjectKeyword(() => 1) // => true
+* Predicate.isObjectKeyword(null) // => false
+* ```
+*
+* @see {@link isObject}
+* @see {@link isObjectOrArray}
+* @category guards
+* @since 4.0.0
+*/
+function isObjectKeyword(input) {
+	return typeof input === "object" && input !== null || isFunction(input);
+}
+var hasProperty;
+var init_Predicate = __esmMin((() => {
+	init_Function();
+	hasProperty = /*#__PURE__*/ dual(2, (self, property) => isObjectKeyword(self) && property in self);
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Hash.js
+var symbol$1, hash, random, mix, combine, optimize, float64, number$2, string$1, structureKeys, structure, unordered, array, hashMap, setSeed, hashSet, randomHashCache, hashCache, visitedObjects;
+var init_Hash = __esmMin((() => {
+	init_Function();
+	init_equal();
+	init_hash();
+	symbol$1 = "~effect/Hash";
+	hash = (self) => {
+		switch (typeof self) {
+			case "number": return number$2(self);
+			case "bigint": return string$1(self.toString(10));
+			case "string": return string$1(self);
+			case "function":
+			case "object": if (self === null) break;
+			else if (self instanceof Date) {
+				if (Number.isNaN(self.getTime())) return string$1("Invalid Date");
+				return string$1(self.toISOString());
+			} else if (self instanceof RegExp) return string$1(self.toString());
+			else {
+				if (byReferenceInstances.has(self)) return random(self);
+				const cached = hashCache.get(self);
+				if (cached !== void 0) return cached;
+				if (visitedObjects.has(self)) {
+					addBackEdge();
+					return string$1("[Circular]");
+				}
+				visitedObjects.add(self);
+				const seen = backEdges;
+				let h;
+				try {
+					if ("~effect/Hash" in self) h = self[symbol$1]();
+					else if (typeof self === "function") h = random(self);
+					else if (self instanceof DataView) h = array(viewBytes(self));
+					else if (Array.isArray(self) || ArrayBuffer.isView(self)) h = array(self);
+					else if (self instanceof Map) h = hashMap(self);
+					else if (self instanceof Set) h = hashSet(self);
+					else h = structure(self);
+				} finally {
+					visitedObjects.delete(self);
+				}
+				if (seen === backEdges) hashCache.set(self, h);
+				return h;
+			}
+		}
+		return optimize(mix(string$1(String(self))));
+	};
+	random = (self) => {
+		if (!randomHashCache.has(self)) randomHashCache.set(self, optimize(Math.random() * 4294967296 | 0));
+		return randomHashCache.get(self);
+	};
+	mix = (h) => {
+		h ^= h >>> 16;
+		h = Math.imul(h, 2246822507);
+		h ^= h >>> 13;
+		h = Math.imul(h, 3266489909);
+		return h ^ h >>> 16;
+	};
+	combine = /*#__PURE__*/ dual(2, (self, b) => mix(Math.imul(self, 2654435761) + Math.imul(b, 2246822507)));
+	optimize = (n) => n & 3221225471 | n >>> 1 & 1073741824;
+	float64 = /*#__PURE__*/ new DataView(/*#__PURE__*/ new ArrayBuffer(8));
+	number$2 = (n) => {
+		const h = n | 0;
+		if (h === n) return optimize(h);
+		float64.setFloat64(0, n !== n ? NaN : n);
+		return optimize(combine(float64.getInt32(0), float64.getInt32(4)));
+	};
+	string$1 = (str) => {
+		let h = 5381, i = str.length;
+		while (i) h = h * 33 ^ str.charCodeAt(--i);
+		return optimize(h);
+	};
+	structureKeys = (o, keys) => {
+		let h = 12289;
+		for (const key of keys) h ^= combine(hash(key), hash(o[key]));
+		return optimize(h);
+	};
+	structure = (o) => structureKeys(o, getAllObjectKeys(o));
+	unordered = (seed, f) => (iter) => {
+		let h = seed;
+		for (const element of iter) h ^= f(element);
+		return optimize(h);
+	};
+	array = (arr) => {
+		let h = 6151;
+		for (const element of arr) h = combine(h, hash(element));
+		return optimize(h);
+	};
+	hashMap = /*#__PURE__*/ unordered(/*#__PURE__*/ string$1("Map"), ([k, v]) => combine(hash(k), hash(v)));
+	setSeed = /*#__PURE__*/ string$1("Set");
+	hashSet = /*#__PURE__*/ unordered(setSeed, (element) => combine(setSeed, hash(element)));
+	randomHashCache = /*#__PURE__*/ new WeakMap();
+	hashCache = /*#__PURE__*/ new WeakMap();
+	visitedObjects = /*#__PURE__*/ new WeakSet();
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Equal.js
+function equals$1() {
+	if (arguments.length === 1) return (self) => compareBoth(self, arguments[0]);
+	return compareBoth(arguments[0], arguments[1]);
+}
+function compareBoth(self, that) {
+	if (self === that) return true;
+	if (self == null || that == null) return false;
+	const selfType = typeof self;
+	if (selfType !== typeof that) return false;
+	if (selfType === "number" && self !== self && that !== that) return true;
+	if (selfType !== "object" && selfType !== "function") return false;
+	if (byReferenceInstances.has(self) || byReferenceInstances.has(that)) return false;
+	return compareObjects(self, that);
+}
+function compareObjects(self, that) {
+	const depth = pathLeft.length;
+	for (let i = depth; i-- > 0;) if (pathLeft[i] === self && pathRight[i] === that) return true;
+	if (depth) return compareOnPath(self, that);
+	let known = results.get(self);
+	if (!known) results.set(self, known = /* @__PURE__ */ new WeakMap());
+	let result = known.get(that);
+	if (result === void 0) known.set(that, result = compareOnPath(self, that));
+	return result;
+}
+function compareOnPath(self, that) {
+	pathLeft.push(self);
+	pathRight.push(that);
+	try {
+		return compareStructure(self, that);
+	} finally {
+		pathLeft.pop();
+		pathRight.pop();
+	}
+}
+function compareStructure(self, that) {
+	if (hash(self) !== hash(that)) return false;
+	else if (self instanceof Date) {
+		if (!(that instanceof Date)) return false;
+		const selfTime = self.getTime();
+		const thatTime = that.getTime();
+		return selfTime === thatTime || Number.isNaN(selfTime) && Number.isNaN(thatTime);
+	} else if (self instanceof RegExp) return that instanceof RegExp && self.toString() === that.toString();
+	const bothEquals = isEqual(self);
+	if (bothEquals !== isEqual(that) || typeof self === "function" && !bothEquals) return false;
+	else if (bothEquals) return self[symbol](that);
+	else if (Array.isArray(self)) {
+		if (!Array.isArray(that) || self.length !== that.length) return false;
+		return compareArrays(self, that);
+	} else if (ArrayBuffer.isView(self)) {
+		const selfIsDataView = self instanceof DataView;
+		if (!ArrayBuffer.isView(that) || self.byteLength !== that.byteLength || selfIsDataView !== that instanceof DataView) return false;
+		if (selfIsDataView) return compareTypedArrays(viewBytes(self), viewBytes(that));
+		return compareTypedArrays(self, that);
+	} else if (self instanceof Map) {
+		if (!(that instanceof Map) || self.size !== that.size) return false;
+		return compareHashed(self, that, entryHash, equalEntries);
+	} else if (self instanceof Set) {
+		if (!(that instanceof Set) || self.size !== that.size) return false;
+		return compareHashed(self, that, hash, compareBoth);
+	}
+	return compareRecords(self, that);
+}
+function compareArrays(self, that) {
+	for (let i = 0; i < self.length; i++) if (!compareBoth(self[i], that[i])) return false;
+	return true;
+}
+function compareTypedArrays(self, that) {
+	if (self.length !== that.length) return false;
+	for (let i = 0; i < self.length; i++) if (self[i] !== that[i]) return false;
+	return true;
+}
+function compareRecords(self, that) {
+	const selfKeys = getAllObjectKeys(self);
+	const thatKeys = getAllObjectKeys(that);
+	if (selfKeys.size !== thatKeys.size) return false;
+	for (const key of selfKeys) if (!thatKeys.has(key) || !compareBoth(self[key], that[key])) return false;
+	return true;
+}
+function compareHashed(self, that, hashOf, equivalent) {
+	const groups = /* @__PURE__ */ new Map();
+	for (const item of that) {
+		const h = hashOf(item);
+		const group = groups.get(h);
+		if (group) group.push(item);
+		else groups.set(h, [item]);
+	}
+	outer: for (const item of self) {
+		const group = groups.get(hashOf(item));
+		if (group) {
+			for (let i = 0; i < group.length; i++) if (equivalent(item, group[i])) {
+				group[i] = group[group.length - 1];
+				group.pop();
+				continue outer;
+			}
+		}
+		return false;
+	}
+	return true;
+}
+var symbol, pathLeft, pathRight, results, entryHash, equalEntries, isEqual;
+var init_Equal = __esmMin((() => {
+	init_Hash();
+	init_equal();
+	init_Predicate();
+	symbol = "~effect/Equal";
+	pathLeft = [];
+	pathRight = [];
+	results = /*#__PURE__*/ new WeakMap();
+	entryHash = (entry) => hash(entry[0]);
+	equalEntries = (self, that) => compareBoth(self[0], that[0]) && compareBoth(self[1], that[1]);
+	isEqual = (u) => hasProperty(u, symbol);
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Redactable.js
+/**
+* Returns a redacted value if it implements {@link Redactable}, otherwise returns it
+* unchanged.
+*
+* **When to use**
+*
+* Use as the general-purpose entry point for redaction when the input may
+* or may not implement the redaction protocol.
+*
+* **Details**
+*
+* This function calls {@link isRedactable} and, when it returns `true`,
+* delegates to {@link getRedacted}.
+*
+* **Gotchas**
+*
+* Redaction is not recursive. Nested redactable values inside the returned
+* object are not automatically redacted.
+*
+* @see {@link isRedactable} to check before redacting
+* @see {@link getRedacted} for the lower-level variant for known redactables
+* @category destructors
+* @since 3.10.0
+*/
+function redact(u) {
+	if (isRedactable(u)) return getRedacted(u);
+	return u;
+}
+/**
+* Returns the result of calling `[symbolRedactable]` on a value that is
+* already known to be {@link Redactable}.
+*
+* **When to use**
+*
+* Use when you need to read the redacted representation from a value already
+* verified as `Redactable`.
+*
+* **Details**
+*
+* This function reads the current fiber's `Context` from the global fiber
+* reference and passes it to the redaction method.
+*
+* **Gotchas**
+*
+* If no fiber is active, an empty `Context` is passed to the redaction method.
+*
+* @see {@link redact} for the higher-level variant that handles non-redactable values
+* @see {@link isRedactable} for the type guard to verify before calling this
+* @category destructors
+* @since 4.0.0
+*/
+function getRedacted(redactable) {
+	return redactable[symbolRedactable](globalThis["~effect/Fiber/currentFiber"]?.context ?? emptyContext$1);
+}
+var symbolRedactable, isRedactable, currentFiberTypeId, emptyMap, emptyContext$1;
+var init_Redactable = __esmMin((() => {
+	init_Pipeable();
+	init_Predicate();
+	symbolRedactable = /*#__PURE__*/ Symbol.for("~effect/Redactable");
+	isRedactable = (u) => hasProperty(u, symbolRedactable);
+	currentFiberTypeId = "~effect/Fiber/currentFiber";
+	emptyMap = /*#__PURE__*/ new Map();
+	emptyContext$1 = {
+		"~effect/Context": {},
+		base: emptyMap,
+		depth: 0,
+		mapUnsafe: emptyMap,
+		pipe() {
+			return pipeArguments(this, arguments);
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Formatter.js
+/**
+* Converts any JavaScript value into a human-readable string.
+*
+* **When to use**
+*
+* Use when you need to format arbitrary JavaScript values for debugging,
+* logging, or error messages.
+*
+* **Details**
+*
+* - Output is **not** valid JSON; use {@link formatJson} when you need
+*   parseable JSON.
+* - Handles `BigInt`, `Symbol`, `Set`, `Map`, `Date`, `RegExp`, and class
+*   instances that `JSON.stringify` cannot represent.
+* - Circular references are shown as `"[Circular]"` instead of throwing.
+* - Failures while inspecting a value are rendered as diagnostic placeholders instead of throwing.
+* - Primitives: stringified naturally (`null`, `undefined`, `123`, `true`).
+*   Strings are JSON-quoted.
+* - Objects with a custom `toString` (not `Object.prototype.toString`):
+*   `toString()` is called unless `ignoreToString` is `true`.
+* - Errors with a `cause`: formatted as `"<message> (cause: <cause>)"`.
+* - Iterables (`Set`, `Map`, etc.): formatted as
+*   `ClassName([...elements])`.
+* - Class instances: wrapped as `ClassName({...})`.
+* - `Redactable` values are automatically redacted.
+* - Arrays/objects with 0–1 entries are inline; larger ones are
+*   pretty-printed when `space` is set.
+* - `space` — indentation unit (number of spaces, or a string like
+*   `"\t"`). Defaults to `0` (compact).
+* - `ignoreToString` — skip calling `toString()`. Defaults to `false`.
+*
+* **Example** (Formatting compact output)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* Formatter.format({ a: 1, b: [2, 3] }) // => "{\"a\":1,\"b\":[2,3]}"
+* ```
+*
+* **Example** (Pretty-printed output)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const output = Formatter.format({ a: 1, b: [2, 3] }, { space: 2 })
+* output // => "{\n  \"a\": 1,\n  \"b\": [\n    2,\n    3\n  ]\n}"
+* ```
+*
+* **Example** (Handling circular references)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const obj: any = { name: "loop" }
+* obj.self = obj
+* Formatter.format(obj) // => "{\"name\":\"loop\",\"self\":[Circular]}"
+* ```
+*
+* @see {@link formatJson}
+* @see {@link Formatter}
+* @category formatting
+* @since 2.0.0
+*/
+function format$2(input, options) {
+	const space = options?.space ?? 0;
+	const ancestors = /* @__PURE__ */ new WeakSet();
+	const gap = !space ? "" : typeof space === "number" ? " ".repeat(space) : space;
+	const ind = (d) => gap.repeat(d);
+	const wrap = (v, body) => {
+		const ctor = v?.constructor;
+		return ctor && ctor !== Object.prototype.constructor && ctor.name ? `${ctor.name}(${body})` : body;
+	};
+	const ownKeys = (o) => {
+		try {
+			return Reflect.ownKeys(o);
+		} catch {
+			return ["[ownKeys threw]"];
+		}
+	};
+	function recur(v, d = 0) {
+		try {
+			return recurUnsafe(v, d);
+		} catch {
+			if (typeof v === "object" && v !== null || typeof v === "function") ancestors.delete(v);
+			return "[inspection threw]";
+		}
+	}
+	function recurUnsafe(v, d = 0) {
+		if (typeof v === "string") return JSON.stringify(v);
+		if (typeof v === "number" || v == null || typeof v === "boolean" || typeof v === "symbol") return String(v);
+		if (typeof v === "bigint") return String(v) + "n";
+		if (typeof v === "object" || typeof v === "function") {
+			if (ancestors.has(v)) return CIRCULAR;
+			ancestors.add(v);
+			let output;
+			if (symbolRedactable in v) output = recur(getRedacted(v), d);
+			else if (Array.isArray(v)) output = !gap || v.length <= 1 ? `[${v.map((x) => recur(x, d)).join(",")}]` : `[\n${ind(d + 1)}${v.map((x) => recur(x, d + 1)).join(",\n" + ind(d + 1))}\n${ind(d)}]`;
+			else if (v instanceof Date) output = formatDate(v);
+			else if (!options?.ignoreToString && hasProperty(v, "toString") && typeof v["toString"] === "function" && v["toString"] !== Object.prototype.toString && v["toString"] !== Array.prototype.toString) {
+				const s = safeToString(v);
+				output = v instanceof Error && v.cause !== void 0 ? `${s} (cause: ${recur(v.cause, d)})` : s;
+			} else if (Symbol.iterator in v) output = `${v.constructor.name}(${recur(Array.from(v), d)})`;
+			else {
+				const keys = ownKeys(v);
+				if (!gap || keys.length <= 1) {
+					const body = `{${keys.map((k) => `${formatPropertyKey(k)}:${recur(safeGet(v, k), d)}`).join(",")}}`;
+					output = wrap(v, body);
+				} else {
+					const body = `{\n${keys.map((k) => `${ind(d + 1)}${formatPropertyKey(k)}: ${recur(safeGet(v, k), d + 1)}`).join(",\n")}\n${ind(d)}}`;
+					output = wrap(v, body);
+				}
+			}
+			ancestors.delete(v);
+			return output;
+		}
+		return String(v);
+	}
+	return recur(input, 0);
+}
+/**
+* @internal
+*/
+function formatPropertyKey(name) {
+	return typeof name === "string" ? JSON.stringify(name) : String(name);
+}
+/**
+* Formats an array of property keys as a bracket-notation path string.
+*
+* @internal
+*/
+function formatPath(path) {
+	return path.map((key) => `[${formatPropertyKey(key)}]`).join("");
+}
+/**
+* Formats a `Date` as an ISO 8601 string, returning `"Invalid Date"` for
+* invalid dates instead of throwing.
+*
+* @internal
+*/
+function formatDate(date) {
+	try {
+		return date.toISOString();
+	} catch {
+		return "Invalid Date";
+	}
+}
+function safeToString(input) {
+	try {
+		const s = input.toString();
+		return typeof s === "string" ? s : String(s);
+	} catch {
+		return "[toString threw]";
+	}
+}
+function safeGet(input, key) {
+	try {
+		return input[key];
+	} catch {
+		return "[property access threw]";
+	}
+}
+/**
+* Stringifies a value to JSON safely, silently dropping circular references.
+*
+* **When to use**
+*
+* Use when you need valid JSON output, unlike `format`, and the input may
+* contain circular references that should be silently omitted rather than
+* throwing a `TypeError`.
+*
+* **Details**
+*
+* Uses `JSON.stringify` internally with a replacer that tracks the current
+* object ancestry. Circular references are replaced with `undefined`, which
+* omits them from object output. `Redactable` values are automatically redacted
+* before serialization. `BigInt` values are stringified with an `n` suffix.
+* `Error` instances without a `toJSON` property include their enumerable
+* properties plus `name` and `message`. Errors with `toJSON` keep their custom
+* representation. Other values follow standard `JSON.stringify` behavior. The
+* `space` parameter controls indentation and defaults to `0`.
+*
+* **Gotchas**
+*
+* When the root input is `undefined`, a symbol, or a function, `formatJson`
+* returns `"null"` instead of the `undefined` returned by `JSON.stringify`.
+* Nested values retain standard `JSON.stringify` behavior.
+*
+* **Example** (Formatting compact JSON)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* Formatter.formatJson({ name: "Alice", age: 30 }) // => "{\"name\":\"Alice\",\"age\":30}"
+* ```
+*
+* **Example** (Handling circular references)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const obj: any = { name: "test" }
+* obj.self = obj
+* Formatter.formatJson(obj) // => "{\"name\":\"test\"}"
+* ```
+*
+* **Example** (Pretty-printed JSON)
+*
+* ```ts import.meta.vitest
+* import { Formatter } from "effect"
+*
+* const output = Formatter.formatJson({ name: "Alice", age: 30 }, { space: 2 })
+* output // => "{\n  \"name\": \"Alice\",\n  \"age\": 30\n}"
+* ```
+*
+* @see {@link format}
+* @see {@link Formatter}
+* @category serialization
+* @since 4.0.0
+*/
+function formatJson(input, options) {
+	const ancestors = [];
+	return JSON.stringify(input, function(key, value) {
+		const original = Object.getOwnPropertyDescriptor(this, key)?.value;
+		const redacted = hasProperty(original, symbolRedactable) ? redact(original) : redact(value);
+		if (typeof redacted === "bigint") return format$2(redacted);
+		if (typeof redacted !== "object" || redacted === null) return redacted;
+		const current = redacted instanceof Error && !hasProperty(redacted, "toJSON") ? {
+			...redacted,
+			name: redacted.name,
+			message: redacted.message
+		} : redacted;
+		while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) ancestors.pop();
+		if (ancestors.includes(redacted)) return;
+		ancestors.push(redacted);
+		if (current !== redacted) ancestors.push(current);
+		return current;
+	}, options?.space) ?? "null";
+}
+var CIRCULAR;
+var init_Formatter = __esmMin((() => {
+	init_Predicate();
+	init_Redactable();
+	CIRCULAR = "[Circular]";
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Inspectable.js
+var NodeInspectSymbol, toJson, BaseProto;
+var init_Inspectable = __esmMin((() => {
+	init_Formatter();
+	init_Predicate();
+	init_Redactable();
+	NodeInspectSymbol = /*#__PURE__*/ Symbol.for("nodejs.util.inspect.custom");
+	toJson = (input) => {
+		try {
+			input = redact(input);
+			if (hasProperty(input, "toJSON") && isFunction(input["toJSON"]) && input["toJSON"].length === 0) return input.toJSON();
+			else if (Array.isArray(input)) return input.map(toJson);
+			return input;
+		} catch {
+			return "[toJSON threw]";
+		}
+	};
+	BaseProto = {
+		toJSON() {
+			return toJson(this);
+		},
+		[NodeInspectSymbol]() {
+			return this.toJSON();
+		},
+		toString() {
+			return format$2(this.toJSON());
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/stackTraceLimit.js
+var isStackTraceLimitWritable, canWriteStackTraceLimit, getStackTraceLimit, setStackTraceLimit;
+var init_stackTraceLimit = __esmMin((() => {
+	isStackTraceLimitWritable = () => {
+		const desc = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit");
+		if (desc === void 0) return Object.isExtensible(Error);
+		return Object.hasOwn(desc, "writable") ? desc.writable === true : desc.set !== void 0;
+	};
+	canWriteStackTraceLimit = /*#__PURE__*/ isStackTraceLimitWritable();
+	getStackTraceLimit = () => Error.stackTraceLimit;
+	setStackTraceLimit = (value) => {
+		if (canWriteStackTraceLimit) Error.stackTraceLimit = value;
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Utils.js
+var SingleShotGen, pickInternalCall, internalCall;
+var init_Utils = __esmMin((() => {
+	init_stackTraceLimit();
+	SingleShotGen = class {
+		constructor(self) {
+			this.value = self;
+			this.done = false;
+		}
+		/**
+		* Yields the stored value once, then completes with the value sent back in.
+		*
+		* **When to use**
+		*
+		* Use to advance a `SingleShotGen` through its single yield and completion
+		* step.
+		*
+		* @since 2.0.0
+		*/
+		next(a) {
+			if (this.done) {
+				this.value = a;
+				return this;
+			}
+			this.done = true;
+			return {
+				value: this.value,
+				done: false
+			};
+		}
+	};
+	pickInternalCall = () => {
+		const InternalTypeId = "~effect/Utils/internal";
+		const standard = { [InternalTypeId]: (body) => {
+			return body();
+		} };
+		const forced = { [InternalTypeId]: (body) => {
+			try {
+				return body();
+			} finally {}
+		} };
+		return getStackTraceLimit() !== 0 && standard[InternalTypeId](() => (/* @__PURE__ */ new Error()).stack)?.includes(InternalTypeId) === true ? standard[InternalTypeId] : forced[InternalTypeId];
+	};
+	internalCall = /*#__PURE__*/ pickInternalCall();
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/record.js
+/** @internal */
+function assignProperty(self, key, value) {
+	if (key === "__proto__") Object.defineProperty(self, key, {
+		value,
+		writable: true,
+		enumerable: true,
+		configurable: true
+	});
+	else self[key] = value;
+}
+/** @internal */
+function assignProperties(self, source) {
+	for (const key of Reflect.ownKeys(source)) if (Object.prototype.propertyIsEnumerable.call(source, key)) assignProperty(self, key, source[key]);
+}
+var init_record = __esmMin((() => {}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/core.js
+function defaultEvaluate(_fiber) {
+	return exitDie(`Effect.evaluate: Not implemented`);
+}
+var EffectTypeId, ExitTypeId, effectVariance, identifier, args, evaluate, contA, contE, contAll, Yield, PipeInspectableProto, EffectProto, isExit, CauseTypeId, CauseReasonTypeId, isCause, CauseImpl, annotationsMap, ReasonBase, constEmptyAnnotations, Fail, causeFromReasons, causeFail, Die, causeDie, causeAnnotate, isFailReason$1, isDieReason, isInterruptReason, makePrimitiveProto, makePrimitive, makeExit, exitSucceed, StackTraceKey, InterruptorStackTrace, exitFailCause, exitFail, exitDie, withFiber, YieldableError, Error$2, TaggedError$1;
+var init_core = __esmMin((() => {
+	init_Equal();
+	init_Formatter();
+	init_Function();
+	init_Hash();
+	init_Inspectable();
+	init_Pipeable();
+	init_Predicate();
+	init_Utils();
+	init_record();
+	EffectTypeId = `~effect/Effect`;
+	ExitTypeId = `~effect/Exit`;
+	effectVariance = {
+		_A: identity,
+		_E: identity,
+		_R: identity
+	};
+	identifier = `${EffectTypeId}/identifier`;
+	args = `${EffectTypeId}/args`;
+	evaluate = `${EffectTypeId}/evaluate`;
+	contA = `${EffectTypeId}/successCont`;
+	contE = `${EffectTypeId}/failureCont`;
+	contAll = `${EffectTypeId}/ensureCont`;
+	Yield = /*#__PURE__*/ Symbol.for("effect/Effect/Yield");
+	PipeInspectableProto = {
+		pipe() {
+			return pipeArguments(this, arguments);
+		},
+		toJSON() {
+			return { ...this };
+		},
+		toString() {
+			return format$2(this.toJSON(), {
+				ignoreToString: true,
+				space: 2
+			});
+		},
+		[NodeInspectSymbol]() {
+			return this.toJSON();
+		}
+	};
+	EffectProto = {
+		[EffectTypeId]: effectVariance,
+		...PipeInspectableProto,
+		[Symbol.iterator]() {
+			return new SingleShotGen(this);
+		},
+		toJSON() {
+			return {
+				_id: "Effect",
+				op: this[identifier],
+				...args in this ? { args: this[args] } : void 0
+			};
+		}
+	};
+	isExit = (u) => hasProperty(u, ExitTypeId);
+	CauseTypeId = "~effect/Cause";
+	CauseReasonTypeId = "~effect/Cause/Reason";
+	isCause = (self) => hasProperty(self, CauseTypeId);
+	CauseImpl = class {
+		constructor(failures) {
+			this[CauseTypeId] = CauseTypeId;
+			this.reasons = failures;
+		}
+		pipe() {
+			return pipeArguments(this, arguments);
+		}
+		toJSON() {
+			return {
+				_id: "Cause",
+				failures: this.reasons.map((f) => f.toJSON())
+			};
+		}
+		toString() {
+			return `Cause(${format$2(this.reasons)})`;
+		}
+		[NodeInspectSymbol]() {
+			return this.toJSON();
+		}
+		[symbol](that) {
+			return isCause(that) && this.reasons.length === that.reasons.length && this.reasons.every((e, i) => equals$1(e, that.reasons[i]));
+		}
+		[symbol$1]() {
+			return array(this.reasons);
+		}
+	};
+	annotationsMap = /*#__PURE__*/ new WeakMap();
+	ReasonBase = class {
+		[CauseReasonTypeId];
+		annotations;
+		_tag;
+		constructor(_tag, annotations, originalError) {
+			this[CauseReasonTypeId] = CauseReasonTypeId;
+			this._tag = _tag;
+			if (annotations !== constEmptyAnnotations && typeof originalError === "object" && originalError !== null && annotations.size > 0) {
+				const prevAnnotations = annotationsMap.get(originalError);
+				if (prevAnnotations) annotations = new Map([...prevAnnotations, ...annotations]);
+				annotationsMap.set(originalError, annotations);
+			}
+			this.annotations = annotations;
+		}
+		annotate(annotations, options) {
+			if (annotations.mapUnsafe.size === 0) return this;
+			const newAnnotations = new Map(this.annotations);
+			annotations.mapUnsafe.forEach((value, key) => {
+				if (options?.overwrite !== true && newAnnotations.has(key)) return;
+				newAnnotations.set(key, value);
+			});
+			const self = Object.assign(Object.create(Object.getPrototypeOf(this)), this);
+			self.annotations = newAnnotations;
+			return self;
+		}
+		pipe() {
+			return pipeArguments(this, arguments);
+		}
+		toString() {
+			return format$2(this);
+		}
+		[NodeInspectSymbol]() {
+			return this.toString();
+		}
+	};
+	constEmptyAnnotations = /*#__PURE__*/ new Map();
+	Fail = class extends ReasonBase {
+		constructor(error, annotations = constEmptyAnnotations) {
+			super("Fail", annotations, error);
+			this.error = error;
+		}
+		toString() {
+			return `Fail(${format$2(this.error)})`;
+		}
+		toJSON() {
+			return {
+				_tag: "Fail",
+				error: this.error
+			};
+		}
+		[symbol](that) {
+			return isFailReason$1(that) && equals$1(this.error, that.error) && equals$1(this.annotations, that.annotations);
+		}
+		[symbol$1]() {
+			return combine(string$1(this._tag))(combine(hash(this.error))(hash(this.annotations)));
+		}
+	};
+	causeFromReasons = (reasons) => new CauseImpl(reasons);
+	causeFail = (error) => new CauseImpl([new Fail(error)]);
+	Die = class extends ReasonBase {
+		constructor(defect, annotations = constEmptyAnnotations) {
+			super("Die", annotations, defect);
+			this.defect = defect;
+		}
+		toString() {
+			return `Die(${format$2(this.defect)})`;
+		}
+		toJSON() {
+			return {
+				_tag: "Die",
+				defect: this.defect
+			};
+		}
+		[symbol](that) {
+			return isDieReason(that) && equals$1(this.defect, that.defect) && equals$1(this.annotations, that.annotations);
+		}
+		[symbol$1]() {
+			return combine(string$1(this._tag))(combine(hash(this.defect))(hash(this.annotations)));
+		}
+	};
+	causeDie = (defect) => new CauseImpl([new Die(defect)]);
+	causeAnnotate = /*#__PURE__*/ dual((args) => isCause(args[0]), (self, annotations, options) => {
+		if (annotations.mapUnsafe.size === 0) return self;
+		return new CauseImpl(self.reasons.map((f) => f.annotate(annotations, options)));
+	});
+	isFailReason$1 = (self) => self._tag === "Fail";
+	isDieReason = (self) => self._tag === "Die";
+	isInterruptReason = (self) => self._tag === "Interrupt";
+	makePrimitiveProto = (options) => ({
+		...EffectProto,
+		[identifier]: options.op,
+		[evaluate]: options[evaluate] ?? defaultEvaluate,
+		[contA]: options[contA],
+		[contE]: options[contE],
+		[contAll]: options[contAll]
+	});
+	makePrimitive = (options) => {
+		const Proto = makePrimitiveProto(options);
+		const PrimitiveImpl = function(value) {
+			this[args] = value;
+		};
+		PrimitiveImpl.prototype = Proto;
+		return function(value) {
+			return new PrimitiveImpl(value);
+		};
+	};
+	makeExit = (options) => {
+		const Proto = {
+			[ExitTypeId]: ExitTypeId,
+			_tag: options.op,
+			get [options.prop]() {
+				return this[args];
+			},
+			...makePrimitiveProto(options),
+			toString() {
+				return `${options.op}(${format$2(this[args])})`;
+			},
+			toJSON() {
+				return {
+					_id: "Exit",
+					_tag: options.op,
+					[options.prop]: this[args]
+				};
+			},
+			[symbol](that) {
+				return isExit(that) && that._tag === this._tag && equals$1(this[args], that[args]);
+			},
+			[symbol$1]() {
+				return combine(string$1(options.op), hash(this[args]));
+			}
+		};
+		const ExitPrimitive = function(value) {
+			this[args] = value;
+		};
+		ExitPrimitive.prototype = Proto;
+		return function(value) {
+			return new ExitPrimitive(value);
+		};
+	};
+	exitSucceed = /*#__PURE__*/ makeExit({
+		op: "Success",
+		prop: "value",
+		[evaluate](fiber) {
+			const cont = fiber.getCont(contA);
+			return cont ? cont[contA](this[args], fiber, this) : fiber.yieldWith(this);
+		}
+	});
+	StackTraceKey = { key: "effect/Cause/StackTrace" };
+	InterruptorStackTrace = { key: "effect/Cause/InterruptorStackTrace" };
+	exitFailCause = /*#__PURE__*/ makeExit({
+		op: "Failure",
+		prop: "cause",
+		[evaluate](fiber) {
+			let cause = this[args];
+			let annotated = false;
+			if (fiber.cache.stackFrame) {
+				cause = causeAnnotate(cause, { mapUnsafe: /* @__PURE__ */ new Map([[StackTraceKey.key, fiber.cache.stackFrame]]) });
+				annotated = true;
+			}
+			let cont = fiber.getCont(contE);
+			while (fiber.interruptible && fiber._interruptedCause && cont) cont = fiber.getCont(contE);
+			return cont ? cont[contE](cause, fiber, annotated ? void 0 : this) : fiber.yieldWith(annotated ? exitFailCause(cause) : this);
+		}
+	});
+	exitFail = (e) => exitFailCause(causeFail(e));
+	exitDie = (defect) => exitFailCause(causeDie(defect));
+	withFiber = /*#__PURE__*/ makePrimitive({
+		op: "WithFiber",
+		[evaluate](fiber) {
+			return this[args](fiber);
+		}
+	});
+	YieldableError = /*#__PURE__*/ function() {
+		class YieldableError extends globalThis.Error {}
+		const proto = /*#__PURE__*/ makePrimitiveProto({
+			op: "YieldableError",
+			[evaluate]() {
+				return exitFail(this);
+			}
+		});
+		delete proto.toString;
+		Object.assign(YieldableError.prototype, proto);
+		return YieldableError;
+	}();
+	Error$2 = /*#__PURE__*/ function() {
+		const plainArgsSymbol = /*#__PURE__*/ Symbol.for("effect/Data/Error/plainArgs");
+		return class Base extends YieldableError {
+			constructor(args) {
+				super(args?.message, args?.cause ? { cause: args.cause } : void 0);
+				if (args) {
+					assignProperties(this, args);
+					Object.defineProperty(this, plainArgsSymbol, {
+						value: args,
+						enumerable: false
+					});
+				}
+			}
+			toJSON() {
+				return {
+					...this[plainArgsSymbol],
+					...this
+				};
+			}
+		};
+	}();
+	TaggedError$1 = (tag) => {
+		class Base extends Error$2 {
+			_tag = tag;
+		}
+		Base.prototype.name = tag;
+		return Base;
+	};
+})), Prototype, init_Effectable = __esmMin((() => {
+	init_core();
+	Prototype = (options) => makePrimitiveProto({
+		op: options.label,
+		[evaluate]: options.evaluate
+	});
+}));
+var init_Equivalence = __esmMin((() => {}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/option.js
+var TypeId$11, CommonProto$1, SomeProto, NoneHash, NoneProto, isOption, isNone$1, isSome$1, none$1, SomeImpl, some$1;
+var init_option$1 = __esmMin((() => {
+	init_Equal();
+	init_Formatter();
+	init_Hash();
+	init_Inspectable();
+	init_Predicate();
+	init_Utils();
+	init_core();
+	TypeId$11 = "~effect/Option";
+	CommonProto$1 = {
+		[TypeId$11]: { _A: (_) => _ },
+		...PipeInspectableProto,
+		[Symbol.iterator]() {
+			return new SingleShotGen(this);
+		}
+	};
+	SomeProto = /*#__PURE__*/ Object.defineProperty(/*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto$1), {
+		_tag: "Some",
+		_op: "Some",
+		[symbol](that) {
+			return isOption(that) && isSome$1(that) && equals$1(this.value, that.value);
+		},
+		[symbol$1]() {
+			return combine(hash(this._tag))(hash(this.value));
+		},
+		toString() {
+			return `some(${format$2(this.value)})`;
+		},
+		toJSON() {
+			return {
+				_id: "Option",
+				_tag: this._tag,
+				value: toJson(this.value)
+			};
+		}
+	}), "valueOrUndefined", { get() {
+		return this.value;
+	} });
+	NoneHash = /*#__PURE__*/ hash("None");
+	NoneProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto$1), {
+		_tag: "None",
+		_op: "None",
+		valueOrUndefined: void 0,
+		[symbol](that) {
+			return isOption(that) && isNone$1(that);
+		},
+		[symbol$1]() {
+			return NoneHash;
+		},
+		toString() {
+			return `none()`;
+		},
+		toJSON() {
+			return {
+				_id: "Option",
+				_tag: this._tag
+			};
+		}
+	});
+	isOption = (input) => hasProperty(input, TypeId$11);
+	isNone$1 = (fa) => fa._tag === "None";
+	isSome$1 = (fa) => fa._tag === "Some";
+	none$1 = /*#__PURE__*/ Object.create(NoneProto);
+	SomeImpl = function(value) {
+		this.value = value;
+	};
+	SomeImpl.prototype = SomeProto;
+	some$1 = (value) => new SomeImpl(value);
+})), TypeId$10, CommonProto, SuccessProto, FailureProto, isResult, isFailure$1, isSuccess$2, FailureImpl, SuccessImpl;
+var init_result = __esmMin((() => {
+	init_Equal();
+	init_Formatter();
+	init_Hash();
+	init_Inspectable();
+	init_Predicate();
+	init_Utils();
+	init_core();
+	TypeId$10 = "~effect/Result";
+	CommonProto = {
+		[TypeId$10]: {
+			/* v8 ignore next 2 */
+			_A: (_) => _,
+			_E: (_) => _
+		},
+		...PipeInspectableProto,
+		[Symbol.iterator]() {
+			return new SingleShotGen(this);
+		}
+	};
+	SuccessProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto), {
+		_tag: "Success",
+		_op: "Success",
+		[symbol](that) {
+			return isResult(that) && isSuccess$2(that) && equals$1(this.success, that.success);
+		},
+		[symbol$1]() {
+			return combine(hash(this._tag))(hash(this.success));
+		},
+		toString() {
+			return `success(${format$2(this.success)})`;
+		},
+		toJSON() {
+			return {
+				_id: "Result",
+				_tag: this._tag,
+				value: toJson(this.success)
+			};
+		}
+	});
+	FailureProto = /*#__PURE__*/ Object.assign(/*#__PURE__*/ Object.create(CommonProto), {
+		_tag: "Failure",
+		_op: "Failure",
+		[symbol](that) {
+			return isResult(that) && isFailure$1(that) && equals$1(this.failure, that.failure);
+		},
+		[symbol$1]() {
+			return combine(hash(this._tag))(hash(this.failure));
+		},
+		toString() {
+			return `failure(${format$2(this.failure)})`;
+		},
+		toJSON() {
+			return {
+				_id: "Result",
+				_tag: this._tag,
+				failure: toJson(this.failure)
+			};
+		}
+	});
+	isResult = (input) => hasProperty(input, TypeId$10);
+	isFailure$1 = (result) => result._tag === "Failure";
+	isSuccess$2 = (result) => result._tag === "Success";
+	FailureImpl = function(failure) {
+		this.failure = failure;
+	};
+	FailureImpl.prototype = FailureProto;
+	SuccessImpl = function(success) {
+		this.success = success;
+	};
+	SuccessImpl.prototype = SuccessProto;
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Order.js
+/**
+* Creates a new `Order` instance from a comparison function.
+*
+* **When to use**
+*
+* Use when you need a sorting rule not covered by the built-in orders or input
+* mapping helpers, and you can provide a total comparison.
+*
+* **Details**
+*
+* Uses reference equality (`===`) as a shortcut: if `self === that`, it returns
+* `0` without calling the comparison function. The comparison function should
+* return `-1`, `0`, or `1`, and the returned order satisfies total ordering
+* laws when the comparison function does.
+*
+* **Example** (Creating an Order)
+*
+* ```ts import.meta.vitest
+* import { Order } from "effect"
+*
+* const byAge = Order.make<{ name: string; age: number }>((self, that) => {
+*   if (self.age < that.age) return -1
+*   if (self.age > that.age) return 1
+*   return 0
+* })
+*
+* byAge({ name: "Alice", age: 30 }, { name: "Bob", age: 25 }) // => 1
+* byAge({ name: "Alice", age: 25 }, { name: "Bob", age: 30 }) // => -1
+* ```
+*
+* @see {@link mapInput} to transform an order by mapping the input type
+* @see {@link combine} to combine multiple orders
+* @category constructors
+* @since 2.0.0
+*/
+function make$9(compare) {
+	return (self, that) => self === that ? 0 : compare(self, that);
+}
+var String$4, init_Order = __esmMin((() => {
+	init_Function();
+	String$4 = /*#__PURE__*/ make$9((self, that) => self < that ? -1 : 1);
+})), none, some;
+var init_Option = __esmMin((() => {
+	init_Function();
+	init_option$1();
+	none = () => none$1;
+	some = some$1;
+})), ServiceTypeId, Service, ServiceProto, cacheKeys, ReferenceTypeId, TypeId$9, MaxDepth, FlattenAfterBaseHits, makeImpl, applyOverlays, flatten, notFound, lookup, makeUnsafe$2, Proto$3, hasSameCache, isContext, isReference, empty$1, emptyContext, make$8, add, addUnsafe, getOrUndefinedUnsafe, getUnsafe, get, defaultValueCacheKey, getDefaultValue, serviceNotFoundError, Reference, init_Context = __esmMin((() => {
+	init_Effectable();
+	init_Equal();
+	init_Function();
+	init_Hash();
+	init_core();
+	init_Predicate();
+	ServiceTypeId = "~effect/Context/Service";
+	Service = function() {
+		function KeyClass() {}
+		const self = KeyClass;
+		Object.setPrototypeOf(self, ServiceProto);
+		const init = (key, options) => {
+			self.key = key;
+			if (options?.defaultValue) {
+				self[ReferenceTypeId] = ReferenceTypeId;
+				self.defaultValue = options.defaultValue;
+			}
+			if (options?.make) self.make = options.make;
+			if (options?.fiberCached) cacheKeys.add(key);
+			return self;
+		};
+		return arguments.length > 0 ? init(arguments[0], arguments[1]) : init;
+	};
+	ServiceProto = {
+		[ServiceTypeId]: ServiceTypeId,
+		.../*#__PURE__*/ Prototype({
+			label: "Service",
+			evaluate(fiber) {
+				return exitSucceed(get(fiber.context, this));
+			}
+		}),
+		toJSON() {
+			return {
+				_id: "Service",
+				key: this.key
+			};
+		},
+		of(self) {
+			return self;
+		},
+		context(self) {
+			return make$8(this, self);
+		},
+		use(f) {
+			return withFiber((fiber) => f(get(fiber.context, this)));
+		},
+		useSync(f) {
+			return withFiber((fiber) => exitSucceed(f(get(fiber.context, this))));
+		}
+	};
+	cacheKeys = /*#__PURE__*/ new Set();
+	ReferenceTypeId = "~effect/Context/Reference";
+	TypeId$9 = "~effect/Context";
+	MaxDepth = 8;
+	FlattenAfterBaseHits = 8;
+	makeImpl = (cacheRoot, base, overlay, depth) => {
+		const self = Object.create(Proto$3);
+		self.cacheRoot = cacheRoot ?? self;
+		self.base = base;
+		self.overlay = overlay;
+		self.depth = depth;
+		self._flat = void 0;
+		self.baseHits = 0;
+		return self;
+	};
+	applyOverlays = (map, overlay) => {
+		if (!overlay) return;
+		applyOverlays(map, overlay.parent);
+		map.set(overlay.key, overlay.value);
+	};
+	flatten = (self) => {
+		if (self._flat) return self._flat;
+		if (!self.overlay) return self._flat = self.base;
+		const map = new Map(self.base);
+		applyOverlays(map, self.overlay);
+		return self._flat = map;
+	};
+	notFound = /*#__PURE__*/ Symbol();
+	lookup = (self, key) => {
+		const impl = self;
+		for (let overlay = impl.overlay; overlay; overlay = overlay.parent) if (overlay.key === key) return overlay.value;
+		const value = impl.base.get(key);
+		if (value === void 0 && !impl.base.has(key)) return notFound;
+		if (impl.overlay && ++impl.baseHits >= impl.base.size && impl.baseHits >= FlattenAfterBaseHits) {
+			impl.base = flatten(impl);
+			impl.overlay = void 0;
+			impl.depth = 0;
+		}
+		return value;
+	};
+	makeUnsafe$2 = (mapUnsafe) => makeImpl(void 0, mapUnsafe, void 0, 0);
+	Proto$3 = {
+		get mapUnsafe() {
+			return flatten(this);
+		},
+		...PipeInspectableProto,
+		[TypeId$9]: { _Services: (_) => _ },
+		toJSON() {
+			return {
+				_id: "Context",
+				services: Array.from(this.mapUnsafe).map(([key, value]) => ({
+					key,
+					value
+				}))
+			};
+		},
+		[symbol](that) {
+			if (!isContext(that)) return false;
+			const self = this.mapUnsafe;
+			const other = that.mapUnsafe;
+			if (self.size !== other.size) return false;
+			for (const [key, value] of self) if (!other.has(key) || !equals$1(value, other.get(key))) return false;
+			return true;
+		},
+		[symbol$1]() {
+			return number$2(this.mapUnsafe.size);
+		}
+	};
+	hasSameCache = (self, that) => self.cacheRoot === that.cacheRoot;
+	isContext = (u) => hasProperty(u, TypeId$9);
+	isReference = (u) => !!u[ReferenceTypeId];
+	empty$1 = () => emptyContext;
+	emptyContext = /*#__PURE__*/ makeUnsafe$2(/*#__PURE__*/ new Map());
+	make$8 = (key, service) => makeUnsafe$2(/* @__PURE__ */ new Map([[key.key, service]]));
+	add = /*#__PURE__*/ dual(3, (self, key, service) => addUnsafe(self, key.key, service));
+	addUnsafe = (self, key, service) => {
+		const impl = self;
+		const cacheRoot = cacheKeys.has(key) ? void 0 : impl.cacheRoot;
+		if (impl.depth >= MaxDepth) {
+			const map = new Map(impl.mapUnsafe);
+			map.set(key, service);
+			return makeImpl(cacheRoot, map, void 0, 0);
+		}
+		return makeImpl(cacheRoot, impl.base, {
+			key,
+			value: service,
+			parent: impl.overlay
+		}, impl.depth + 1);
+	};
+	getOrUndefinedUnsafe = (self, key) => {
+		const value = lookup(self, key);
+		return value === notFound ? void 0 : value;
+	};
+	getUnsafe = /*#__PURE__*/ dual(2, (self, service) => {
+		const value = lookup(self, service.key);
+		if (value === notFound) {
+			if (isReference(service)) return getDefaultValue(service);
+			throw serviceNotFoundError(service);
+		}
+		return value;
+	});
+	get = getUnsafe;
+	defaultValueCacheKey = "~effect/Context/defaultValue";
+	getDefaultValue = (ref) => {
+		if (defaultValueCacheKey in ref) return ref[defaultValueCacheKey];
+		return ref[defaultValueCacheKey] = ref.defaultValue();
+	};
+	serviceNotFoundError = (service) => {
+		const error = /* @__PURE__ */ new Error(`Service not found${service.key ? `: ${String(service.key)}` : ""}`);
+		if (error.stack) {
+			const lines = error.stack.split("\n");
+			lines.splice(1, 3);
+			error.stack = lines.join("\n");
+		}
+		return error;
+	};
+	Reference = Service;
+})), isArrayNonEmpty$1, init_array = __esmMin((() => {
+	isArrayNonEmpty$1 = (self) => self.length > 0;
+}));
+var init_Result = __esmMin((() => {
+	init_Function();
+	init_result();
+})), init_Tuple = __esmMin((() => {
+	init_Equivalence();
+	init_Predicate();
+})), init_Record = __esmMin((() => {
+	init_Function();
+	init_record();
+})), Array$1, fromIterable$1, append, isArrayNonEmpty, isReadonlyArrayNonEmpty, empty, map$2, init_Array = __esmMin((() => {
+	init_Equivalence();
+	init_Function();
+	init_array();
+	Array$1 = globalThis.Array;
+	fromIterable$1 = (collection) => Array$1.isArray(collection) ? collection : Array$1.from(collection);
+	append = /*#__PURE__*/ dual(2, (self, last) => [...self, last]);
+	Array$1.isArray;
+	isArrayNonEmpty = isArrayNonEmpty$1;
+	isReadonlyArrayNonEmpty = isArrayNonEmpty$1;
+	empty = () => [];
+	map$2 = /*#__PURE__*/ dual(2, (self, f) => self.map(f));
+})), TypeId$8, bigint0$1, bigint1$1, bigint2, bigint10$1, bigint1e3, roundTiesAwayFromZero, roundMillisToNanos, parseNanos, DURATION_REGEXP, fromInputUnsafe, invalid$1, zeroDurationValue, infinityDurationValue, negativeInfinityDurationValue, DurationProto, make$7, isDuration, zero$1, infinity, negativeInfinity, nanos, millis, seconds, minutes, hours, days, weeks, toNanosUnsafe, matchPair, Equivalence$1, equals;
+var init_Duration = __esmMin((() => {
+	init_Equal();
+	init_Function();
+	init_Hash();
+	init_Inspectable();
+	init_Pipeable();
+	init_Predicate();
+	TypeId$8 = "~effect/Duration";
+	bigint0$1 = /*#__PURE__*/ BigInt(0);
+	bigint1$1 = /*#__PURE__*/ BigInt(1);
+	bigint2 = /*#__PURE__*/ BigInt(2);
+	bigint10$1 = /*#__PURE__*/ BigInt(10);
+	bigint1e3 = /*#__PURE__*/ BigInt(1e3);
+	roundTiesAwayFromZero = (input) => BigInt(input < 0 ? Math.ceil(input - .5) : Math.floor(input + .5));
+	roundMillisToNanos = (millis) => roundTiesAwayFromZero(millis * 1e6);
+	parseNanos = (input, scale) => {
+		const decimalIndex = input.indexOf(".");
+		if (decimalIndex === -1) return BigInt(input) * scale;
+		const isNegative = input[0] === "-";
+		const fractional = input.slice(decimalIndex + 1);
+		const fractionalScale = bigint10$1 ** BigInt(fractional.length);
+		const scaled = (BigInt(input.slice(isNegative ? 1 : 0, decimalIndex)) * fractionalScale + BigInt(fractional)) * scale;
+		const rounded = scaled / fractionalScale + (scaled % fractionalScale * bigint2 >= fractionalScale ? bigint1$1 : bigint0$1);
+		return isNegative ? -rounded : rounded;
+	};
+	DURATION_REGEXP = /^(-?\d+(?:\.\d+)?)\s+(nanos?|micros?|millis?|seconds?|minutes?|hours?|days?|weeks?)$/;
+	fromInputUnsafe = (input) => {
+		switch (typeof input) {
+			case "number": return millis(input);
+			case "bigint": return nanos(input);
+			case "string": {
+				if (input === "Infinity") return infinity;
+				if (input === "-Infinity") return negativeInfinity;
+				const match = DURATION_REGEXP.exec(input);
+				if (!match) break;
+				const [_, valueStr, unit] = match;
+				if (unit === "nano" || unit === "nanos") return nanos(parseNanos(valueStr, bigint1$1));
+				if (unit === "micro" || unit === "micros") return nanos(parseNanos(valueStr, bigint1e3));
+				const value = Number(valueStr);
+				switch (unit) {
+					case "milli":
+					case "millis": return millis(value);
+					case "second":
+					case "seconds": return seconds(value);
+					case "minute":
+					case "minutes": return minutes(value);
+					case "hour":
+					case "hours": return hours(value);
+					case "day":
+					case "days": return days(value);
+					case "week":
+					case "weeks": return weeks(value);
+				}
+				break;
+			}
+			case "object": {
+				if (input === null) break;
+				if (TypeId$8 in input) return input;
+				if (Array.isArray(input)) {
+					if (input.length !== 2 || !input.every(isNumber)) return invalid$1(input);
+					if (Number.isNaN(input[0]) || Number.isNaN(input[1])) return zero$1;
+					if (input[0] === -Infinity || input[1] === -Infinity) return negativeInfinity;
+					if (input[0] === Infinity || input[1] === Infinity) return infinity;
+					return make$7(roundTiesAwayFromZero(input[0] * 1e9 + input[1]));
+				}
+				const obj = input;
+				let millis = 0;
+				if (obj.weeks) millis += obj.weeks * 6048e5;
+				if (obj.days) millis += obj.days * 864e5;
+				if (obj.hours) millis += obj.hours * 36e5;
+				if (obj.minutes) millis += obj.minutes * 6e4;
+				if (obj.seconds) millis += obj.seconds * 1e3;
+				if (obj.milliseconds) millis += obj.milliseconds;
+				if (!obj.microseconds && !obj.nanoseconds) return make$7(millis);
+				return make$7(roundTiesAwayFromZero(millis * 1e6 + (obj.microseconds ?? 0) * 1e3 + (obj.nanoseconds ?? 0)));
+			}
+		}
+		return invalid$1(input);
+	};
+	invalid$1 = (input) => {
+		throw new Error(`Invalid Input: ${input}`);
+	};
+	zeroDurationValue = {
+		_tag: "Millis",
+		millis: 0
+	};
+	infinityDurationValue = { _tag: "Infinity" };
+	negativeInfinityDurationValue = { _tag: "NegativeInfinity" };
+	DurationProto = {
+		[TypeId$8]: TypeId$8,
+		[symbol$1]() {
+			switch (this.value._tag) {
+				case "Millis": {
+					const nanos = this.value.millis * 1e6;
+					return Number.isFinite(nanos) ? hash(roundTiesAwayFromZero(nanos)) : number$2(this.value.millis);
+				}
+				case "Nanos": return hash(this.value.nanos);
+				default: return structure(this.value);
+			}
+		},
+		[symbol](that) {
+			return isDuration(that) && equals(this, that);
+		},
+		toString() {
+			switch (this.value._tag) {
+				case "Infinity": return "Infinity";
+				case "NegativeInfinity": return "-Infinity";
+				case "Nanos": return `${this.value.nanos} nanos`;
+				case "Millis": return `${this.value.millis} millis`;
+			}
+		},
+		toJSON() {
+			switch (this.value._tag) {
+				case "Millis": return {
+					_id: "Duration",
+					_tag: "Millis",
+					millis: this.value.millis
+				};
+				case "Nanos": return {
+					_id: "Duration",
+					_tag: "Nanos",
+					nanos: String(this.value.nanos)
+				};
+				case "Infinity": return {
+					_id: "Duration",
+					_tag: "Infinity"
+				};
+				case "NegativeInfinity": return {
+					_id: "Duration",
+					_tag: "NegativeInfinity"
+				};
+			}
+		},
+		[NodeInspectSymbol]() {
+			return this.toJSON();
+		},
+		pipe() {
+			return pipeArguments(this, arguments);
+		}
+	};
+	make$7 = (input) => {
+		const duration = Object.create(DurationProto);
+		if (typeof input === "number") {
+			if (isNaN(input) || input === 0 || Object.is(input, -0)) duration.value = zeroDurationValue;
+			else if (!Number.isFinite(input)) duration.value = input > 0 ? infinityDurationValue : negativeInfinityDurationValue;
+			else if (!Number.isInteger(input)) duration.value = {
+				_tag: "Nanos",
+				nanos: roundMillisToNanos(input)
+			};
+			else duration.value = {
+				_tag: "Millis",
+				millis: input
+			};
+		} else if (input === bigint0$1) duration.value = zeroDurationValue;
+		else duration.value = {
+			_tag: "Nanos",
+			nanos: input
+		};
+		return duration;
+	};
+	isDuration = (u) => hasProperty(u, TypeId$8);
+	zero$1 = /*#__PURE__*/ make$7(0);
+	infinity = /*#__PURE__*/ make$7(Infinity);
+	negativeInfinity = /*#__PURE__*/ make$7(-Infinity);
+	nanos = (nanos) => make$7(nanos);
+	millis = (millis) => make$7(millis);
+	seconds = (seconds) => make$7(seconds * 1e3);
+	minutes = (minutes) => make$7(minutes * 6e4);
+	hours = (hours) => make$7(hours * 36e5);
+	days = (days) => make$7(days * 864e5);
+	weeks = (weeks) => make$7(weeks * 6048e5);
+	toNanosUnsafe = (input) => {
+		const self = fromInputUnsafe(input);
+		switch (self.value._tag) {
+			case "Infinity":
+			case "NegativeInfinity": throw new Error("Cannot convert infinite duration to nanos");
+			case "Nanos": return self.value.nanos;
+			case "Millis": return roundMillisToNanos(self.value.millis);
+		}
+	};
+	matchPair = /*#__PURE__*/ dual(3, (self, that, options) => {
+		if (self.value._tag === "Infinity" || self.value._tag === "NegativeInfinity" || that.value._tag === "Infinity" || that.value._tag === "NegativeInfinity") return options.onInfinity(self, that);
+		if (self.value._tag === "Millis") return that.value._tag === "Millis" ? options.onMillis(self.value.millis, that.value.millis) : options.onNanos(toNanosUnsafe(self), that.value.nanos);
+		else return options.onNanos(self.value.nanos, toNanosUnsafe(that));
+	});
+	Equivalence$1 = (self, that) => matchPair(self, that, {
+		onMillis: (self, that) => self === that,
+		onNanos: (self, that) => self === that,
+		onInfinity: (self, that) => self.value._tag === that.value._tag
+	});
+	equals = /*#__PURE__*/ dual(2, (self, that) => Equivalence$1(self, that));
+})), Scheduler, setMicrotask, setTimer, setImmediate, PriorityBuckets, MixedScheduler, MixedSchedulerDispatcher, MaxOpsBeforeYield, PreventSchedulerYield, init_Scheduler = __esmMin((() => {
+	init_Context();
+	Scheduler = /*#__PURE__*/ Reference("effect/Scheduler", {
+		fiberCached: true,
+		defaultValue: () => new MixedScheduler()
+	});
+	setMicrotask = (f) => {
+		let cancelled = false;
+		Promise.resolve().then(() => {
+			if (!cancelled) f();
+		});
+		return () => {
+			cancelled = true;
+		};
+	};
+	setTimer = "setImmediate" in globalThis ? (f) => {
+		const timer = globalThis.setImmediate(f);
+		return () => globalThis.clearImmediate(timer);
+	} : (f) => {
+		const timer = setTimeout(f, 0);
+		return () => clearTimeout(timer);
+	};
+	setImmediate = (f) => {
+		try {
+			return setTimer(f);
+		} catch {
+			return setMicrotask(f);
+		}
+	};
+	PriorityBuckets = class {
+		buckets = [];
+		scheduleTask(task, priority) {
+			const buckets = this.buckets;
+			const len = buckets.length;
+			let bucket;
+			let index = 0;
+			for (; index < len; index++) {
+				if (buckets[index][0] > priority) break;
+				bucket = buckets[index];
+			}
+			if (bucket && bucket[0] === priority) bucket[1].push(task);
+			else if (index === len) buckets.push([priority, [task]]);
+			else buckets.splice(index, 0, [priority, [task]]);
+		}
+		drain() {
+			const buckets = this.buckets;
+			this.buckets = [];
+			return buckets;
+		}
+	};
+	MixedScheduler = class {
+		executionMode;
+		setImmediate;
+		constructor(executionMode = "async", setImmediateFn) {
+			this.executionMode = executionMode;
+			this.setImmediate = setImmediateFn ?? (executionMode === "sync" ? setMicrotask : setImmediate);
+		}
+		/**
+		* Returns whether the fiber has reached its operation budget and should yield.
+		*
+		* **When to use**
+		*
+		* Use to decide whether a fiber should yield after consuming its current
+		* operation budget.
+		*
+		* @since 2.0.0
+		*/
+		shouldYield(fiber) {
+			return fiber.currentOpCount >= fiber.cache.maxOpsBeforeYield;
+		}
+		/**
+		* Creates a dispatcher that schedules work through this scheduler.
+		*
+		* **When to use**
+		*
+		* Use when you need a standalone dispatcher from a scheduler instance, for
+		* example in tests that enqueue tasks and then flush them deterministically.
+		*
+		* @since 4.0.0
+		*/
+		makeDispatcher() {
+			return new MixedSchedulerDispatcher(this.setImmediate);
+		}
+	};
+	MixedSchedulerDispatcher = class {
+		tasks = /*#__PURE__*/ new PriorityBuckets();
+		running = void 0;
+		setImmediate;
+		constructor(setImmediateFn = setImmediate) {
+			this.setImmediate = setImmediateFn;
+		}
+		/**
+		* @since 2.0.0
+		*/
+		scheduleTask(task, priority) {
+			this.tasks.scheduleTask(task, priority);
+			if (this.running === void 0) this.running = this.setImmediate(this.afterScheduled);
+		}
+		/**
+		* @since 2.0.0
+		*/
+		afterScheduled = () => {
+			this.running = void 0;
+			this.runTasks();
+		};
+		/**
+		* @since 2.0.0
+		*/
+		runTasks() {
+			const buckets = this.tasks.drain();
+			for (let i = 0; i < buckets.length; i++) {
+				const toRun = buckets[i][1];
+				for (let j = 0; j < toRun.length; j++) toRun[j]();
+			}
+		}
+		/**
+		* @since 2.0.0
+		*/
+		flush() {
+			while (this.tasks.buckets.length > 0) {
+				if (this.running !== void 0) {
+					this.running();
+					this.running = void 0;
+				}
+				this.runTasks();
+			}
+		}
+	};
+	MaxOpsBeforeYield = /*#__PURE__*/ Reference("effect/Scheduler/MaxOpsBeforeYield", {
+		fiberCached: true,
+		defaultValue: () => 2048
+	});
+	PreventSchedulerYield = /*#__PURE__*/ Reference("effect/Scheduler/PreventSchedulerYield", {
+		fiberCached: true,
+		defaultValue: () => false
+	});
+})), TaggedError, init_Data = __esmMin((() => {
+	init_core();
+	init_record();
+	init_Pipeable();
+	TaggedError = TaggedError$1;
+})), init_EncodingError = __esmMin((() => {
+	init_Data();
+})), ParentSpanKey, TracerKey, init_Tracer = __esmMin((() => {
+	ParentSpanKey = "effect/Tracer/ParentSpan";
+	TracerKey = "effect/Tracer";
+})), FiberRuntimeMetricsKey, init_metric = __esmMin((() => {
+	FiberRuntimeMetricsKey = "effect/Metric/FiberRuntimeMetrics";
+})), CurrentStackFrame, TracerEnabled, CurrentLogLevel, MinimumLogLevel, init_references = __esmMin((() => {
+	init_Context();
+	init_Function();
+	CurrentStackFrame = /*#__PURE__*/ Reference("effect/References/CurrentStackFrame", {
+		fiberCached: true,
+		defaultValue: constUndefined
+	});
+	TracerEnabled = /*#__PURE__*/ Reference("effect/References/TracerEnabled", {
+		fiberCached: true,
+		defaultValue: constTrue
+	});
+	CurrentLogLevel = /*#__PURE__*/ Reference("effect/References/CurrentLogLevel", {
+		fiberCached: true,
+		defaultValue: () => "Info"
+	});
+	MinimumLogLevel = /*#__PURE__*/ Reference("effect/References/MinimumLogLevel", {
+		fiberCached: true,
+		defaultValue: () => "Info"
+	});
+})), Interrupt, causeInterrupt, hasInterrupts, dedupeReasons, causeCombine, causeMap, causePrettyErrors, causePrettyError, causePrettyMessage, locationRegExp, cleanErrorStack, addStackAnnotations, interruptCauseStack, currentStackTrace, causePretty, renderPrettyError, renderErrorCause, FiberTypeId, fiberVariance, fiberIdStore, getCurrentFiber, FiberImpl, makeFiberContextCache, deferredInterruptCont, maxInlineSteps, fiberMiddleware, fiberStackAnnotations, fiberAwaitAll, fiberInterruptAll, succeed$3, failCause$1, fail$5, sync, suspend$1, yieldNowWith, yieldNow, failCauseSync$1, die$2, void_$1, callbackOptions, asyncFinalizer, callback, defineFunctionLength, fnUntracedEager$1, fromIteratorEagerUnsafe, fromIteratorUnsafe, evaluateCont, OnSuccessProto, ContImpl, returnPayload, continuationMarksStack, mapCont, andThenCont, asVoid, flatMap$1, effectIsExit, flatMapEager$1, map$1, mapEager$1, exitIsSuccess, exitVoid, exitMap, catchCause$1, OnFailureProto, OnFailureImpl, OnSuccessAndFailureProto, OnSuccessAndFailureImpl, matchSuccess, makeMatch, MatchImpl, match$1, exit$1, exitPrimitive, uninterruptible, setInterruptible, setInterruptibleTrue, resolveConcurrency, iterateEager, iterateConcurrentImpl, iterateConcurrent, forkUnsafe, runForkWith, runFork$1, runSyncExitWith, runSyncExit$1, AsyncFiberErrorTypeId, AsyncFiberError, colors, init_effect = __esmMin((() => {
+	init_Array();
+	init_Context();
+	init_Equal();
+	init_Formatter();
+	init_Function();
+	init_Hash();
+	init_Pipeable();
+	init_Predicate();
+	init_Redactable();
+	init_Result();
+	init_Scheduler();
+	init_Tracer();
+	init_Utils();
+	init_core();
+	init_metric();
+	init_references();
+	init_stackTraceLimit();
+	Interrupt = class extends ReasonBase {
+		constructor(fiberId, annotations = constEmptyAnnotations) {
+			super("Interrupt", annotations, "Interrupted");
+			this.fiberId = fiberId;
+		}
+		toString() {
+			return `Interrupt(${this.fiberId})`;
+		}
+		toJSON() {
+			return {
+				_tag: "Interrupt",
+				fiberId: this.fiberId
+			};
+		}
+		[symbol](that) {
+			return isInterruptReason(that) && this.fiberId === that.fiberId && this.annotations === that.annotations;
+		}
+		[symbol$1]() {
+			return combine(string$1(`${this._tag}:${this.fiberId}`))(random(this.annotations));
+		}
+	};
+	causeInterrupt = (fiberId) => new CauseImpl([new Interrupt(fiberId)]);
+	hasInterrupts = (self) => self.reasons.some(isInterruptReason);
+	dedupeReasons = (self, that) => {
+		const buckets = /* @__PURE__ */ new Map();
+		const out = [];
+		for (const reason of self.concat(that)) {
+			const hash$1 = hash(reason);
+			const bucket = buckets.get(hash$1);
+			if (bucket === void 0) buckets.set(hash$1, [reason]);
+			else if (bucket.some((previous) => equals$1(previous, reason))) continue;
+			else bucket.push(reason);
+			out.push(reason);
+		}
+		return out;
+	};
+	causeCombine = /*#__PURE__*/ dual(2, (self, that) => {
+		if (self.reasons.length === 0) return that;
+		else if (that.reasons.length === 0) return self;
+		const newCause = new CauseImpl(dedupeReasons(self.reasons, that.reasons));
+		return equals$1(self, newCause) ? self : newCause;
+	});
+	causeMap = /*#__PURE__*/ dual(2, (self, f) => {
+		let hasFail = false;
+		const failures = self.reasons.map((failure) => {
+			if (isFailReason$1(failure)) {
+				hasFail = true;
+				return new Fail(f(failure.error), failure.annotations);
+			}
+			return failure;
+		});
+		return hasFail ? causeFromReasons(failures) : self;
+	});
+	causePrettyErrors = (self, options) => {
+		const errors = [];
+		const interrupts = [];
+		if (self.reasons.length === 0) return errors;
+		const prevStackLimit = getStackTraceLimit();
+		if (prevStackLimit !== 0) setStackTraceLimit(1);
+		try {
+			for (const failure of self.reasons) {
+				if (failure._tag === "Interrupt") {
+					interrupts.push(failure);
+					continue;
+				}
+				errors.push(causePrettyError(failure._tag === "Die" ? failure.defect : failure.error, failure.annotations, options));
+			}
+			if (errors.length === 0) {
+				const cause = /* @__PURE__ */ new Error("The fiber was interrupted by:");
+				cause.name = "InterruptCause";
+				cause.stack = interruptCauseStack(cause, interrupts);
+				const error = new globalThis.Error("All fibers interrupted without error", { cause });
+				error.name = "InterruptError";
+				error.stack = `${error.name}: ${error.message}`;
+				errors.push(causePrettyError(error, interrupts[0].annotations, options));
+			}
+		} finally {
+			if (prevStackLimit !== 0) setStackTraceLimit(prevStackLimit);
+		}
+		return errors;
+	};
+	causePrettyError = (original, annotations, options) => {
+		const kind = typeof original;
+		let error;
+		if (original && kind === "object") {
+			error = new globalThis.Error(causePrettyMessage(original), { cause: original.cause ? causePrettyError(original.cause) : void 0 });
+			if (typeof original.name === "string") error.name = original.name;
+			if (typeof original.stack === "string") error.stack = cleanErrorStack(original.stack, error, annotations);
+			else {
+				const stack = `${error.name}: ${error.message}`;
+				error.stack = annotations ? addStackAnnotations(stack, annotations) : stack;
+			}
+			if (options?.includeCauseInStack) error.stack = renderPrettyError(error);
+			for (const key of Object.keys(original)) if (!(key in error)) error[key] = original[key];
+		} else error = new globalThis.Error(!original ? `Unknown error: ${original}` : kind === "string" ? original : formatJson(original));
+		return error;
+	};
+	causePrettyMessage = (u) => {
+		if (typeof u.message === "string") return u.message;
+		else if (typeof u.toString === "function" && u.toString !== Object.prototype.toString && u.toString !== Array.prototype.toString) try {
+			return u.toString();
+		} catch {}
+		return formatJson(u);
+	};
+	locationRegExp = /\((.*)\)/g;
+	cleanErrorStack = (stack, error, annotations) => {
+		const message = `${error.name}: ${error.message}`;
+		const lines = (stack.startsWith(message) ? stack.slice(message.length) : stack).split("\n");
+		const out = [message];
+		for (let i = 1; i < lines.length; i++) {
+			if (/Generator\.next|~effect\/(?:Effect|Utils)/.test(lines[i])) break;
+			out.push(lines[i]);
+		}
+		return annotations ? addStackAnnotations(out.join("\n"), annotations) : out.join("\n");
+	};
+	addStackAnnotations = (stack, annotations) => {
+		const frame = annotations?.get(StackTraceKey.key);
+		if (frame) stack = `${stack}\n${currentStackTrace(frame)}`;
+		return stack;
+	};
+	interruptCauseStack = (error, interrupts) => {
+		const out = [`${error.name}: ${error.message}`];
+		for (const current of interrupts) {
+			const fiberId = current.fiberId !== void 0 ? `#${current.fiberId}` : "unknown";
+			const frame = current.annotations.get(InterruptorStackTrace.key);
+			out.push(`    at fiber (${fiberId})`);
+			if (frame) out.push(currentStackTrace(frame));
+		}
+		return out.join("\n");
+	};
+	currentStackTrace = (frame) => {
+		const out = [];
+		let current = frame;
+		let i = 0;
+		while (current && i < 10) {
+			const stack = current.stack();
+			if (stack) {
+				const locationMatchAll = stack.matchAll(locationRegExp);
+				let match = false;
+				for (const [, location] of locationMatchAll) {
+					match = true;
+					out.push(`    at ${current.name} (${location})`);
+				}
+				if (!match) out.push(`    at ${current.name} (${stack.replace(/^at /, "")})`);
+			} else out.push(`    at ${current.name}`);
+			current = current.parent;
+			i++;
+		}
+		return out.join("\n");
+	};
+	causePretty = (cause) => causePrettyErrors(cause).map(renderPrettyError).join("\n");
+	renderPrettyError = (e) => e.cause ? `${e.stack} {\n${renderErrorCause(e.cause, "  ")}\n}` : e.stack;
+	renderErrorCause = (cause, prefix) => {
+		const lines = cause.stack.split("\n");
+		let stack = `${prefix}[cause]: ${lines[0]}`;
+		for (let i = 1, len = lines.length; i < len; i++) stack += `\n${prefix}${lines[i]}`;
+		if (cause.cause) stack += ` {\n${renderErrorCause(cause.cause, `${prefix}  `)}\n${prefix}}`;
+		return stack;
+	};
+	FiberTypeId = "~effect/Fiber";
+	fiberVariance = {
+		_A: identity,
+		_E: identity
+	};
+	fiberIdStore = { id: 0 };
+	getCurrentFiber = () => globalThis[currentFiberTypeId];
+	FiberImpl = class {
+		constructor(context, interruptible = true) {
+			this.setContext(context);
+			this.id = ++fiberIdStore.id;
+			this.currentOpCount = 0;
+			this.interruptible = interruptible;
+			this._stack = [];
+			this._observers = void 0;
+			this._exit = void 0;
+			this._children = void 0;
+			this._interruptedCause = void 0;
+			this._yielded = void 0;
+			this._running = false;
+			this._deferredInterrupt = false;
+			this._parent = void 0;
+			this.cache.runtimeMetrics?.recordFiberStart(this.context);
+		}
+		get [FiberTypeId]() {
+			return fiberVariance;
+		}
+		get currentDispatcher() {
+			return this._dispatcher ??= this.cache.scheduler.makeDispatcher();
+		}
+		getRef(ref) {
+			return get(this.context, ref);
+		}
+		addObserver(cb) {
+			if (this._exit) {
+				cb(this._exit);
+				return constVoid;
+			}
+			if (this._observers === void 0) this._observers = [cb];
+			else this._observers.push(cb);
+			return () => this.removeObserver(cb);
+		}
+		removeObserver(cb) {
+			if (this._exit || this._observers === void 0) return;
+			const index = this._observers.indexOf(cb);
+			if (index >= 0) this._observers.splice(index, 1);
+		}
+		interruptUnsafe(fiberId, annotations) {
+			if (this._exit) return;
+			let cause = causeInterrupt(fiberId);
+			if (this.cache.stackFrame) cause = causeAnnotate(cause, make$8(StackTraceKey, this.cache.stackFrame));
+			if (annotations) cause = causeAnnotate(cause, annotations);
+			this._interruptedCause = this._interruptedCause ? causeCombine(this._interruptedCause, cause) : cause;
+			if (this.interruptible) {
+				if (this._running) this._deferredInterrupt = true;
+				else this.evaluate(failCause$1(this._interruptedCause));
+			}
+		}
+		pollUnsafe() {
+			return this._exit;
+		}
+		evaluate(effect) {
+			if (this._exit) return;
+			else if (this._yielded !== void 0) {
+				const yielded = this._yielded;
+				this._yielded = void 0;
+				yielded();
+			}
+			const exit = this.runLoop(effect);
+			if (exit === Yield) return;
+			const interruptChildren = fiberMiddleware.interruptChildren && fiberMiddleware.interruptChildren(this);
+			if (interruptChildren !== void 0) return this.evaluate(flatMap$1(interruptChildren, () => exit));
+			this._exit = exit;
+			this.cache.runtimeMetrics?.recordFiberEnd(this.context, this._exit);
+			if (this._parent) {
+				this._parent._children?.delete(this);
+				this._parent = void 0;
+			}
+			if (this._observers !== void 0) {
+				const observers = this._observers;
+				this._observers = void 0;
+				for (let i = 0; i < observers.length; i++) observers[i](exit);
+			}
+			this._stack.length = 0;
+			this._children = void 0;
+			this.context = empty$1();
+		}
+		runLoop(effect) {
+			const prevFiber = globalThis[currentFiberTypeId];
+			globalThis[currentFiberTypeId] = this;
+			const prevRunning = this._running;
+			this._running = true;
+			let yielding = false;
+			let current = effect;
+			this.currentOpCount = 0;
+			try {
+				while (true) {
+					if (this._deferredInterrupt) {
+						this._deferredInterrupt = false;
+						current = failCause$1(this._interruptedCause);
+					}
+					this.currentOpCount++;
+					const cache = this.cache;
+					if (!yielding && !cache.preventYield && cache.scheduler.shouldYield(this)) {
+						yielding = true;
+						const prev = current;
+						current = flatMap$1(yieldNow, () => prev);
+					}
+					current = cache.tracerContext ? cache.tracerContext(current, this) : current[evaluate](this);
+					if (current === Yield) {
+						const yielded = this._yielded;
+						if (ExitTypeId in yielded) {
+							this._deferredInterrupt = false;
+							this._yielded = void 0;
+							return yielded;
+						} else if (this._deferredInterrupt) {
+							this._yielded = void 0;
+							yielded();
+							continue;
+						}
+						return Yield;
+					}
+				}
+			} catch (error) {
+				if (!hasProperty(current, evaluate)) return exitDie(`Fiber.runLoop: Not a valid effect: ${String(current)}`);
+				return this.runLoop(exitDie(error));
+			} finally {
+				this._running = prevRunning;
+				globalThis[currentFiberTypeId] = prevFiber;
+			}
+		}
+		getCont(symbol) {
+			if (this._deferredInterrupt) {
+				this._deferredInterrupt = false;
+				return deferredInterruptCont;
+			}
+			while (true) {
+				const op = this._stack.pop();
+				if (!op) return void 0;
+				const all = op[contAll];
+				if (all !== void 0) {
+					const cont = all.call(op, this);
+					if (cont) {
+						cont[symbol] = cont;
+						return cont;
+					}
+				}
+				if (op[symbol]) return op;
+			}
+		}
+		succeedWith(value) {
+			if ((++this.currentOpCount & maxInlineSteps - 1) === 0) return exitSucceed(value);
+			const cont = this.getCont(contA);
+			return cont ? cont[contA](value, this) : this.yieldWith(exitSucceed(value));
+		}
+		yieldWith(value) {
+			this._yielded = value;
+			return Yield;
+		}
+		children() {
+			return this._children ??= /* @__PURE__ */ new Set();
+		}
+		pipe() {
+			return pipeArguments(this, arguments);
+		}
+		setContext(context) {
+			const previous = this.context;
+			this.context = context;
+			if (previous !== void 0 && hasSameCache(previous, context)) return;
+			const root = context.cacheRoot;
+			const cache = root._fiberCache ??= makeFiberContextCache(context);
+			if (this.cache?.scheduler !== cache.scheduler) this._dispatcher = void 0;
+			this.cache = cache;
+		}
+		get currentSpanLocal() {
+			const span = this.cache.span;
+			return span?._tag === "Span" ? span : void 0;
+		}
+	};
+	makeFiberContextCache = (context) => {
+		const currentTracer = getOrUndefinedUnsafe(context, TracerKey);
+		return {
+			scheduler: get(context, Scheduler),
+			tracer: currentTracer,
+			tracerContext: currentTracer ? currentTracer["context"] : void 0,
+			tracerEnabled: get(context, TracerEnabled),
+			span: getOrUndefinedUnsafe(context, ParentSpanKey),
+			logLevel: get(context, CurrentLogLevel),
+			minimumLogLevel: get(context, MinimumLogLevel),
+			stackFrame: get(context, CurrentStackFrame),
+			runtimeMetrics: getOrUndefinedUnsafe(context, FiberRuntimeMetricsKey),
+			maxOpsBeforeYield: get(context, MaxOpsBeforeYield),
+			preventYield: get(context, PreventSchedulerYield)
+		};
+	};
+	deferredInterruptCont = {
+		[contA](_value, fiber) {
+			return failCause$1(fiber._interruptedCause);
+		},
+		[contE](_cause, fiber) {
+			return failCause$1(fiber._interruptedCause);
+		}
+	};
+	maxInlineSteps = 32;
+	fiberMiddleware = { interruptChildren: void 0 };
+	fiberStackAnnotations = (fiber) => {
+		if (!fiber.cache.stackFrame) return void 0;
+		const annotations = /* @__PURE__ */ new Map();
+		annotations.set(InterruptorStackTrace.key, fiber.cache.stackFrame);
+		return makeUnsafe$2(annotations);
+	};
+	fiberAwaitAll = (self) => callback((resume) => {
+		const iter = self[Symbol.iterator]();
+		const exits = [];
+		let cancel = void 0;
+		function loop() {
+			let result = iter.next();
+			while (!result.done) {
+				if (result.value._exit) {
+					exits.push(result.value._exit);
+					result = iter.next();
+					continue;
+				}
+				cancel = result.value.addObserver((exit) => {
+					exits.push(exit);
+					loop();
+				});
+				return;
+			}
+			resume(succeed$3(exits));
+		}
+		loop();
+		return sync(() => cancel?.());
+	});
+	fiberInterruptAll = (fibers) => withFiber((parent) => {
+		const annotations = fiberStackAnnotations(parent);
+		let fiberArr = empty();
+		for (const fiber of fibers) {
+			fiber.interruptUnsafe(parent.id, annotations);
+			fiberArr.push(fiber);
+		}
+		return asVoid(fiberAwaitAll(fiberArr));
+	});
+	succeed$3 = exitSucceed;
+	failCause$1 = exitFailCause;
+	fail$5 = exitFail;
+	sync = /*#__PURE__*/ makePrimitive({
+		op: "Sync",
+		[evaluate](fiber) {
+			const value = this[args]();
+			const cont = fiber.getCont(contA);
+			return cont ? cont[contA](value, fiber) : fiber.yieldWith(exitSucceed(value));
+		}
+	});
+	suspend$1 = /*#__PURE__*/ makePrimitive({
+		op: "Suspend",
+		[evaluate](_fiber) {
+			return this[args]();
+		}
+	});
+	yieldNowWith = /*#__PURE__*/ makePrimitive({
+		op: "Yield",
+		[evaluate](fiber) {
+			let resumed = false;
+			fiber.currentDispatcher.scheduleTask(() => {
+				if (resumed) return;
+				fiber.evaluate(exitVoid);
+			}, this[args] ?? 0);
+			return fiber.yieldWith(() => {
+				resumed = true;
+			});
+		}
+	});
+	yieldNow = /*#__PURE__*/ yieldNowWith(0);
+	failCauseSync$1 = (evaluate) => suspend$1(() => failCause$1(evaluate()));
+	die$2 = (defect) => exitDie(defect);
+	void_$1 = /*#__PURE__*/ succeed$3(void 0);
+	callbackOptions = /*#__PURE__*/ function() {
+		const Proto = /*#__PURE__*/ makePrimitiveProto({
+			op: "Async",
+			[evaluate](fiber) {
+				let resumed = false;
+				let yielded = false;
+				const controller = this.withSignal ? new AbortController() : void 0;
+				const onCancel = this.register.call(fiber.cache.scheduler, (effect) => {
+					if (resumed) return;
+					resumed = true;
+					if (yielded) fiber.evaluate(effect);
+					else yielded = effect;
+				}, controller?.signal);
+				if (yielded !== false) return yielded;
+				yielded = true;
+				fiber._yielded = () => {
+					resumed = true;
+				};
+				if (controller === void 0 && onCancel === void 0) return Yield;
+				fiber._stack.push(asyncFinalizer(() => {
+					resumed = true;
+					controller?.abort();
+					return onCancel ?? exitVoid;
+				}));
+				return Yield;
+			}
+		});
+		const AsyncImpl = function(register, withSignal) {
+			this.register = register;
+			this.withSignal = withSignal;
+		};
+		AsyncImpl.prototype = Proto;
+		return function(register, withSignal) {
+			return new AsyncImpl(register, withSignal);
+		};
+	}();
+	asyncFinalizer = /*#__PURE__*/ makePrimitive({
+		op: "AsyncFinalizer",
+		[contAll](fiber) {
+			if (fiber.interruptible) {
+				fiber.interruptible = false;
+				fiber._stack.push(setInterruptibleTrue);
+			}
+		},
+		[contE](cause, _fiber) {
+			return hasInterrupts(cause) ? flatMap$1(this[args](), () => failCause$1(cause)) : failCause$1(cause);
+		}
+	});
+	callback = (register) => callbackOptions(register, register.length >= 2);
+	defineFunctionLength = (length, fn) => Object.defineProperty(fn, "length", {
+		value: length,
+		configurable: true
+	});
+	fnUntracedEager$1 = (body, ...pipeables) => defineFunctionLength(body.length, pipeables.length === 0 ? function() {
+		return fromIteratorEagerUnsafe(() => body.apply(this, arguments));
+	} : function() {
+		let effect = fromIteratorEagerUnsafe(() => body.apply(this, arguments));
+		for (const pipeable of pipeables) effect = pipeable(effect, ...arguments);
+		return effect;
+	});
+	fromIteratorEagerUnsafe = (evaluate) => {
+		try {
+			const iterator = evaluate();
+			let value = void 0;
+			while (true) {
+				const state = iterator.next(value);
+				if (state.done) return succeed$3(state.value);
+				const primitive = state.value;
+				if (primitive && primitive._tag === "Success") {
+					value = primitive.value;
+					continue;
+				} else if (primitive && primitive._tag === "Failure") return state.value;
+				else {
+					let isFirstExecution = true;
+					return suspend$1(() => {
+						if (isFirstExecution) {
+							isFirstExecution = false;
+							return flatMap$1(state.value, (value) => fromIteratorUnsafe(iterator, value));
+						} else return suspend$1(() => fromIteratorUnsafe(evaluate()));
+					});
+				}
+			}
+		} catch (error) {
+			return die$2(error);
+		}
+	};
+	fromIteratorUnsafe = /*#__PURE__*/ function() {
+		const Proto = /*#__PURE__*/ makePrimitiveProto({
+			op: "Iterator",
+			[contA](value, fiber) {
+				const iter = this.iterator;
+				while (true) {
+					const state = iter.next(value);
+					if (state.done) return succeed$3(state.value);
+					if (!effectIsExit(state.value)) {
+						fiber._stack.push(this);
+						return state.value;
+					} else if (state.value._tag === "Failure") return state.value;
+					value = state.value.value;
+				}
+			},
+			[evaluate](fiber) {
+				return this[contA](this.initial, fiber);
+			}
+		});
+		const IteratorImpl = function(iterator, initial) {
+			this.iterator = iterator;
+			this.initial = initial;
+		};
+		IteratorImpl.prototype = Proto;
+		return function(iterator, initial) {
+			return new IteratorImpl(iterator, initial);
+		};
+	}();
+	evaluateCont = function(fiber) {
+		fiber._stack.push(this);
+		return this[args];
+	};
+	OnSuccessProto = /*#__PURE__*/ makePrimitiveProto({
+		op: "OnSuccess",
+		[evaluate]: evaluateCont
+	});
+	ContImpl = function(self, cont, payload) {
+		this[args] = self;
+		this[contA] = cont;
+		this.payload = payload;
+	};
+	ContImpl.prototype = OnSuccessProto;
+	returnPayload = function() {
+		return this.payload;
+	};
+	continuationMarksStack = /*#__PURE__*/ (() => {
+		const marker = "~effect/Effect/stackProbe";
+		return { [marker]: function stackProbe() {
+			return (/* @__PURE__ */ new Error()).stack;
+		} }[marker]()?.includes("[as " + marker + "]") === true;
+	})();
+	mapCont = function(value, fiber) {
+		const f = this.payload;
+		return fiber.succeedWith(continuationMarksStack ? f(value) : internalCall(() => f(value)));
+	};
+	andThenCont = function(value) {
+		const f = this.payload;
+		return f(value);
+	};
+	asVoid = (self) => new ContImpl(self, returnPayload, exitVoid);
+	flatMap$1 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, andThenCont, f));
+	effectIsExit = (effect) => effect[ExitTypeId] !== void 0;
+	flatMapEager$1 = /*#__PURE__*/ dual(2, (self, f) => {
+		if (effectIsExit(self)) return self._tag === "Success" ? f(self.value) : self;
+		return flatMap$1(self, f);
+	});
+	map$1 = /*#__PURE__*/ dual(2, (self, f) => new ContImpl(self, mapCont, f));
+	mapEager$1 = /*#__PURE__*/ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map$1(self, f));
+	exitIsSuccess = (self) => self._tag === "Success";
+	exitVoid = /*#__PURE__*/ exitSucceed(void 0);
+	exitMap = /*#__PURE__*/ dual(2, (self, f) => self._tag === "Success" ? exitSucceed(f(self.value)) : self);
+	catchCause$1 = /*#__PURE__*/ dual(2, (self, f) => new OnFailureImpl(self, f.length !== 1 ? (cause) => f(cause) : f));
+	OnFailureProto = /*#__PURE__*/ makePrimitiveProto({
+		op: "OnFailure",
+		[evaluate]: evaluateCont
+	});
+	OnFailureImpl = function(self, f) {
+		this[args] = self;
+		this[contE] = f;
+	};
+	OnFailureImpl.prototype = OnFailureProto;
+	OnSuccessAndFailureProto = /*#__PURE__*/ makePrimitiveProto({
+		op: "OnSuccessAndFailure",
+		[evaluate]: evaluateCont
+	});
+	OnSuccessAndFailureImpl = function(self, onSuccess, onFailure) {
+		this[args] = self;
+		this[contA] = onSuccess;
+		this[contE] = onFailure;
+	};
+	OnSuccessAndFailureImpl.prototype = OnSuccessAndFailureProto;
+	matchSuccess = function(value, fiber) {
+		const handlers = this.payload;
+		return fiber.succeedWith(continuationMarksStack ? handlers.onSuccess(value) : internalCall(() => handlers.onSuccess(value)));
+	};
+	makeMatch = (op, onFailure) => {
+		const Proto = makePrimitiveProto({
+			op,
+			[evaluate]: evaluateCont,
+			[contA]: matchSuccess,
+			[contE]: onFailure
+		});
+		const MatchImpl = function(self, handlers) {
+			this[args] = self;
+			this.payload = handlers;
+		};
+		MatchImpl.prototype = Proto;
+		return MatchImpl;
+	};
+	MatchImpl = /*#__PURE__*/ makeMatch("Match", function(cause, fiber) {
+		const fail = cause.reasons.find(isFailReason$1);
+		if (fail === void 0) return failCause$1(cause);
+		const handlers = this.payload;
+		return fiber.succeedWith(continuationMarksStack ? handlers.onFailure(fail.error) : internalCall(() => handlers.onFailure(fail.error)));
+	});
+	match$1 = /*#__PURE__*/ dual(2, (self, options) => new MatchImpl(self, options));
+	exit$1 = (self) => effectIsExit(self) ? exitSucceed(self) : exitPrimitive(self);
+	exitPrimitive = /*#__PURE__*/ makePrimitive({
+		op: "Exit",
+		[evaluate](fiber) {
+			fiber._stack.push(this);
+			return this[args];
+		},
+		[contA](value, fiber, exit) {
+			return fiber.succeedWith(exit ?? exitSucceed(value));
+		},
+		[contE](cause, fiber, exit) {
+			return fiber.succeedWith(exit ?? exitFailCause(cause));
+		}
+	});
+	uninterruptible = (self) => withFiber((fiber) => {
+		if (!fiber.interruptible) return self;
+		fiber.interruptible = false;
+		fiber._stack.push(setInterruptibleTrue);
+		return self;
+	});
+	setInterruptible = /*#__PURE__*/ makePrimitive({
+		op: "SetInterruptible",
+		[contAll](fiber) {
+			fiber.interruptible = this[args];
+			if (fiber._interruptedCause && fiber.interruptible) return () => failCause$1(fiber._interruptedCause);
+		}
+	});
+	setInterruptibleTrue = /*#__PURE__*/ setInterruptible(true);
+	resolveConcurrency = (concurrency) => concurrency === "unbounded" ? Number.POSITIVE_INFINITY : Math.max(1, concurrency ?? 1);
+	iterateEager = () => (options) => {
+		const onItem = options.onItem;
+		const step = options.step;
+		const resumeSequential = (state, items, index, end, effect) => flatMap$1(exit$1(effect), (itemExit) => step(state, items[index], itemExit, index) ?? runSequential(state, items, index + 1, end) ?? void_$1);
+		const runSequential = (state, items, index = 0, end = items.length) => {
+			for (; index < end; index++) {
+				const item = items[index];
+				const effect = onItem(state, item, index);
+				if (!effectIsExit(effect)) return resumeSequential(state, items, index, end, effect);
+				const terminal = step(state, item, effect, index);
+				if (terminal) return terminal._tag === "Failure" ? terminal : void 0;
+			}
+		};
+		return runSequential;
+	};
+	iterateConcurrentImpl = (options) => {
+		const onItem = options.onItem;
+		const step = options.step;
+		return (state, items, opts) => {
+			let index = 0;
+			const end = opts.end ?? items.length;
+			const concurrency = opts.concurrency;
+			let done = false;
+			let parentFiber;
+			let fibers;
+			let resume;
+			let interrupted = false;
+			let terminal;
+			let effect;
+			const failDefect = (error) => {
+				const defect = exitDie(error);
+				terminal = defect;
+				done = true;
+				interrupted = true;
+				return fibers && fibers.size > 0 ? flatMap$1(uninterruptible(fiberInterruptAll(Array.from(fibers))), () => defect) : defect;
+			};
+			const go = () => {
+				let paused = false;
+				for (; !terminal && index < end; index++) {
+					const item = items[index];
+					const eff = effect ?? onItem(state, item, index);
+					if (effectIsExit(eff)) {
+						terminal = step(state, item, eff, index);
+						if (terminal) break;
+					} else if (!parentFiber) return callback((cb) => {
+						parentFiber = getCurrentFiber();
+						fibers = /* @__PURE__ */ new Set();
+						effect = eff;
+						resume = cb;
+						let result;
+						try {
+							result = go();
+						} catch (error) {
+							return cb(failDefect(error));
+						}
+						if (result) return cb(result);
+						return suspend$1(() => {
+							terminal = exitVoid;
+							interrupted = true;
+							return fibers ? fiberInterruptAll(fibers) : void_$1;
+						});
+					});
+					else {
+						effect = void 0;
+						const fiber = forkUnsafe(parentFiber, eff, true, true, "inherit");
+						if (fiber._exit) {
+							terminal = step(state, item, fiber._exit, index);
+							if (terminal) break;
+							continue;
+						}
+						fibers.add(fiber);
+						const currentIndex = index;
+						fiber.addObserver((exit) => {
+							fibers.delete(fiber);
+							try {
+								if (terminal) {
+									if (!interrupted && exit._tag === "Failure") for (const reason of exit.cause.reasons) if (reason._tag === "Interrupt") continue;
+									else if (terminal._tag === "Failure") terminal.cause.reasons.push(reason);
+									else terminal = exitFailCause(causeFromReasons([reason]));
+								} else {
+									const result = step(state, item, exit, currentIndex);
+									if (result) {
+										terminal = result._tag === "Failure" ? exitFailCause(causeFromReasons(result.cause.reasons.slice())) : result;
+										go();
+									}
+								}
+								if (paused) {
+									const eff = go();
+									if (eff) resume(eff);
+								} else if (done && fibers.size === 0) resume(terminal ?? void_$1);
+							} catch (error) {
+								resume(failDefect(error));
+							}
+						});
+						if (fibers.size < concurrency) continue;
+						paused = true;
+						index++;
+						return;
+					}
+				}
+				done = true;
+				if (terminal) {
+					if (fibers && fibers.size > 0) {
+						const annotations = fiberStackAnnotations(parentFiber);
+						fibers.forEach((f) => f.interruptUnsafe(parentFiber.id, annotations));
+						return;
+					}
+					if (resume || terminal._tag === "Failure") return terminal;
+				} else if (resume) {
+					if (!fibers) return exitVoid;
+					else if (fibers.size === 0) resume(void_$1);
+				}
+			};
+			return go();
+		};
+	};
+	iterateConcurrent = () => (options) => iterateConcurrentImpl(options);
+	forkUnsafe = (parent, effect, immediate = false, daemon = false, uninterruptible = false) => {
+		const parentRuntime = parent;
+		const interruptible = uninterruptible === "inherit" ? parentRuntime.interruptible : !uninterruptible;
+		const child = new FiberImpl(parentRuntime.context, interruptible);
+		if (immediate) child.evaluate(effect);
+		else parentRuntime.currentDispatcher.scheduleTask(() => child.evaluate(effect), 0);
+		if (!daemon && !child._exit) {
+			parentRuntime.children().add(child);
+			child._parent = parentRuntime;
+		}
+		return child;
+	};
+	runForkWith = (context) => (effect, options) => {
+		const fiber = new FiberImpl(options?.scheduler ? add(context, Scheduler, options.scheduler) : context, options?.uninterruptible !== true);
+		fiber.evaluate(effect);
+		if (fiber._exit) return fiber;
+		if (options?.signal) {
+			if (options.signal.aborted) fiber.interruptUnsafe();
+			else {
+				const abort = () => fiber.interruptUnsafe();
+				options.signal.addEventListener("abort", abort, { once: true });
+				fiber.addObserver(() => options.signal.removeEventListener("abort", abort));
+			}
+		}
+		if (options?.onFiberStart) options.onFiberStart(fiber);
+		return fiber;
+	};
+	runFork$1 = /*#__PURE__*/ runForkWith(/*#__PURE__*/ empty$1());
+	runSyncExitWith = (context) => {
+		const runFork = runForkWith(context);
+		return (effect) => {
+			if (effectIsExit(effect)) return effect;
+			const scheduler = new MixedScheduler("sync");
+			const fiber = runFork(effect, { scheduler });
+			fiber._dispatcher?.flush();
+			return fiber._exit ?? exitDie(new AsyncFiberError(fiber));
+		};
+	};
+	runSyncExit$1 = /*#__PURE__*/ runSyncExitWith(/*#__PURE__*/ empty$1());
+	AsyncFiberErrorTypeId = "~effect/Cause/AsyncFiberError";
+	AsyncFiberError = class extends (/*#__PURE__*/ TaggedError$1("AsyncFiberError")) {
+		[AsyncFiberErrorTypeId] = AsyncFiberErrorTypeId;
+		constructor(fiber) {
+			super({
+				message: "An asynchronous Effect was executed with Effect.runSync",
+				fiber
+			});
+		}
+	};
+	colors = {
+		bold: "1",
+		red: "31",
+		green: "32",
+		yellow: "33",
+		blue: "34",
+		cyan: "36",
+		white: "37",
+		gray: "90",
+		black: "30",
+		bgBrightRed: "101"
+	};
+	colors.gray, colors.blue, colors.green, colors.yellow, colors.red, colors.bgBrightRed, colors.black;
+})), isFailReason, die$1, map, pretty, init_Cause = __esmMin((() => {
+	init_core();
+	init_effect();
+	isFailReason = isFailReason$1;
+	die$1 = causeDie;
+	map = causeMap;
+	pretty = causePretty;
+})), succeed$2, failCause, fail$4, void_, isSuccess, init_Exit = __esmMin((() => {
+	init_core();
+	init_effect();
+	succeed$2 = exitSucceed;
+	failCause = exitFailCause;
+	fail$4 = exitFail;
+	void_ = exitVoid;
+	isSuccess = exitIsSuccess;
+})), TypeId$7, TimeZoneTypeId, Proto$2, ProtoTimeZone, toDateUtc$1, init_dateTime = __esmMin((() => {
+	init_Cause();
+	init_Equal();
+	init_Hash();
+	init_Inspectable();
+	init_Option();
+	init_Pipeable();
+	init_Predicate();
+	TypeId$7 = "~effect/DateTime";
+	TimeZoneTypeId = "~effect/DateTime/TimeZone";
+	Proto$2 = {
+		[TypeId$7]: TypeId$7,
+		pipe() {
+			return pipeArguments(this, arguments);
+		},
+		[NodeInspectSymbol]() {
+			return this.toString();
+		},
+		toJSON() {
+			return toDateUtc$1(this).toJSON();
+		}
+	};
+	({ ...Proto$2 });
+	({ ...Proto$2 });
+	ProtoTimeZone = {
+		[TimeZoneTypeId]: TimeZoneTypeId,
+		[NodeInspectSymbol]() {
+			return this.toString();
+		}
+	};
+	({ ...ProtoTimeZone });
+	({ ...ProtoTimeZone });
+	toDateUtc$1 = (self) => new Date(self.epochMilliseconds);
+})), succeed$1, suspend, fail$3, failCauseSync, die, flatMap, exit, catchCause, match, runFork, runSyncExit, mapEager, flatMapEager, fnUntracedEager, init_Effect = __esmMin((() => {
+	init_effect();
+	succeed$1 = succeed$3;
+	suspend = suspend$1;
+	fail$3 = fail$5;
+	failCauseSync = failCauseSync$1;
+	die = die$2;
+	flatMap = flatMap$1;
+	exit = exit$1;
+	catchCause = catchCause$1;
+	match = match$1;
+	runFork = runFork$1;
+	runSyncExit = runSyncExit$1;
+	mapEager = mapEager$1;
+	flatMapEager = flatMapEager$1;
+	fnUntracedEager = fnUntracedEager$1;
+})), TypeId$6, BigDecimalProto, isBigDecimal, make$5, makeNormalized, bigint0, bigint1, bigint10, zero, normalize$2, MAX_COMPARISON_SCALE_ALIGNMENT, comparisonPowersOfTen, compareBigInt, compareMagnitude, compare, sign, format$1, toExponential, isZero, init_BigDecimal = __esmMin((() => {
+	init_Equal();
+	init_Hash();
+	init_Inspectable();
+	init_Order();
+	init_Pipeable();
+	init_Predicate();
+	TypeId$6 = "~effect/BigDecimal";
+	BigDecimalProto = {
+		[TypeId$6]: TypeId$6,
+		[symbol$1]() {
+			const normalized = normalize$2(this);
+			return combine(string$1(String(normalized.value)), number$2(normalized.scale));
+		},
+		[symbol](that) {
+			return isBigDecimal(that) && compare(this, that) === 0;
+		},
+		toString() {
+			return `BigDecimal(${format$1(this)})`;
+		},
+		toJSON() {
+			return {
+				_id: "BigDecimal",
+				value: String(this.value),
+				scale: this.scale
+			};
+		},
+		[NodeInspectSymbol]() {
+			return this.toJSON();
+		},
+		pipe() {
+			return pipeArguments(this, arguments);
+		}
+	};
+	isBigDecimal = (u) => hasProperty(u, TypeId$6);
+	make$5 = (value, scale) => {
+		if (!Number.isSafeInteger(scale)) throw new RangeError(`Scale must be a safe integer, got ${scale}`);
+		const o = Object.create(BigDecimalProto);
+		o.value = value;
+		o.scale = scale;
+		return o;
+	};
+	makeNormalized = (value, scale) => {
+		const o = make$5(value, scale);
+		o.normalized = o;
+		return o;
+	};
+	bigint0 = /*#__PURE__*/ BigInt(0);
+	bigint1 = /*#__PURE__*/ BigInt(1);
+	bigint10 = /*#__PURE__*/ BigInt(10);
+	zero = /*#__PURE__*/ makeNormalized(bigint0, 0);
+	normalize$2 = (self) => {
+		if (self.normalized === void 0) {
+			if (self.value === bigint0) self.normalized = zero;
+			else {
+				const digits = `${self.value}`;
+				let end = digits.length;
+				while (digits[end - 1] === "0") end--;
+				self.normalized = makeNormalized(BigInt(digits.slice(0, end)), self.scale - (digits.length - end));
+			}
+		}
+		return self.normalized;
+	};
+	MAX_COMPARISON_SCALE_ALIGNMENT = 100;
+	comparisonPowersOfTen = [bigint1];
+	compareBigInt = (self, that) => self === that ? 0 : self < that ? -1 : 1;
+	compareMagnitude = (self, that) => {
+		const selfDigits = `${self.value < bigint0 ? -self.value : self.value}`;
+		const thatDigits = `${that.value < bigint0 ? -that.value : that.value}`;
+		const exponentDifference = BigInt(selfDigits.length - thatDigits.length) - BigInt(self.scale) + BigInt(that.scale);
+		if (exponentDifference !== bigint0) return exponentDifference < bigint0 ? -1 : 1;
+		const length = Math.max(selfDigits.length, thatDigits.length);
+		return String$4(selfDigits.padEnd(length, "0"), thatDigits.padEnd(length, "0"));
+	};
+	compare = (self, that) => {
+		if (self.scale === that.scale) return compareBigInt(self.value, that.value);
+		const selfSign = sign(self);
+		const thatSign = sign(that);
+		if (selfSign !== thatSign) return selfSign < thatSign ? -1 : 1;
+		if (selfSign === 0) return 0;
+		const scaleDifference = self.scale - that.scale;
+		const absoluteScaleDifference = Math.abs(scaleDifference);
+		if (absoluteScaleDifference > MAX_COMPARISON_SCALE_ALIGNMENT) return selfSign === -1 ? compareMagnitude(that, self) : compareMagnitude(self, that);
+		const powerOfTen = comparisonPowersOfTen[absoluteScaleDifference] ??= bigint10 ** BigInt(absoluteScaleDifference);
+		return scaleDifference > 0 ? compareBigInt(self.value, that.value * powerOfTen) : compareBigInt(self.value * powerOfTen, that.value);
+	};
+	sign = (n) => n.value === bigint0 ? 0 : n.value < bigint0 ? -1 : 1;
+	format$1 = (n) => {
+		const normalized = normalize$2(n);
+		if (Math.abs(normalized.scale) >= 16) return toExponential(normalized);
+		const negative = normalized.value < bigint0;
+		const absolute = `${negative ? -normalized.value : normalized.value}`;
+		const digits = normalized.scale > 0 ? absolute.padStart(normalized.scale + 1, "0") : absolute.padEnd(absolute.length - normalized.scale, "0");
+		const point = digits.length - normalized.scale;
+		const complete = normalized.scale > 0 ? `${digits.slice(0, point)}.${digits.slice(point)}` : digits;
+		return negative ? `-${complete}` : complete;
+	};
+	toExponential = (n) => {
+		if (isZero(n)) return "0e+0";
+		const normalized = normalize$2(n);
+		const digits = `${normalized.value}`;
+		const point = normalized.value < bigint0 ? 2 : 1;
+		const head = digits.slice(0, point);
+		const tail = digits.slice(point);
+		const exp = tail.length - normalized.scale;
+		return `${head}${tail === "" ? "" : `.${tail}`}e${exp >= 0 ? "+" : ""}${exp}`;
+	};
+	isZero = (n) => n.value === bigint0;
+})), init_DateTime = __esmMin((() => {
+	init_dateTime();
+})), alphabet, codes, init_Base64 = __esmMin((() => {
+	init_Result();
+	init_EncodingError();
+	alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+	codes = /*#__PURE__*/ (/* @__PURE__ */ new Uint8Array(123)).fill(255);
+	for (let i = 0; i < 64; i++) codes[/*#__PURE__*/ alphabet.charCodeAt(i)] = i;
+	codes[/*#__PURE__*/ "=".charCodeAt(0)] = 0;
+})), init_Cookies = __esmMin((() => {
+	init_Data();
+	init_Duration();
+	init_Inspectable();
+	init_record();
+	init_Pipeable();
+	init_Predicate();
+	init_Record();
+	init_Result();
+	({ ...BaseProto });
+	({ ...BaseProto });
+})), fromInputNested;
+var init_UrlParams = __esmMin((() => {
+	init_Array();
+	init_Equal();
+	init_Equivalence();
+	init_Hash();
+	init_core();
+	init_record();
+	init_Predicate();
+	init_Tuple();
+	({ ...PipeInspectableProto });
+	fromInputNested = (input) => {
+		const entries = typeof input[Symbol.iterator] === "function" ? fromIterable$1(input) : Object.entries(input);
+		const out = [];
+		for (const [key, value] of entries) if (Array.isArray(value)) {
+			for (let i = 0; i < value.length; i++) if (value[i] !== void 0) out.push([key, String(value[i])]);
+		} else if (value !== null && typeof value === "object") {
+			const nested = fromInputNested(value);
+			for (const [k, v] of nested) out.push([[key, ...typeof k === "string" ? [k] : k], v]);
+		} else if (value !== void 0) out.push([key, String(value)]);
+		return out;
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/annotations.js
+/** @internal */
+function resolve$3(ast) {
+	return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
+}
+var SENTINELS_ANNOTATION_KEY, CONSTRUCTOR_ANNOTATION_KEY, getExpected;
+var init_annotations = __esmMin((() => {
+	init_Function();
+	SENTINELS_ANNOTATION_KEY = "~sentinels";
+	CONSTRUCTOR_ANNOTATION_KEY = "~constructor";
+	getExpected = /*#__PURE__*/ memoize((ast) => {
+		const identifier = resolve$3(ast)?.identifier;
+		if (typeof identifier === "string") return identifier;
+		return ast.getExpected(getExpected);
+	});
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/parser.js
+var missing, succeed, missingExit, sameExit, toOption, fromOptionExit;
+var init_parser = __esmMin((() => {
+	init_Exit();
+	init_Option();
+	init_core();
+	missing = /*#__PURE__*/ Symbol();
+	succeed = succeed$2;
+	missingExit = /*#__PURE__*/ succeed(missing);
+	sameExit = /*#__PURE__*/ succeed(missing);
+	toOption = (value) => value === missing ? none() : some(value);
+	fromOptionExit = (option) => option._tag === "None" ? missingExit : succeed(option.value);
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaIssue.js
+/**
+* Returns `true` if the given value is an {@link Issue}.
+*
+* **When to use**
+*
+* Use when you need to narrow an `unknown` value to `Issue` in error-handling
+* code, such as distinguishing an `Issue` from other error types in a catch-all
+* handler.
+*
+* **Details**
+*
+* - Checks for the internal `TypeId` brand on the value.
+*
+* **Example** (Type-guarding an unknown error)
+*
+* ```ts import.meta.vitest
+* import { SchemaIssue } from "effect"
+*
+* const issue = new SchemaIssue.MissingKey(undefined)
+* SchemaIssue.isIssue(issue) // => true
+* SchemaIssue.isIssue("not an issue") // => false
+* ```
+*
+* @see {@link Issue}
+*
+* @category guards
+* @since 4.0.0
+*/
+function isIssue(u) {
+	return hasProperty(u, TypeId$3) && u[TypeId$3] === TypeId$3;
+}
+/**
+* Returns `true` when an issue contains an input reported by the schema parser.
+*
+* **When to use**
+*
+* Use when reading `Issue.input`, especially when `undefined` is a valid input
+* value.
+*
+* **Details**
+*
+* Reported input is stored as an own property. This guard checks for that
+* property and narrows `input` from optional to required.
+*
+* **Example** (Reading a reported input)
+*
+* ```ts import.meta.vitest
+* import { Result, Schema, SchemaIssue } from "effect"
+*
+* const result = Schema.decodeUnknownResult(Schema.String)(1, { reportInput: true })
+* if (Result.isFailure(result) && SchemaIssue.hasInput(result.failure.issue)) {
+*   result.failure.issue.input // => 1
+* }
+* ```
+*
+* @see {@link Issue} for the complete issue model
+*
+* @category guards
+* @since 4.0.0
+*/
+function hasInput(issue) {
+	return Object.hasOwn(issue, "input");
+}
+function makeFilterIssue(entry, input, options) {
+	if (isIssue(entry)) return entry;
+	if (typeof entry === "string") return new InvalidValue({ message: entry }, input, options);
+	const inner = typeof entry.issue === "string" ? new InvalidValue({ message: entry.issue }, input, options) : entry.issue;
+	return new Pointer(entry.path, inner);
+}
+/** @internal */
+function makeSingle(out, input, options) {
+	if (out === void 0) return;
+	if (typeof out === "boolean") return out ? void 0 : new InvalidValue(void 0, input, options);
+	return makeFilterIssue(out, input, options);
+}
+/** @internal */
+function normalizeFilterOutput(ast, out, input, options) {
+	if (Array.isArray(out)) {
+		if (!isReadonlyArrayNonEmpty(out)) return;
+		return out.length === 1 ? makeFilterIssue(out[0], input, options) : new Composite(ast, map$2(out, (entry) => makeFilterIssue(entry, input, options)), input, options);
+	}
+	return makeSingle(out, input, options);
+}
+/**
+* Creates a {@link Formatter} that produces a `StandardSchemaV1.FailureResult`.
+*
+* **When to use**
+*
+* Use when you need schema parse errors in
+* [Standard Schema V1](https://github.com/standard-schema/standard-schema)
+* format, optionally customizing leaf or check issue rendering.
+*
+* **Details**
+*
+* - Returns a `Formatter<StandardSchemaV1.FailureResult>`.
+* - Each leaf issue is flattened into `{ message, path }` entries.
+* - `Pointer` paths are accumulated to produce full property paths.
+* - Falls back to {@link defaultLeafHook} / {@link defaultCheckHook} when no
+*   hooks are provided.
+* - Default messages include reported input when the issue that produces the
+*   message has an `input` field. The returned Standard Schema issues do not
+*   receive an `input` field.
+*
+* **Gotchas**
+*
+* Reported input can appear inside the Standard Schema `message` string even
+* though it is not exposed as a separate property. Custom hooks control their
+* complete message and are not modified.
+*
+* **Example** (Creating a Standard Schema V1 formatter)
+*
+* ```ts import.meta.vitest
+* import { SchemaIssue } from "effect"
+*
+* const formatter = SchemaIssue.makeFormatterStandardSchemaV1()
+* formatter(new SchemaIssue.MissingKey(undefined)).issues[0].message // => "Missing key"
+* ```
+*
+* @see {@link makeFormatterDefault} — produces a plain string instead
+* @see {@link LeafHook}
+* @see {@link CheckHook}
+*
+* @category formatting
+* @since 4.0.0
+*/
+function makeFormatterStandardSchemaV1(options) {
+	return (issue) => ({ issues: toDefaultIssues(issue, [], options?.leafHook ?? defaultLeafHook, options?.checkHook ?? defaultCheckHook) });
+}
+function formatInput(issue) {
+	return hasInput(issue) ? format$2(issue.input) : void 0;
+}
+function findExpected(issue) {
+	const expected = issue.annotations?.expected;
+	return typeof expected === "string" ? expected : void 0;
+}
+function getExpectedMessage(expected, issue) {
+	const input = formatInput(issue);
+	return input === void 0 ? `Expected ${expected}` : `Expected ${expected}, got ${input}`;
+}
+function toDefaultIssues(issue, path, leafHook, checkHook) {
+	switch (issue._tag) {
+		case "Filter": {
+			const message = checkHook(issue);
+			if (message !== void 0) return [{
+				path,
+				message
+			}];
+			if (issue.issue._tag !== "InvalidValue") return toDefaultIssues(issue.issue, path, leafHook, checkHook);
+			const expected = findExpected(issue.issue);
+			return [{
+				path,
+				message: expected === void 0 ? getExpectedMessage(formatCheck(issue.filter), issue) : getExpectedMessage(expected, issue.issue)
+			}];
+		}
+		case "Encoding": return toDefaultIssues(issue.issue, path, leafHook, checkHook);
+		case "Pointer": return toDefaultIssues(issue.issue, [...path, ...issue.path], leafHook, checkHook);
+		case "Composite": return issue.issues.flatMap((issue) => toDefaultIssues(issue, path, leafHook, checkHook));
+		case "AnyOf":
+			if (issue.issues.length === 0) return [{
+				path,
+				message: findMessage(issue) ?? getExpectedMessage(getExpected(issue.ast), issue)
+			}];
+			return issue.issues.flatMap((issue) => toDefaultIssues(issue, path, leafHook, checkHook));
+		default: return [{
+			path,
+			message: leafHook(issue)
+		}];
+	}
+}
+function formatCheck(check) {
+	const expected = check.annotations?.expected;
+	if (typeof expected === "string") return expected;
+	switch (check._tag) {
+		case "Filter": return "<filter>";
+		case "FilterGroup": return check.checks.map((check) => formatCheck(check)).join(" & ");
+	}
+}
+/**
+* Creates a {@link Formatter} that converts an {@link Issue} into a
+* human-readable multi-line string.
+*
+* **When to use**
+*
+* Use when you need to format a `SchemaIssue.Issue` as error messages for
+* logging, CLI output, or developer-facing diagnostics.
+*
+* **Details**
+*
+* - Flattens the issue tree into `{ message, path }` entries using
+*   {@link defaultLeafHook} and {@link defaultCheckHook}.
+* - Includes reported input in default messages when the node producing the
+*   message has an `input` field.
+* - Each entry is rendered as `"<message>"` or `"<message>\n  at <path>"`.
+* - Multiple entries are joined with newlines.
+*
+* **Gotchas**
+*
+* Formatting an issue can disclose input retained with `reportInput: true`.
+* Wrapper inputs are not inherited by child messages, and custom messages are
+* returned unchanged.
+*
+* **Example** (Formatting an issue as a string)
+*
+* ```ts import.meta.vitest
+* import { SchemaIssue } from "effect"
+*
+* const formatter = SchemaIssue.makeFormatterDefault()
+* formatter(new SchemaIssue.MissingKey(undefined)) // => "Missing key"
+* ```
+*
+* @see {@link makeFormatterStandardSchemaV1} — produces Standard Schema V1 format instead
+* @see {@link Formatter}
+*
+* @category formatting
+* @since 4.0.0
+*/
+function makeFormatterDefault() {
+	return (issue) => formatIssue(issue, "");
+}
+function formatIssue(issue, path) {
+	let message;
+	switch (issue._tag) {
+		case "Filter": {
+			const annotated = defaultCheckHook(issue);
+			if (annotated !== void 0) message = annotated;
+			else {
+				if (issue.issue._tag !== "InvalidValue") return formatIssue(issue.issue, path);
+				const expected = findExpected(issue.issue);
+				message = expected === void 0 ? getExpectedMessage(formatCheck(issue.filter), issue) : getExpectedMessage(expected, issue.issue);
+			}
+			break;
+		}
+		case "Encoding": return formatIssue(issue.issue, path);
+		case "Pointer": return formatIssue(issue.issue, path + formatPath(issue.path));
+		case "Composite":
+		case "AnyOf":
+			if (issue._tag === "Composite" || issue.issues.length > 0) return issue.issues.map((issue) => formatIssue(issue, path)).join("\n");
+			message = findMessage(issue) ?? getExpectedMessage(getExpected(issue.ast), issue);
+			break;
+		default: message = defaultLeafHook(issue);
+	}
+	return path ? `${message}\n  at ${path}` : message;
+}
+function findMessage(issue) {
+	if (issue._tag === "Pointer") return;
+	if (issue._tag === "Encoding") return findMessage(issue.issue);
+	const message = (issue._tag === "Filter" ? issue.filter.annotations : "annotations" in issue ? issue.annotations : issue.ast.annotations)?.[issue._tag === "MissingKey" ? "messageMissingKey" : issue._tag === "UnexpectedKey" ? "messageUnexpectedKey" : "message"];
+	if (typeof message === "string") return message;
+}
+var TypeId$3, IssueNodeImpl, Filter$1, Encoding, Pointer, MissingKey, UnexpectedKey, Composite, InvalidType, InvalidValue, AnyOf, OneOf, defaultLeafHook, defaultCheckHook, defaultFormatter;
+var init_SchemaIssue = __esmMin((() => {
+	init_Array();
+	init_Formatter();
+	init_annotations();
+	init_parser();
+	init_Predicate();
+	TypeId$3 = "~effect/SchemaIssue/Issue";
+	IssueNodeImpl = class {
+		[TypeId$3] = TypeId$3;
+		constructor(input, options) {
+			if (options?.reportInput === true && input !== missing) this.input = input;
+		}
+	};
+	Filter$1 = class extends IssueNodeImpl {
+		_tag = "Filter";
+		/**
+		* The filter that failed.
+		*/
+		filter;
+		/**
+		* The issue that occurred.
+		*/
+		issue;
+		constructor(filter, issue, input, options) {
+			super(input, options);
+			this.filter = filter;
+			this.issue = issue;
+		}
+	};
+	Encoding = class extends IssueNodeImpl {
+		_tag = "Encoding";
+		/**
+		* The schema that caused the issue.
+		*/
+		ast;
+		/**
+		* The issue that occurred.
+		*/
+		issue;
+		constructor(ast, issue, input, options) {
+			super(input, options);
+			this.ast = ast;
+			this.issue = issue;
+		}
+	};
+	Pointer = class extends IssueNodeImpl {
+		_tag = "Pointer";
+		/**
+		* The path to the location in the input that caused the issue.
+		*/
+		path;
+		/**
+		* The issue that occurred.
+		*/
+		issue;
+		constructor(path, issue) {
+			super();
+			this.path = path;
+			this.issue = issue;
+		}
+	};
+	MissingKey = class extends IssueNodeImpl {
+		_tag = "MissingKey";
+		/**
+		* The metadata for the issue.
+		*/
+		annotations;
+		constructor(annotations) {
+			super();
+			this.annotations = annotations;
+		}
+	};
+	UnexpectedKey = class extends IssueNodeImpl {
+		_tag = "UnexpectedKey";
+		/**
+		* The schema that caused the issue.
+		*/
+		ast;
+		constructor(ast, input, options) {
+			super(input, options);
+			this.ast = ast;
+		}
+	};
+	Composite = class extends IssueNodeImpl {
+		_tag = "Composite";
+		/**
+		* The schema that caused the issue.
+		*/
+		ast;
+		/**
+		* The issues that occurred.
+		*/
+		issues;
+		constructor(ast, issues, input, options) {
+			super(input, options);
+			this.ast = ast;
+			this.issues = issues;
+		}
+	};
+	InvalidType = class extends IssueNodeImpl {
+		_tag = "InvalidType";
+		/**
+		* The schema that caused the issue.
+		*/
+		ast;
+		constructor(ast, input, options) {
+			super(input, options);
+			this.ast = ast;
+		}
+	};
+	InvalidValue = class extends IssueNodeImpl {
+		_tag = "InvalidValue";
+		/**
+		* The metadata for the issue.
+		*/
+		annotations;
+		constructor(annotations, input, options) {
+			super(input, options);
+			this.annotations = annotations;
+		}
+	};
+	AnyOf = class extends IssueNodeImpl {
+		_tag = "AnyOf";
+		/**
+		* The schema that caused the issue.
+		*/
+		ast;
+		/**
+		* The issues that occurred.
+		*/
+		issues;
+		constructor(ast, issues, input, options) {
+			super(input, options);
+			this.ast = ast;
+			this.issues = issues;
+		}
+	};
+	OneOf = class extends IssueNodeImpl {
+		_tag = "OneOf";
+		/**
+		* The schema that caused the issue.
+		*/
+		ast;
+		/**
+		* The schemas that were successful.
+		*/
+		successes;
+		constructor(ast, successes, input, options) {
+			super(input, options);
+			this.ast = ast;
+			this.successes = successes;
+		}
+	};
+	defaultLeafHook = (issue) => {
+		const message = findMessage(issue);
+		if (message !== void 0) return message;
+		switch (issue._tag) {
+			case "InvalidType": return getExpectedMessage(getExpected(issue.ast), issue);
+			case "InvalidValue": {
+				const expected = findExpected(issue);
+				if (expected !== void 0) return getExpectedMessage(expected, issue);
+				const input = formatInput(issue);
+				return input === void 0 ? "Expected a valid value" : `Invalid data ${input}`;
+			}
+			case "MissingKey": return "Missing key";
+			case "UnexpectedKey": {
+				const input = formatInput(issue);
+				return input === void 0 ? "Expected no excess property" : `Unexpected key with value ${input}`;
+			}
+			case "Forbidden": return "Forbidden operation";
+			case "OneOf": {
+				const input = formatInput(issue);
+				return input === void 0 ? "Expected exactly one member to match" : `Expected exactly one member to match the input ${input}`;
+			}
+		}
+	};
+	defaultCheckHook = (issue) => findMessage(issue.issue) ?? findMessage(issue);
+	defaultFormatter = /*#__PURE__*/ makeFormatterDefault();
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/cause.js
+/** @internal */
+function getSchemaIssue(cause) {
+	let issue;
+	for (const reason of cause.reasons) {
+		if (!isFailReason(reason) || !isIssue(reason.error)) return;
+		issue ??= reason.error;
+	}
+	return issue;
+}
+/** @internal */
+function getSchemaIssueOrThrow(cause, message) {
+	const issue = getSchemaIssue(cause);
+	if (issue === void 0) throw new Error(message, { cause });
+	return issue;
+}
+var init_cause = __esmMin((() => {
+	init_Cause();
+	init_SchemaIssue();
+}));
+function passthrough$1() {
+	return passthrough_$1;
+}
+/**
+* Creates a getter that applies a pure function to present values.
+*
+* **When to use**
+*
+* Use when you need a schema getter for a pure, infallible transformation
+* between types.
+* - Building encode/decode pairs for `Schema.decodeTo`.
+*
+* **Details**
+*
+* - This is the most commonly used constructor.
+* - Transforms `Some(e)` to `Some(f(e))` and leaves `None` unchanged.
+* - Skips `None` inputs — only called when a value is present.
+* - Never fails.
+*
+* **Example** (Transforming strings to numbers)
+*
+* ```ts import.meta.vitest
+* import { Schema, SchemaGetter } from "effect"
+*
+* const NumberFromString = Schema.String.pipe(
+*   Schema.decodeTo(Schema.Number, {
+*     decode: SchemaGetter.transform((s) => Number(s)),
+*     encode: SchemaGetter.transform((n) => String(n))
+*   })
+* )
+* Schema.decodeSync(NumberFromString)("42") // => 42
+* ```
+*
+* @see {@link transformEffect} when the transformation returns an `Effect`
+* @see {@link transformOptional} when you need to handle `None` inputs
+* @see {@link passthrough} when no transformation is needed
+*
+* @category transforming
+* @since 4.0.0
+*/
+function transform$1(f) {
+	return makeGetter({
+		_tag: "Transform",
+		transform: f
+	});
+}
+/**
+* Coerces any value to a `string` using the global `String()` constructor.
+*
+* **When to use**
+*
+* Use when you need a schema getter to coerce a present encoded value to a
+* string with `String()`.
+*
+* **Details**
+*
+* The getter is pure, never fails, and delegates to `globalThis.String`.
+*
+* **Example** (Coercing to a string)
+*
+* ```ts import.meta.vitest
+* import { Effect, Option, SchemaGetter } from "effect"
+*
+* const toString = SchemaGetter.String<number>()
+* Effect.runSync(SchemaGetter.run(toString, Option.some(42), {})) // => Option.some("42")
+* ```
+*
+* @see {@link transform} for custom string conversions
+*
+* @category converting
+* @since 4.0.0
+*/
+function String$3() {
+	return transform$1(globalThis.String);
+}
+/**
+* Coerces any value to a `number` using the global `Number()` constructor.
+*
+* **When to use**
+*
+* Use when you need a schema getter to coerce a present encoded value to a
+* number with `Number()`.
+*
+* **Details**
+*
+* The getter is pure, never fails, and delegates to `globalThis.Number`. It may
+* produce `NaN` for non-numeric inputs.
+*
+* **Example** (Coercing to a number)
+*
+* ```ts import.meta.vitest
+* import { Effect, Option, SchemaGetter } from "effect"
+*
+* const toNumber = SchemaGetter.Number<string>()
+* Effect.runSync(SchemaGetter.run(toNumber, Option.some("42"), {})) // => Option.some(42)
+* ```
+*
+* @see {@link transformEffect} for effectful or validated number parsing
+*
+* @category converting
+* @since 4.0.0
+*/
+function Number$3() {
+	return transform$1(globalThis.Number);
+}
+var makeGetter, passthrough_$1;
+var init_SchemaGetter = __esmMin((() => {
+	init_Effect();
+	init_Base64();
+	init_Option();
+	init_Pipeable();
+	init_SchemaIssue();
+	makeGetter = (fields) => Object.assign(Object.create(Prototype$1), fields);
+	passthrough_$1 = /*#__PURE__*/ makeGetter({ _tag: "Passthrough" });
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaTransformation.js
+/**
+* Returns `true` if `u` is a `Transformation` instance.
+*
+* **When to use**
+*
+* Use to check whether a value is already a schema transformation before
+* wrapping it.
+*
+* **Details**
+*
+* - Pure predicate, no side effects.
+* - Acts as a TypeScript type guard.
+*
+* **Example** (Checking a value)
+*
+* ```ts import.meta.vitest
+* import { SchemaTransformation } from "effect"
+*
+* SchemaTransformation.isTransformation(SchemaTransformation.trim()) // => true
+* SchemaTransformation.isTransformation({ decode: null, encode: null }) // => false
+* ```
+*
+* @see {@link Transformation}
+* @see {@link makeTransformation}
+*
+* @category guards
+* @since 4.0.0
+*/
+function isTransformation(u) {
+	return hasProperty(u, TypeId$2) && u[TypeId$2] === TypeId$2;
+}
+function passthrough() {
+	return passthrough_;
+}
+var Middleware, TypeId$2, Transformation, makeTransformation, passthrough_, numberFromString;
+var init_SchemaTransformation = __esmMin((() => {
+	init_Effect();
+	init_Formatter();
+	init_Pipeable();
+	init_Predicate();
+	init_SchemaGetter();
+	init_SchemaIssue();
+	Middleware = class extends Class$1 {
+		_tag = "Middleware";
+		decode;
+		encode;
+		constructor(decode, encode) {
+			super();
+			this.decode = decode;
+			this.encode = encode;
+		}
+		flip() {
+			return new Middleware(this.encode, this.decode);
+		}
+	};
+	TypeId$2 = "~effect/SchemaTransformation/Transformation";
+	Transformation = class extends Class$1 {
+		[TypeId$2] = TypeId$2;
+		_tag = "Transformation";
+		decode;
+		encode;
+		constructor(decode, encode) {
+			super();
+			this.decode = decode;
+			this.encode = encode;
+		}
+		flip() {
+			return new Transformation(this.encode, this.decode);
+		}
+	};
+	makeTransformation = (options) => {
+		if (isTransformation(options)) return options;
+		return new Transformation(options.decode, options.encode);
+	};
+	passthrough_ = /*#__PURE__*/ new Transformation(/*#__PURE__*/ passthrough$1(), /*#__PURE__*/ passthrough$1());
+	numberFromString = /*#__PURE__*/ new Transformation(/*#__PURE__*/ Number$3(), /*#__PURE__*/ String$3());
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaAST.js
+function makeGuard(tag) {
+	return (ast) => ast._tag === tag;
+}
+function literalToString(ast) {
+	const literalAsString = globalThis.String(ast.literal);
+	return replaceEncoding(ast, [new Link(new Literal$1(literalAsString), new Transformation(transform$1(() => ast.literal), transform$1(() => literalAsString)))]);
+}
+function hasCheck(checks, id) {
+	return checks.some((check) => check.annotations?.representation?.id === id || check._tag === "FilterGroup" && hasCheck(check.checks, id));
+}
+/** @internal */
+function stepArray(s, item, exit, i) {
+	if (exit._tag === "Failure") return wrapPropertyKeyIssue(s, s.ast, i, exit);
+	const value = exit === sameExit ? item : exit[args];
+	if (value !== missing) s.output[i] = value;
+	else {
+		const p = s.getParser(s.tailThreshold, i);
+		if (isOptional(p.ast)) return;
+		const issue = new Pointer([i], new MissingKey(p.ast.context?.annotations));
+		if (s.options.errors === "all") {
+			if (s.issues) s.issues.push(issue);
+			else s.issues = [issue];
+		} else return fail$4(new Composite(s.ast, [issue], s.input, s.options));
+	}
+}
+/**
+* Returns the object keys that match the index signature parameter schema.
+* @internal
+*/
+function getIndexSignatureKeys(input, parameter, options = defaultParseOptions) {
+	let stringKeys;
+	let symbolKeys;
+	function go(parameter) {
+		switch (parameter._tag) {
+			case "String":
+			case "TemplateLiteral": return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchPart(k, options) !== void 0);
+			case "Number": return (stringKeys ??= Object.keys(input)).filter((k) => parameter.matchKey(k, options) !== void 0);
+			case "Symbol": return (symbolKeys ??= Object.getOwnPropertySymbols(input)).filter((k) => Object.prototype.propertyIsEnumerable.call(input, k) && parameter.matchKey(k, options) !== void 0);
+			case "Union": return [...new Set(parameter.types.flatMap(go))];
+			default: return [];
+		}
+	}
+	return go(parameterFromPropertyKey(toEncoded(parameter)));
+}
+function isIndexSignatureParameterSide(ast) {
+	switch (ast._tag) {
+		case "String":
+		case "Number":
+		case "Symbol":
+		case "TemplateLiteral": return true;
+		case "Union": return ast.types.every(isIndexSignatureParameterSide);
+		default: return false;
+	}
+}
+function isIndexSignatureParameterEncodedSide(ast) {
+	const encoded = getLastEncoding(ast);
+	switch (encoded._tag) {
+		case "String":
+		case "Number":
+		case "Symbol":
+		case "TemplateLiteral": return true;
+		case "Union": return encoded.types.every(isIndexSignatureParameterEncodedSide);
+		default: return false;
+	}
+}
+function isIndexSignatureParameter(ast) {
+	return isIndexSignatureParameterSide(ast) && isIndexSignatureParameterEncodedSide(ast);
+}
+/** @internal */
+function stepProperty(s, p, exit) {
+	if (exit._tag === "Failure") return wrapPropertyKeyIssue(s, s.ast, p.name, exit);
+	if (exit === sameExit) return;
+	const value = exit[args];
+	if (value !== missing) {
+		assignProperty(s.out, p.name, value);
+		return;
+	}
+	delete s.out[p.name];
+	if (!isOptional(p.type)) {
+		const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
+		if (s.options.errors === "all") {
+			if (s.issues) s.issues.push(issue);
+			else s.issues = [issue];
+			return;
+		} else return fail$4(new Composite(s.ast, [issue], s.input, s.options));
+	}
+}
+function combineChecks(a, b) {
+	if (!a) return b;
+	if (!b) return a;
+	return [...a, ...b];
+}
+/** @internal */
+function struct(fields, checks, annotations) {
+	return new Objects(Reflect.ownKeys(fields).map((key) => {
+		return new PropertySignature(key, fields[key].ast);
+	}), [], annotations, checks);
+}
+/** @internal */
+function getAST(self) {
+	return self.ast;
+}
+/** @internal */
+function union(members, options, checks) {
+	return new Union$1(members.map(getAST), options, void 0, checks);
+}
+function getCandidateTypes(ast) {
+	switch (ast._tag) {
+		case "Null": return ["null"];
+		case "Undefined": return ["undefined"];
+		case "String":
+		case "TemplateLiteral": return ["string"];
+		case "Number": return ["number"];
+		case "Boolean": return ["boolean"];
+		case "Symbol":
+		case "UniqueSymbol": return ["symbol"];
+		case "BigInt": return ["bigint"];
+		case "Arrays": return ["array"];
+		case "ObjectKeyword": return [
+			"object",
+			"array",
+			"function"
+		];
+		case "Objects": return ast.propertySignatures.length || ast.indexSignatures.length ? ["object"] : [
+			"string",
+			"number",
+			"boolean",
+			"symbol",
+			"bigint",
+			"object",
+			"array",
+			"function"
+		];
+		case "Enum": return Array.from(new Set(ast.enums.map(([, v]) => typeof v)));
+		case "Literal": return [typeof ast.literal];
+		case "Union": return Array.from(new Set(ast.types.flatMap(getCandidateTypes)));
+		default: return [
+			"null",
+			"undefined",
+			"string",
+			"number",
+			"boolean",
+			"symbol",
+			"bigint",
+			"object",
+			"array",
+			"function"
+		];
+	}
+}
+/** @internal */
+function collectSentinels(ast) {
+	switch (ast._tag) {
+		default: return [];
+		case "Declaration": {
+			const s = ast.annotations?.[SENTINELS_ANNOTATION_KEY];
+			return Array.isArray(s) ? s : [];
+		}
+		case "Objects": return ast.propertySignatures.flatMap((ps) => {
+			const type = ps.type;
+			if (!isOptional(type)) {
+				if (isLiteral(type)) return [{
+					key: ps.name,
+					literal: type.literal
+				}];
+				if (isUniqueSymbol(type)) return [{
+					key: ps.name,
+					literal: type.symbol
+				}];
+			}
+			return [];
+		});
+		case "Arrays": return ast.elements.flatMap((e, i) => {
+			if (!isOptional(e)) {
+				if (isLiteral(e)) return [{
+					key: i,
+					literal: e.literal
+				}];
+				if (isUniqueSymbol(e)) return [{
+					key: i,
+					literal: e.symbol
+				}];
+			}
+			return [];
+		});
+		case "Union": {
+			if (ast.types.length === 0) return [];
+			const members = ast.types.map((type) => collectSentinels(toCandidate(type)));
+			return members[0].filter((s) => members.every((sentinels) => sentinels.some((o) => o.key === s.key && o.literal === s.literal)));
+		}
+		case "Suspend": return collectSentinels(ast.thunk());
+	}
+}
+function getIndex(types) {
+	let index = candidateIndexCache.get(types);
+	if (index) return index;
+	let bySentinel;
+	let sentinelCandidateCount = 0;
+	let otherwise;
+	let literalCandidates;
+	let onlyLiterals = true;
+	for (let i = 0; i < types.length; i++) {
+		const a = types[i];
+		const encoded = toCandidate(a);
+		if (isNever(encoded)) continue;
+		if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
+			literalCandidates ??= /* @__PURE__ */ new Map();
+			const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
+			let arr = literalCandidates.get(literal);
+			if (!arr) literalCandidates.set(literal, arr = []);
+			arr.push(a);
+		} else onlyLiterals = false;
+		const sentinels = collectSentinels(encoded);
+		if (sentinels.length) {
+			bySentinel ??= /* @__PURE__ */ new Map();
+			sentinelCandidateCount++;
+			for (const { key, literal } of sentinels) {
+				let entry = bySentinel.get(key);
+				if (!entry) bySentinel.set(key, entry = [/* @__PURE__ */ new Map(), /* @__PURE__ */ new Set()]);
+				entry[1].add(i);
+				let indexes = entry[0].get(literal);
+				if (!indexes) entry[0].set(literal, indexes = /* @__PURE__ */ new Set());
+				indexes.add(i);
+			}
+		} else {
+			otherwise ??= {};
+			const candidateTypes = getCandidateTypes(encoded);
+			for (const t of candidateTypes) (otherwise[t] ??= []).push(i);
+		}
+	}
+	const fallbacks = {};
+	const getFallback = (type) => fallbacks[type] ??= Object.freeze((otherwise?.[type] ?? emptyCandidates).map((i) => types[i]));
+	if (onlyLiterals && literalCandidates) {
+		literalCandidates.forEach(Object.freeze);
+		index = (input) => literalCandidates.get(input) ?? emptyCandidates;
+	} else if (bySentinel?.size === 1 && !otherwise) {
+		const [key, [byValue]] = bySentinel.entries().next().value;
+		const candidates = byValue;
+		for (const [literal, indexes] of byValue) candidates.set(literal, Object.freeze(Array.from(indexes, (index) => types[index])));
+		index = (input, isConstructor) => {
+			if (isObjectKeyword(input)) {
+				const value = hasPropertySignature(input, key) ? input[key] : void 0;
+				if (value !== void 0) return candidates.get(value) ?? emptyCandidates;
+				if (isConstructor) return types;
+			}
+			return emptyCandidates;
+		};
+	} else if (bySentinel) {
+		let commonSentinel;
+		for (const entry of bySentinel) if ((!commonSentinel || entry[1][0].size > commonSentinel[1][0].size) && entry[1][1].size === sentinelCandidateCount) commonSentinel = entry;
+		index = (input, isConstructor) => {
+			const runtimeType = getRuntimeType(input);
+			if (!isObjectKeyword(input)) return getFallback(runtimeType);
+			const selected = new Set(otherwise?.[runtimeType]);
+			let directKey;
+			if (commonSentinel) {
+				const [key, [byValue]] = commonSentinel;
+				const hasKey = hasPropertySignature(input, key);
+				const value = hasKey ? input[key] : void 0;
+				if (hasKey && (!isConstructor || value !== void 0)) {
+					const match = byValue.get(value);
+					if (!match) return getFallback(runtimeType);
+					for (const i of match) selected.add(i);
+					directKey = key;
+				}
+			}
+			if (directKey === void 0) for (const [key, [byValue, all]] of bySentinel) {
+				const hasKey = hasPropertySignature(input, key);
+				const value = hasKey ? input[key] : void 0;
+				if (hasKey && (!isConstructor || value !== void 0)) {
+					const match = byValue.get(value);
+					if (match) for (const i of match) selected.add(i);
+				} else if (isConstructor) for (const i of all) selected.add(i);
+			}
+			for (const [key, [byValue, all]] of bySentinel) {
+				if (key === directKey) continue;
+				const hasKey = hasPropertySignature(input, key);
+				const value = hasKey ? input[key] : void 0;
+				if (hasKey && (!isConstructor || value !== void 0)) {
+					const match = byValue.get(value);
+					for (const i of selected) if (all.has(i) && !match?.has(i)) selected.delete(i);
+				}
+			}
+			return Array.from(selected).sort((a, b) => a - b).map((i) => types[i]);
+		};
+	} else index = (input) => {
+		const fallback = getFallback(getRuntimeType(input));
+		return literalCandidates ? fallback.filter(filterLiterals(input)) : fallback;
+	};
+	candidateIndexCache.set(types, index);
+	return index;
+}
+function filterLiterals(input) {
+	return (ast) => {
+		const encoded = toCandidate(ast);
+		return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
+	};
+}
+/**
+* The goal is to reduce the number of a union members that will be checked.
+* This is useful to reduce the number of issues that will be returned.
+*
+* @internal
+*/
+function getCandidates(input, types, isConstructor = false) {
+	return getIndex(types)(input, isConstructor);
+}
+function failSingleUnionCandidate(ast, cause, input, options) {
+	const issue = getSchemaIssue(cause);
+	if (!issue) return failCause(cause);
+	return fail$4(new AnyOf(ast, [issue], input, options));
+}
+function formatIsMutable(isMutable) {
+	return isMutable ? "" : "readonly ";
+}
+function formatIsOptional(isOptional) {
+	return isOptional ? "?" : "";
+}
+/** @internal */
+function makeFilter$1(filter, annotations, aborted = false) {
+	return new Filter((input, ast, options) => normalizeFilterOutput(ast, filter(input, ast, options), input, options), annotations, aborted);
+}
+/** @internal */
+function isFinite$1(annotations) {
+	return makeFilter$1((n) => globalThis.Number.isFinite(n), {
+		expected: "a finite number",
+		representation: {
+			id: "effect/schema/isFinite",
+			payload: null
+		},
+		toJsonSchema: () => ({ type: "number" }),
+		toCode: () => ({ runtime: "Schema.isFinite()" }),
+		arbitraryConstraint: { number: "finite" },
+		...annotations
+	});
+}
+/**
+* Creates a {@link Filter} that validates strings by running `RegExp.test`.
+*
+* **When to use**
+*
+* Use when string validation should be represented as a schema `Filter` backed
+* by a regular expression.
+*
+* **Details**
+*
+* The filter can be used with `Schema.filter` or attached directly to a
+* `String` AST node through checks. The regular expression is cloned and its
+* `lastIndex` is reset before each test, so global and sticky expressions are
+* deterministic and the provided regular expression is not mutated. The
+* regular expression source is stored in annotations for serialization and
+* arbitrary generation.
+*
+* **Gotchas**
+*
+* Arbitrary metadata preserves both `regExp.source` and `regExp.flags`.
+* Implementations that cannot consume all flags may still use the source as a
+* generation hint because the Schema filter validates every generated value.
+* JSON Schema has no way to carry JavaScript regular-expression flags. Unless
+* annotations provide `toJsonSchema`, the RegExp constraint is omitted from
+* JSON Schema export.
+*
+* **Example** (Validating an email pattern)
+*
+* ```ts import.meta.vitest
+* import { SchemaAST } from "effect"
+*
+* const emailFilter = SchemaAST.isPattern(/^[^@]+@[^@]+$/)
+* emailFilter.run("alice@example.com", SchemaAST.string, {}) // => undefined
+* emailFilter.run("invalid", SchemaAST.string, {})?._tag // => "InvalidValue"
+* ```
+*
+* @see {@link Filter}
+* @category constructors
+* @since 4.0.0
+*/
+function isPattern$1(regExp, annotations) {
+	const copy = new globalThis.RegExp(regExp);
+	const payload = {
+		source: copy.source,
+		flags: copy.flags
+	};
+	return makeFilter$1((s) => {
+		copy.lastIndex = 0;
+		return copy.test(s);
+	}, {
+		expected: `a string matching the RegExp ${payload.source}`,
+		representation: {
+			id: "effect/schema/isPattern",
+			payload
+		},
+		toJsonSchema: () => [{}, true],
+		arbitraryConstraint: { patterns: [payload] },
+		...annotations
+	});
+}
+function copy(ast) {
+	return Object.assign(Object.create(Object.getPrototypeOf(ast)), ast);
+}
+/** @internal */
+function getContextOwner(ast) {
+	return contextOwners.get(ast) ?? ast;
+}
+/** @internal */
+function replaceEncoding(ast, encoding) {
+	if (ast.encoding === encoding) return ast;
+	const out = copy(ast);
+	out.encoding = encoding;
+	return out;
+}
+/** @internal */
+function replaceContext(ast, context) {
+	if (ast.context === context) return ast;
+	const owner = getContextOwner(ast);
+	if (owner.context === context) return owner;
+	const out = copy(ast);
+	out.context = context;
+	contextOwners.set(out, owner);
+	return out;
+}
+/** @internal */
+function getLastEncoding(ast) {
+	return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
+}
+/** @internal */
+function annotate(ast, annotations) {
+	if (ast.checks) {
+		const last = ast.checks[ast.checks.length - 1];
+		return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
+	}
+	const out = copy(ast);
+	out.annotations = {
+		...ast.annotations,
+		...annotations
+	};
+	return out;
+}
+/** @internal */
+function replaceChecks(ast, checks) {
+	if (ast._tag === "Suspend" && checks) throw new Error("Cannot add checks to Suspend");
+	if (ast.checks === checks) return ast;
+	const out = copy(ast);
+	out.checks = checks;
+	return out;
+}
+/** @internal */
+function appendChecks(ast, checks) {
+	return replaceChecks(ast, combineChecks(ast.checks, checks));
+}
+/** @internal */
+function mapLink(link, f) {
+	const to = f(link.to);
+	return to === link.to ? link : new Link(to, link.transformation);
+}
+function updateLastLink(encoding, f) {
+	const links = encoding;
+	const last = links[links.length - 1];
+	const out = mapLink(last, f);
+	return out === last ? encoding : append(encoding.slice(0, encoding.length - 1), out);
+}
+/** @internal */
+function applyToLastLink(f) {
+	return (ast) => ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, f)) : ast;
+}
+/** @internal */
+function applyToSelfOrLastLinkEncodingIdempotent(f, options) {
+	function out(ast) {
+		if (ast.encoding) {
+			const last = ast.encoding[ast.encoding.length - 1];
+			return options?.stopAt?.(last) ? ast : replaceEncoding(ast, updateLastLink(ast.encoding, out));
+		}
+		return f(ast);
+	}
+	return memoizeIdempotent(out);
+}
+function appendTransformation(from, transformation, to) {
+	const link = new Link(from, transformation);
+	return replaceEncoding(to, to.encoding ? [...to.encoding, link] : [link]);
+}
+function mapOrSame(as, f) {
+	let out;
+	for (let i = 0; i < as.length; i++) {
+		const a = as[i];
+		const fa = f(a);
+		if (out) out[i] = fa;
+		else if (fa !== a) {
+			out = new Array(as.length);
+			for (let j = 0; j < i; j++) out[j] = as[j];
+			out[i] = fa;
+		}
+	}
+	return out ?? as;
+}
+/** @internal */
+function annotateKey(ast, annotations) {
+	return replaceContext(ast, ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.constructorDefault, {
+		...ast.context.annotations,
+		...annotations
+	}) : new Context(false, false, void 0, annotations));
+}
+/**
+* Attaches a `Transformation` to the `to` AST, making it decode from the
+* `from` AST and encode back to it.
+*
+* **Details**
+*
+* This is the low-level primitive behind `Schema.decodeTo`. It appends a
+* {@link Link} to the `to` node's encoding chain.
+*
+* - Returns a new AST with the same type as `to`.
+*
+* @see {@link Link}
+* @see {@link Encoding}
+* @see {@link flip}
+* @category transforming
+* @since 4.0.0
+*/
+function decodeTo$1(from, to, transformation) {
+	return appendTransformation(from, transformation, to);
+}
+/**
+* Returns `true` if the AST node represents an optional property.
+*
+* **Details**
+*
+* Checks `ast.context?.isOptional`. Defaults to `false` when no
+* {@link Context} is set.
+*
+* @see `Schema.optionalKey`
+* @see {@link Context}
+* @category predicates
+* @since 4.0.0
+*/
+function isOptional(ast) {
+	return ast.context?.isOptional ?? false;
+}
+function isStructuralCheck(check) {
+	return check.annotations?.["~structural"] === true || check._tag === "FilterGroup" && check.checks.every(isStructuralCheck);
+}
+function extractStructuralChecks(checks) {
+	function extract(check) {
+		if (isStructuralCheck(check)) return [check];
+		return check._tag === "FilterGroup" ? check.checks.flatMap(extract) : [];
+	}
+	const out = checks.flatMap(extract);
+	return isArrayNonEmpty(out) ? out : void 0;
+}
+function flipEncoding(ast, encoding) {
+	const links = encoding;
+	const len = links.length;
+	const last = links[len - 1];
+	const ls = [new Link(flip(replaceEncoding(ast, void 0)), links[0].transformation.flip())];
+	for (let i = 1; i < len; i++) ls.unshift(new Link(flip(links[i - 1].to), links[i].transformation.flip()));
+	const to = flip(last.to);
+	if (to.encoding) return replaceEncoding(to, [...to.encoding, ...ls]);
+	else return replaceEncoding(to, ls);
+}
+/** @internal */
+function containsUndefined(ast) {
+	switch (ast._tag) {
+		case "Undefined": return true;
+		case "Union": return ast.types.some(containsUndefined);
+		default: return false;
+	}
+}
+function fromConst(ast, value) {
+	const succeed$7 = value === 0 ? sameExit : succeed(value);
+	return (input, options) => {
+		if (input === missing) return missingExit;
+		if (input === value) return succeed$7;
+		return fail$3(new InvalidType(ast, input, options));
+	};
+}
+function fromRefinement(ast, refinement) {
+	return (input, options) => {
+		if (input === missing) return missingExit;
+		if (refinement(input)) return sameExit;
+		return fail$3(new InvalidType(ast, input, options));
+	};
+}
+/** @internal */
+function isStringFinite(annotations) {
+	return isPattern$1(isStringFiniteRegExp, {
+		expected: "a string representing a finite number",
+		representation: {
+			id: "effect/schema/isStringFinite",
+			payload: null
+		},
+		toJsonSchema: () => ({ pattern: isStringFiniteRegExp.source }),
+		...annotations
+	});
+}
+/** @internal */
+function collectIssues(checks, value, issues, ast, options) {
+	for (let i = 0; i < checks.length; i++) {
+		const check = checks[i];
+		if (check._tag === "FilterGroup") {
+			issues = collectIssues(check.checks, value, issues, ast, options);
+			if (issues && (options.errors !== "all" || issues[issues.length - 1].filter.aborted)) return issues;
+		} else {
+			const issue = check.run(value, ast, options);
+			if (issue) {
+				const filter = new Filter$1(check, issue, value, options);
+				if (issues) issues.push(filter);
+				else issues = [filter];
+				if (options.errors !== "all" || check.aborted) return issues;
+			}
+		}
+	}
+	return issues;
+}
+/** @internal */
+function getConstructorDescriptor(ast) {
+	if (!isDeclaration(ast)) return void 0;
+	const getDescriptor = ast.annotations?.[CONSTRUCTOR_ANNOTATION_KEY];
+	return isFunction(getDescriptor) ? getDescriptor(ast.typeParameters) : void 0;
+}
+var isDeclaration, isNever, isLiteral, isUniqueSymbol, isArrays, isObjects, isSuspend, Link, defaultParseOptions, Context, TypeId$1, ASTNodeImpl, Declaration, Null, null_, Undefined$1, undefinedToNull, undefined_, Unknown$1, unknown$1, Literal$1, String$2, string, Number$2, number$1, Boolean$2, boolean$1, Arrays, parseArrayOptions, parseArray$1, parseArrayConcurrent, wrapPropertyKeyIssue, FINITE_PATTERN, PropertySignature, IndexSignature, Objects, parsePropertiesOptions, parseProperties, parsePropertiesConcurrent, toCandidate, candidateIndexCache, emptyCandidates, getRuntimeType, hasPropertySignature, Union$1, parseUnion, nonFiniteLiterals, Filter, FilterGroup, finite, numberToJson, contextOwners, optionalKey, optionalKeyLastLink, optional$1, toType, toEncoded, flip, parameterFromPropertyKey, isStringFiniteRegExp, isStringNumberRegExp, finiteString, finiteToString, numberToString;
+var init_SchemaAST = __esmMin((() => {
+	init_Array();
+	init_Cause();
+	init_Effect();
+	init_Exit();
+	init_Formatter();
+	init_Function();
+	init_effect();
+	init_record();
+	init_annotations();
+	init_cause();
+	init_parser();
+	init_Pipeable();
+	init_Predicate();
+	init_SchemaGetter();
+	init_SchemaIssue();
+	init_SchemaTransformation();
+	isDeclaration = /*#__PURE__*/ makeGuard("Declaration");
+	isNever = /*#__PURE__*/ makeGuard("Never");
+	isLiteral = /*#__PURE__*/ makeGuard("Literal");
+	isUniqueSymbol = /*#__PURE__*/ makeGuard("UniqueSymbol");
+	isArrays = /*#__PURE__*/ makeGuard("Arrays");
+	isObjects = /*#__PURE__*/ makeGuard("Objects");
+	isSuspend = /*#__PURE__*/ makeGuard("Suspend");
+	Link = class {
+		to;
+		transformation;
+		constructor(to, transformation) {
+			this.to = to;
+			this.transformation = transformation;
+		}
+	};
+	defaultParseOptions = {};
+	Context = class {
+		isOptional;
+		isMutable;
+		/** Used for constructor default values (e.g. `withConstructorDefault` API) */
+		constructorDefault;
+		annotations;
+		constructor(isOptional, isMutable, constructorDefault = void 0, annotations = void 0) {
+			this.isOptional = isOptional;
+			this.isMutable = isMutable;
+			this.constructorDefault = constructorDefault;
+			this.annotations = annotations;
+		}
+	};
+	TypeId$1 = "~effect/Schema";
+	ASTNodeImpl = class {
+		[TypeId$1] = TypeId$1;
+		annotations;
+		checks;
+		encoding;
+		context;
+		constructor(annotations = void 0, checks = void 0, encoding = void 0, context = void 0) {
+			this.annotations = annotations;
+			this.checks = checks;
+			this.encoding = encoding;
+			this.context = context;
+		}
+		toString() {
+			return `<${this._tag}>`;
+		}
+	};
+	Declaration = class extends ASTNodeImpl {
+		_tag = "Declaration";
+		typeParameters;
+		run;
+		encodingChecks;
+		/**
+		* Parser factory {@link flip} swaps in, so a declaration can behave
+		* differently when encoding. `undefined` reuses `run`.
+		*/
+		encodingRun;
+		constructor(typeParameters, run, annotations, checks, encoding, context, encodingChecks, encodingRun) {
+			super(annotations, checks, encoding, context);
+			this.typeParameters = typeParameters;
+			this.run = run;
+			this.encodingChecks = encodingChecks;
+			this.encodingRun = encodingRun;
+		}
+		/** @internal */
+		getParser() {
+			let run;
+			return (input, options) => {
+				if (input === missing) return missingExit;
+				return (run ??= this.run(this.typeParameters))(input, this, options);
+			};
+		}
+		_rebuild(recur, checks, encodingChecks, run, encodingRun) {
+			const tps = mapOrSame(this.typeParameters, recur);
+			return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks && run === this.run && encodingRun === this.encodingRun ? this : new Declaration(tps, run, this.annotations, checks, void 0, this.context, encodingChecks, encodingRun);
+		}
+		/** @internal */
+		recur(recur) {
+			return this._rebuild(recur, this.checks, this.encodingChecks, this.run, this.encodingRun);
+		}
+		/** @internal */
+		flip(recur) {
+			return this._rebuild(recur, this.encodingChecks, this.checks, this.encodingRun ?? this.run, this.run);
+		}
+		/** @internal */
+		getExpected() {
+			const expected = this.annotations?.expected;
+			if (typeof expected === "string") return expected;
+			return "<Declaration>";
+		}
+	};
+	Null = class extends ASTNodeImpl {
+		_tag = "Null";
+		/** @internal */
+		getParser() {
+			return fromConst(this, null);
+		}
+		/** @internal */
+		getExpected() {
+			return "null";
+		}
+	};
+	null_ = /*#__PURE__*/ new Null();
+	Undefined$1 = class extends ASTNodeImpl {
+		_tag = "Undefined";
+		/** @internal */
+		getParser() {
+			return fromConst(this, void 0);
+		}
+		/** @internal */
+		toCodecJson() {
+			return replaceEncoding(this, [undefinedToNull]);
+		}
+		/** @internal */
+		getExpected() {
+			return "undefined";
+		}
+	};
+	undefinedToNull = /*#__PURE__*/ new Link(null_, /*#__PURE__*/ new Transformation(/*#__PURE__*/ transform$1(() => void 0), /*#__PURE__*/ transform$1(() => null)));
+	undefined_ = /*#__PURE__*/ new Undefined$1();
+	Unknown$1 = class extends ASTNodeImpl {
+		_tag = "Unknown";
+		/** @internal */
+		getParser() {
+			return fromRefinement(this, isUnknown);
+		}
+		/** @internal */
+		getExpected() {
+			return "unknown";
+		}
+	};
+	unknown$1 = /*#__PURE__*/ new Unknown$1();
+	Literal$1 = class extends ASTNodeImpl {
+		_tag = "Literal";
+		literal;
+		constructor(literal, annotations, checks, encoding, context) {
+			super(annotations, checks, encoding, context);
+			if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) throw new Error(`A numeric literal must be finite, got ${format$2(literal)}`);
+			this.literal = literal;
+		}
+		/** @internal */
+		getParser() {
+			return fromConst(this, this.literal);
+		}
+		/** @internal */
+		matchPart(s, _options) {
+			return s === globalThis.String(this.literal) ? this.literal : void 0;
+		}
+		/** @internal */
+		toCodecJson() {
+			return typeof this.literal === "bigint" ? literalToString(this) : this;
+		}
+		/** @internal */
+		toCodecStringTree() {
+			return typeof this.literal === "string" ? this : literalToString(this);
+		}
+		/** @internal */
+		getExpected() {
+			return typeof this.literal === "string" ? JSON.stringify(this.literal) : globalThis.String(this.literal);
+		}
+	};
+	String$2 = class extends ASTNodeImpl {
+		_tag = "String";
+		/** @internal */
+		getParser() {
+			return fromRefinement(this, isString);
+		}
+		/** @internal */
+		matchPart(s, options) {
+			const checks = this.checks;
+			return checks && !options.disableChecks && collectIssues(checks, s, void 0, this, options) ? void 0 : s;
+		}
+		/** @internal */
+		getExpected() {
+			return "string";
+		}
+	};
+	string = /*#__PURE__*/ new String$2();
+	Number$2 = class extends ASTNodeImpl {
+		_tag = "Number";
+		/** @internal */
+		getParser() {
+			return fromRefinement(this, isNumber);
+		}
+		/** @internal */
+		matchKey(s, options) {
+			return this._match(isStringNumberRegExp, s, options);
+		}
+		/** @internal */
+		matchPart(s, options) {
+			return this._match(isStringFiniteRegExp, s, options);
+		}
+		_match(regexp, s, options) {
+			if (!regexp.test(s)) return void 0;
+			const value = globalThis.Number(s);
+			if (options.disableChecks || !this.checks) return value;
+			return collectIssues(this.checks, value, void 0, this, options) ? void 0 : value;
+		}
+		/** @internal */
+		toCodecJson() {
+			if (this.checks && (hasCheck(this.checks, "effect/schema/isFinite") || hasCheck(this.checks, "effect/schema/isInt"))) return this;
+			return replaceEncoding(this, [numberToJson]);
+		}
+		/** @internal */
+		toCodecStringTree() {
+			if (this.toCodecJson() === this) return replaceEncoding(this, [finiteToString]);
+			return replaceEncoding(this, [numberToString]);
+		}
+		/** @internal */
+		getExpected() {
+			return "number";
+		}
+	};
+	number$1 = /*#__PURE__*/ new Number$2();
+	Boolean$2 = class extends ASTNodeImpl {
+		_tag = "Boolean";
+		/** @internal */
+		getParser() {
+			return fromRefinement(this, isBoolean);
+		}
+		/** @internal */
+		getExpected() {
+			return "boolean";
+		}
+	};
+	boolean$1 = /*#__PURE__*/ new Boolean$2();
+	Arrays = class extends ASTNodeImpl {
+		_tag = "Arrays";
+		isMutable;
+		elements;
+		rest;
+		encodingChecks;
+		constructor(isMutable, elements, rest, annotations, checks, encoding, context, encodingChecks) {
+			super(annotations, checks, encoding, context);
+			this.isMutable = isMutable;
+			this.elements = elements;
+			this.rest = rest;
+			this.encodingChecks = encodingChecks;
+			let hasOptional = false;
+			for (let i = 0; i < elements.length; i++) if (isOptional(elements[i])) hasOptional = true;
+			else if (hasOptional) throw new Error("A required element cannot follow an optional element. ts(1257)");
+			if (hasOptional && rest.length > 1) throw new Error("A required element cannot follow an optional element. ts(1257)");
+			for (let i = 1; i < rest.length; i++) if (isOptional(rest[i])) throw new Error("An optional element cannot follow a rest element. ts(1266)");
+		}
+		/** @internal */
+		getParser(compile, compileField = compile) {
+			const ast = this;
+			let elements;
+			let rest;
+			const elementLen = ast.elements.length;
+			const tailLen = Math.max(0, ast.rest.length - 1);
+			function getParser(tailThreshold, index) {
+				if (index < elementLen) return elements[index];
+				else if (index >= tailThreshold) return rest[index - tailThreshold + 1];
+				return rest[0];
+			}
+			const finish = (state) => {
+				const { input, len, options } = state;
+				if (ast.rest.length === 0 && len > elementLen) for (let i = elementLen; i < len; i++) {
+					const unexpected = new UnexpectedKey(ast, input[i], options);
+					const issue = new Pointer([i], unexpected);
+					if (options.errors === "all") {
+						if (state.issues) state.issues.push(issue);
+						else state.issues = [issue];
+					} else return fail$3(new Composite(ast, [issue], input, options));
+				}
+				if (state.issues) return fail$3(new Composite(ast, state.issues, input, options));
+				return succeed(state.output);
+			};
+			const parse = (input, options) => {
+				const len = input.length;
+				const state = {
+					ast,
+					getParser,
+					input,
+					len,
+					tailThreshold: Math.max(elementLen, len - tailLen),
+					output: new globalThis.Array(len),
+					issues: void 0,
+					options
+				};
+				const end = ast.rest.length === 0 ? elementLen : Math.max(len, elementLen + tailLen);
+				const concurrency = options.concurrency === void 0 ? 1 : resolveConcurrency(options.concurrency);
+				const eff = concurrency === 1 ? parseArray$1(state, input, 0, end) : parseArrayConcurrent(state, input, {
+					concurrency,
+					end
+				});
+				if (!eff) return finish(state);
+				if (effectIsExit(eff)) return flatMapEager(eff, () => finish(state));
+				let first = true;
+				return suspend(() => {
+					if (!first) return parse(input, options);
+					first = false;
+					return flatMap(eff, () => finish(state));
+				});
+			};
+			return (input, options) => {
+				if (input === missing) return missingExit;
+				try {
+					if (!Array.isArray(input)) return fail$3(new InvalidType(ast, input, options));
+					if (!elements) {
+						elements = ast.elements.map((ast) => ({
+							ast,
+							parser: compileField(ast)
+						}));
+						rest = ast.rest.map((ast) => ({
+							ast,
+							parser: compileField(ast)
+						}));
+					}
+					return parse(input, options);
+				} catch (error) {
+					return die(error);
+				}
+			};
+		}
+		_rebuild(recur, checks, encodingChecks) {
+			const elements = mapOrSame(this.elements, recur);
+			const rest = mapOrSame(this.rest, recur);
+			return elements === this.elements && rest === this.rest && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Arrays(this.isMutable, elements, rest, this.annotations, checks, void 0, this.context, encodingChecks);
+		}
+		/** @internal */
+		recur(recur) {
+			return this._rebuild(recur, this.checks, this.encodingChecks);
+		}
+		/** @internal */
+		flip(recur) {
+			return this._rebuild(recur, this.encodingChecks, this.checks);
+		}
+		/** @internal */
+		getExpected() {
+			return "array";
+		}
+	};
+	parseArrayOptions = {
+		onItem(s, item, i) {
+			const value = i < s.len ? item : missing;
+			return s.getParser(s.tailThreshold, i).parser(value, s.options);
+		},
+		step: stepArray
+	};
+	parseArray$1 = /*#__PURE__*/ iterateEager()(parseArrayOptions);
+	parseArrayConcurrent = /*#__PURE__*/ iterateConcurrent()(parseArrayOptions);
+	wrapPropertyKeyIssue = (s, ast, key, exit) => {
+		if (exit.cause.reasons.length === 0) return exit;
+		const issue = getSchemaIssue(exit.cause);
+		if (issue === void 0) return failCause(map(exit.cause, (issue) => new Composite(ast, [new Pointer([key], issue)], s.input, s.options)));
+		const pointer = new Pointer([key], issue);
+		if (s.options.errors === "all") {
+			if (s.issues) s.issues.push(pointer);
+			else s.issues = [pointer];
+		} else return fail$4(new Composite(ast, [pointer], s.input, s.options));
+	};
+	FINITE_PATTERN = "[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?";
+	PropertySignature = class {
+		name;
+		type;
+		constructor(name, type) {
+			this.name = name;
+			this.type = type;
+		}
+	};
+	IndexSignature = class {
+		parameter;
+		type;
+		constructor(parameter, type) {
+			if (!isIndexSignatureParameter(parameter)) throw new Error(`Invalid index signature parameter ${parameter._tag}`);
+			this.parameter = parameter;
+			this.type = type;
+			if (isOptional(type) && !containsUndefined(type)) throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
+		}
+	};
+	Objects = class extends ASTNodeImpl {
+		_tag = "Objects";
+		propertySignatures;
+		indexSignatures;
+		encodingChecks;
+		constructor(propertySignatures, indexSignatures, annotations, checks, encoding, context, encodingChecks) {
+			super(annotations, checks, encoding, context);
+			this.propertySignatures = propertySignatures;
+			this.indexSignatures = indexSignatures;
+			this.encodingChecks = encodingChecks;
+		}
+		/** @internal */
+		getParser(compile, compileField = compile) {
+			const ast = this;
+			const hasProperties = ast.propertySignatures.length;
+			const indexCount = ast.indexSignatures.length;
+			if (!hasProperties && !indexCount) return fromRefinement(ast, isNotNullish);
+			let properties;
+			let indexes;
+			const compileMembers = () => {
+				if (!properties) {
+					properties = ast.propertySignatures.map((ps) => ({
+						parser: compileField(ps.type),
+						name: ps.name,
+						type: ps.type
+					}));
+					indexes = indexCount ? ast.indexSignatures.map((is) => ({
+						is,
+						parserKey: compile(parameterFromPropertyKey(is.parameter)),
+						parserValue: compileField(is.type)
+					})) : void 0;
+				}
+				return properties;
+			};
+			const makeFallback = () => {
+				const expectedKeys = new Set(ast.propertySignatures.map((ps) => typeof ps.name === "number" ? globalThis.String(ps.name) : ps.name));
+				const finishIndex = (s, key, k2, inputValue, exitValue) => {
+					if (exitValue._tag === "Failure") return wrapPropertyKeyIssue(s, ast, key, exitValue) ?? void_;
+					const value = exitValue === sameExit ? inputValue : exitValue[args];
+					if (k2 !== missing && value !== missing) {
+						if (hasProperties && (expectedKeys.has(key) || expectedKeys.has(typeof k2 === "number" ? globalThis.String(k2) : k2))) return void_;
+						assignProperty(s.out, k2, value);
+					}
+					return void_;
+				};
+				const parseIndex = (s, key, index, exitKey) => {
+					if (!exitKey) {
+						const eff = index.parserKey(key, s.options);
+						if (!effectIsExit(eff)) return flatMap(exit(eff), (exit) => parseIndex(s, key, index, exit));
+						exitKey = eff;
+					}
+					if (exitKey._tag === "Failure") return wrapPropertyKeyIssue(s, ast, key, exitKey) ?? void_;
+					const k2 = exitKey === sameExit ? key : exitKey[args];
+					const inputValue = s.input[key];
+					const result = index.parserValue(inputValue, s.options);
+					return effectIsExit(result) ? finishIndex(s, key, k2, inputValue, result) : flatMap(exit(result), (exit) => finishIndex(s, key, k2, inputValue, exit));
+				};
+				const parseStringIndex = (s, key, index) => {
+					const inputValue = s.input[key];
+					const result = index.parserValue(inputValue, s.options);
+					return effectIsExit(result) ? finishIndex(s, key, key, inputValue, result) : flatMap(exit(result), (exit) => finishIndex(s, key, key, inputValue, exit));
+				};
+				const parseIndexes = indexCount ? iterateConcurrent()({
+					onItem: (s, [key, index]) => index.is.parameter === string ? parseStringIndex(s, key, index) : parseIndex(s, key, index),
+					step: (_s, _item, exit) => exit._tag === "Failure" ? exit : void 0
+				}) : void 0;
+				return fnUntracedEager(function* (input, options) {
+					if (input === missing) return missing;
+					if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return yield* fail$3(new InvalidType(ast, input, options));
+					compileMembers();
+					const record = input;
+					const out = {};
+					const state = {
+						ast,
+						input: record,
+						out,
+						issues: void 0,
+						options
+					};
+					const errorsAllOption = options.errors === "all";
+					const onExcessPropertyError = options.onExcessProperty === "error";
+					const concurrency = options.concurrency === void 0 ? 1 : resolveConcurrency(options.concurrency);
+					const indexKeys = indexCount && onExcessPropertyError ? ast.indexSignatures.map((index) => getIndexSignatureKeys(record, index.parameter, options)) : void 0;
+					if (onExcessPropertyError) {
+						const coveredKeys = indexKeys ? new Set(expectedKeys) : expectedKeys;
+						if (indexKeys) for (const keys of indexKeys) for (const key of keys) coveredKeys.add(key);
+						const inputKeys = Reflect.ownKeys(record);
+						for (let i = 0; i < inputKeys.length; i++) {
+							const key = inputKeys[i];
+							if (!coveredKeys.has(key) && Object.prototype.propertyIsEnumerable.call(record, key)) {
+								const unexpected = new UnexpectedKey(ast, record[key], options);
+								const issue = new Pointer([key], unexpected);
+								if (errorsAllOption) {
+									if (state.issues) state.issues.push(issue);
+									else state.issues = [issue];
+									continue;
+								} else return yield* fail$3(new Composite(ast, [issue], input, options));
+							}
+						}
+					}
+					if (hasProperties) {
+						const eff = concurrency === 1 ? parseProperties(state, properties) : parsePropertiesConcurrent(state, properties, { concurrency });
+						if (eff) yield* eff;
+					}
+					if (indexCount && concurrency === 1) for (let i = 0; i < indexCount; i++) {
+						const index = indexes[i];
+						const parse = index.is.parameter === string ? parseStringIndex : parseIndex;
+						const keys = indexKeys?.[i] ?? (index.is.parameter === string ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+						for (let j = 0; j < keys.length; j++) {
+							const eff = parse(state, keys[j], index);
+							if (!effectIsExit(eff)) yield* eff;
+							else if (eff._tag === "Failure") return yield* eff;
+						}
+					}
+					else if (parseIndexes) {
+						const keyPairs = empty();
+						for (let i = 0; i < indexCount; i++) {
+							const index = indexes[i];
+							const keys = indexKeys?.[i] ?? (index.is.parameter === string ? Object.keys(record) : getIndexSignatureKeys(record, index.is.parameter, options));
+							for (let j = 0; j < keys.length; j++) keyPairs.push([keys[j], index]);
+						}
+						const eff = parseIndexes(state, keyPairs, { concurrency });
+						if (eff) yield* eff;
+					}
+					if (state.issues) return yield* fail$3(new Composite(ast, state.issues, input, options));
+					return out;
+				});
+			};
+			if (indexCount) return makeFallback();
+			let fallback;
+			const resume = (state, index, pending) => {
+				const property = properties[index];
+				return flatMap(exit(pending), (exit) => {
+					const terminal = stepProperty(state, property, exit);
+					if (terminal) return terminal;
+					const done = () => succeed(state.out);
+					const eff = parseProperties(state, properties.slice(index + 1));
+					return eff ? flatMapEager(eff, done) : done();
+				});
+			};
+			return (input, options) => {
+				if (input === missing) return missingExit;
+				if (options.errors === "all" || options.onExcessProperty !== void 0 || options.concurrency !== void 0 && resolveConcurrency(options.concurrency) !== 1) return (fallback ??= makeFallback())(input, options);
+				if (!(typeof input === "object" && input !== null && !Array.isArray(input))) return fail$3(new InvalidType(ast, input, options));
+				const props = compileMembers();
+				const record = input;
+				const out = {};
+				const state = {
+					ast,
+					input: record,
+					out,
+					issues: void 0,
+					options
+				};
+				try {
+					for (let index = 0; index < props.length; index++) {
+						const property = props[index];
+						const name = property.name;
+						const hasKey = hasPropertySignature(record, name);
+						const value = hasKey ? record[name] : missing;
+						const exit = property.parser(value, options);
+						if (!effectIsExit(exit)) return resume(state, index, exit);
+						if (exit === sameExit) {
+							if (hasKey) assignProperty(out, name, value);
+							continue;
+						}
+						const terminal = stepProperty(state, property, exit);
+						if (terminal) return terminal;
+					}
+				} catch (error) {
+					return die(error);
+				}
+				return succeed(out);
+			};
+		}
+		_rebuild(recur, recurParameter, checks, encodingChecks) {
+			const props = mapOrSame(this.propertySignatures, (ps) => {
+				const t = recur(ps.type);
+				return t === ps.type ? ps : new PropertySignature(ps.name, t);
+			});
+			const indexes = mapOrSame(this.indexSignatures, (is) => {
+				const p = recurParameter(is.parameter);
+				const t = recur(is.type);
+				return p === is.parameter && t === is.type ? is : new IndexSignature(p, t);
+			});
+			return props === this.propertySignatures && indexes === this.indexSignatures && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Objects(props, indexes, this.annotations, checks, void 0, this.context, encodingChecks);
+		}
+		/** @internal */
+		flip(recur) {
+			return this._rebuild(recur, recur, this.encodingChecks, this.checks);
+		}
+		/** @internal */
+		recur(recur, recurParameter = recur) {
+			return this._rebuild(recur, recurParameter, this.checks, this.encodingChecks);
+		}
+		/** @internal */
+		getExpected() {
+			if (this.propertySignatures.length === 0 && this.indexSignatures.length === 0) return "object | array";
+			return "object";
+		}
+	};
+	parsePropertiesOptions = {
+		onItem(s, p) {
+			if (!hasPropertySignature(s.input, p.name)) return p.parser(missing, s.options);
+			const value = s.input[p.name];
+			assignProperty(s.out, p.name, value);
+			return p.parser(value, s.options);
+		},
+		step: stepProperty
+	};
+	parseProperties = /*#__PURE__*/ iterateEager()(parsePropertiesOptions);
+	parsePropertiesConcurrent = /*#__PURE__*/ iterateConcurrent()(parsePropertiesOptions);
+	toCandidate = /*#__PURE__*/ memoizeIdempotent((ast) => {
+		while (true) {
+			if (isSuspend(ast)) return unknown$1;
+			const encoding = ast.encoding;
+			if (!encoding) return ast.recur?.(toCandidate, identity) ?? ast;
+			if (encoding.some((link) => link.transformation._tag === "Middleware" && link.transformation.decode !== identity)) return unknown$1;
+			ast = encoding[encoding.length - 1].to;
+		}
+	});
+	candidateIndexCache = /*#__PURE__*/ new WeakMap();
+	emptyCandidates = /*#__PURE__*/ Object.freeze([]);
+	getRuntimeType = (input) => input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
+	hasPropertySignature = (input, key) => key === "__proto__" ? Object.hasOwn(input, key) : key in input;
+	Union$1 = class extends ASTNodeImpl {
+		_tag = "Union";
+		types;
+		options;
+		encodingChecks;
+		constructor(types, options, annotations, checks, encoding, context, encodingChecks) {
+			super(annotations, checks, encoding, context);
+			this.types = types;
+			this.options = options;
+			this.encodingChecks = encodingChecks;
+		}
+		/** @internal */
+		getParser(compile, compileField) {
+			const ast = this;
+			return (input, options) => {
+				if (input === missing) return missingExit;
+				const candidates = getCandidates(input, ast.types, compileField !== void 0);
+				if (candidates.length === 0) return fail$3(new AnyOf(ast, [], input, options));
+				if (candidates.length === 1) {
+					const result = compile(candidates[0])(input, options);
+					if (result._tag === "Success") return result;
+					return effectIsExit(result) ? failSingleUnionCandidate(ast, result.cause, input, options) : catchCause(result, (cause) => failSingleUnionCandidate(ast, cause, input, options));
+				}
+				const state = {
+					ast,
+					compile,
+					input,
+					out: void 0,
+					successes: ast.options?.mode === "oneOf" ? [] : void 0,
+					issues: void 0,
+					options
+				};
+				const eff = parseUnion(state, candidates);
+				if (!eff) {
+					if (state.out) return state.out;
+					return fail$3(new AnyOf(ast, state.issues ?? [], input, options));
+				}
+				return flatMapEager(eff, (_) => {
+					if (state.out === sameExit) return succeed$1(input);
+					if (state.out) return state.out;
+					return fail$3(new AnyOf(ast, state.issues ?? [], input, options));
+				});
+			};
+		}
+		_rebuild(recur, checks, encodingChecks) {
+			const types = mapOrSame(this.types, recur);
+			return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new Union$1(types, this.options, this.annotations, checks, void 0, this.context, encodingChecks);
+		}
+		/** @internal */
+		recur(recur) {
+			return this._rebuild(recur, this.checks, this.encodingChecks);
+		}
+		/** @internal */
+		flip(recur) {
+			return this._rebuild(recur, this.encodingChecks, this.checks);
+		}
+		/** @internal */
+		matchPart(s, options) {
+			for (const type of this.types) {
+				const out = type.matchPart(s, options);
+				if (out !== void 0) return out;
+			}
+		}
+		/** @internal */
+		getExpected(getExpected) {
+			const expected = this.annotations?.expected;
+			if (typeof expected === "string") return expected;
+			if (this.types.length === 0) return "never";
+			const types = this.types.map((type) => {
+				const encoded = toEncoded(type);
+				switch (encoded._tag) {
+					case "Arrays": {
+						const literals = encoded.elements.filter(isLiteral);
+						if (literals.length > 0) return `${formatIsMutable(encoded.isMutable)}[ ${literals.map((e) => getExpected(e) + formatIsOptional(e.context?.isOptional)).join(", ")}, ... ]`;
+						break;
+					}
+					case "Objects": {
+						const literals = encoded.propertySignatures.filter((ps) => isLiteral(ps.type));
+						if (literals.length > 0) return `{ ${literals.map((ps) => `${formatIsMutable(ps.type.context?.isMutable)}${formatPropertyKey(ps.name)}${formatIsOptional(ps.type.context?.isOptional)}: ${getExpected(ps.type)}`).join(", ")}, ... }`;
+						break;
+					}
+				}
+				return getExpected(encoded);
+			});
+			return Array.from(new Set(types)).join(" | ");
+		}
+	};
+	parseUnion = /*#__PURE__*/ iterateEager()({
+		onItem(s, ast) {
+			return s.compile(ast)(s.input, s.options);
+		},
+		step(s, candidate, exit) {
+			if (exit._tag === "Failure") {
+				const issue = getSchemaIssue(exit.cause);
+				if (issue === void 0) return exit;
+				if (s.issues) s.issues.push(issue);
+				else s.issues = [issue];
+			} else {
+				if (s.out && s.successes) {
+					s.successes.push(candidate);
+					return fail$4(new OneOf(s.ast, s.successes, s.input, s.options));
+				}
+				s.out = exit;
+				if (s.successes) s.successes.push(candidate);
+				else return void_;
+			}
+		}
+	});
+	nonFiniteLiterals = /*#__PURE__*/ new Union$1([
+		/*#__PURE__*/ new Literal$1("Infinity"),
+		/*#__PURE__*/ new Literal$1("-Infinity"),
+		/*#__PURE__*/ new Literal$1("NaN")
+	]);
+	Filter = class extends Class$1 {
+		_tag = "Filter";
+		run;
+		annotations;
+		/**
+		* Whether the parsing process should be aborted after this check has failed.
+		*/
+		aborted;
+		constructor(run, annotations = void 0, aborted = false) {
+			super();
+			this.run = run;
+			this.annotations = annotations;
+			this.aborted = aborted;
+		}
+		annotate(annotations) {
+			return new Filter(this.run, {
+				...this.annotations,
+				...annotations
+			}, this.aborted);
+		}
+		abort() {
+			return new Filter(this.run, this.annotations, true);
+		}
+		and(other, annotations) {
+			return new FilterGroup([this, other], annotations);
+		}
+	};
+	FilterGroup = class extends Class$1 {
+		_tag = "FilterGroup";
+		checks;
+		annotations;
+		constructor(checks, annotations = void 0) {
+			super();
+			this.checks = checks;
+			this.annotations = annotations;
+		}
+		annotate(annotations) {
+			return new FilterGroup(this.checks, {
+				...this.annotations,
+				...annotations
+			});
+		}
+		and(other, annotations) {
+			return new FilterGroup([this, other], annotations);
+		}
+	};
+	finite = /*#__PURE__*/ appendChecks(number$1, [/*#__PURE__*/ isFinite$1()]);
+	numberToJson = /*#__PURE__*/ new Link(/*#__PURE__*/ new Union$1([finite, nonFiniteLiterals]), /*#__PURE__*/ new Transformation(/*#__PURE__*/ Number$3(), /*#__PURE__*/ transform$1((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
+	contextOwners = /*#__PURE__*/ new WeakMap();
+	optionalKey = /*#__PURE__*/ memoizeIdempotent((ast) => {
+		const context = ast.context ? ast.context.isOptional === false ? new Context(true, ast.context.isMutable, ast.context.constructorDefault, ast.context.annotations) : ast.context : new Context(true, false);
+		return optionalKeyLastLink(replaceContext(ast, context));
+	});
+	optionalKeyLastLink = /*#__PURE__*/ applyToLastLink(optionalKey);
+	optional$1 = /*#__PURE__*/ memoize((ast) => optionalKey(new Union$1([ast, undefined_])));
+	toType = /*#__PURE__*/ memoizeIdempotent((ast) => {
+		const out = ast;
+		const type = out.recur?.(toType) ?? out;
+		const encodingChecks = type.encodingChecks;
+		if (encodingChecks) {
+			const checks = type === ast ? encodingChecks : isArrays(type) || isObjects(type) || isDeclaration(type) && type.typeParameters.length > 0 ? extractStructuralChecks(encodingChecks) : void 0;
+			const copyOfType = copy(type);
+			copyOfType.encoding = void 0;
+			copyOfType.encodingChecks = void 0;
+			copyOfType.checks = combineChecks(type.checks, checks);
+			return copyOfType;
+		}
+		return type.encoding ? replaceEncoding(type, void 0) : type;
+	});
+	toEncoded = /*#__PURE__*/ memoizeIdempotent((ast) => {
+		return toType(flip(ast));
+	});
+	flip = /*#__PURE__*/ memoize((ast) => {
+		if (ast.encoding) return flipEncoding(ast, ast.encoding);
+		const out = ast;
+		return out.flip?.(flip) ?? out.recur?.(flip) ?? out;
+	});
+	parameterFromPropertyKey = /*#__PURE__*/ applyToSelfOrLastLinkEncodingIdempotent((ast) => {
+		switch (ast._tag) {
+			default: return ast;
+			case "Number": return ast.toCodecStringTree();
+			case "Union": return ast.recur(parameterFromPropertyKey);
+		}
+	});
+	isStringFiniteRegExp = /*#__PURE__*/ new globalThis.RegExp(`^${FINITE_PATTERN}$`);
+	isStringNumberRegExp = /*#__PURE__*/ new globalThis.RegExp(`^(?:${FINITE_PATTERN}|Infinity|-Infinity|NaN)$`);
+	finiteString = /*#__PURE__*/ appendChecks(string, [/*#__PURE__*/ isStringFinite()]);
+	finiteToString = /*#__PURE__*/ new Link(finiteString, numberFromString);
+	numberToString = /*#__PURE__*/ new Link(/*#__PURE__*/ new Union$1([finiteString, nonFiniteLiterals]), numberFromString);
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/interpreter.js
+function compileTransformation(transformation) {
+	if (transformation._tag === "Middleware") return (result, current, options) => {
+		const transformed = result === sameExit ? transformation.decode(succeed(toOption(current)), options) : transformation.decode(mapEager(result, toOption), options);
+		return fromOptionalEffect(transformed);
+	};
+	const getter = transformation.decode;
+	switch (getter._tag) {
+		case "Passthrough": return (result, current) => result === sameExit ? succeed(current) : result;
+		case "Transform": {
+			const transform = (value) => value === missing ? missingExit : succeed(getter.transform(value));
+			return (result, current) => flatMapTransformation(result, current, transform);
+		}
+		case "TransformOptional": {
+			const transform = (value) => fromOptionExit(getter.transform(toOption(value)));
+			return (result, current) => flatMapTransformation(result, current, transform);
+		}
+		case "TransformEffect": return (result, current, options) => flatMapTransformation(result, current, (value) => value === missing ? missingExit : getter.transform(value, options));
+		case "TransformOptionalEffect": return (result, current, options) => flatMapTransformation(result, current, (value) => fromOptionalEffect(getter.transform(toOption(value), options)));
+	}
+}
+function makeConstructorParser(descriptor, compile) {
+	const transform = compileTransformation(descriptor.link.transformation);
+	let sourceParser;
+	return (input, options) => {
+		if (input === missing) return missingExit;
+		if (descriptor.isConstructed(input)) return sameExit;
+		const result = (sourceParser ??= compile(descriptor.link.to))(input, options);
+		return transform(result, input, options);
+	};
+}
+function withDefault(ast, parser) {
+	const defaultValue = ast.context.constructorDefault;
+	return (input, options) => {
+		if (input !== missing && input !== void 0) return parser(input, options);
+		const result = defaultValue;
+		if (effectIsExit(result) && result._tag === "Success") {
+			const local = parser(result[args], options);
+			return local === sameExit ? result : local;
+		}
+		return flatMapEager(wrapEncoding(ast, input, options, result), (value) => {
+			const local = parser(value, options);
+			return local === sameExit ? succeed(value) : local;
+		});
+	};
+}
+/** @internal */
+function compileField(ast, compile) {
+	const parser = compile(ast);
+	return ast.context?.constructorDefault === void 0 ? parser : withDefault(ast, parser);
+}
+/** @internal */
+function compile(ast, compile, compileField, base, specialize) {
+	if (ast._tag === "Declaration") for (const parameter of ast.typeParameters) compile(parameter);
+	const descriptor = compileField ? getConstructorDescriptor(ast) : void 0;
+	const parser = descriptor ? makeConstructorParser(descriptor, compile) : base ?? ast.getParser(compile, compileField);
+	const checks = ast.checks;
+	const links = ast.encoding;
+	const transformations = links?.map((link) => compileTransformation(link.transformation));
+	const encodingChecks = ast.encodingChecks;
+	if (!links && !checks && !encodingChecks) return parser;
+	let encodingParsers;
+	const parseChecks = (input, options) => {
+		let result = parser(input, options);
+		if (encodingChecks && !options.disableChecks) {
+			if (effectIsExit(result)) {
+				if (result._tag === "Success") {
+					const output = result === sameExit ? input : result[args];
+					if (input !== missing && output !== missing) {
+						const issues = collectIssues(encodingChecks, input, void 0, ast, options);
+						if (issues) result = fail$3(new Composite(ast, issues, input, options));
+					}
+				}
+			} else result = flatMap(result, (value) => {
+				if (input !== missing && value !== missing) {
+					const issues = collectIssues(encodingChecks, input, void 0, ast, options);
+					if (issues) return fail$3(new Composite(ast, issues, input, options));
+				}
+				return succeed$1(value);
+			});
+		}
+		if (checks && !options.disableChecks) {
+			if (effectIsExit(result)) {
+				if (result._tag === "Success") {
+					const value = result === sameExit ? input : result[args];
+					if (value === missing) return result;
+					const issues = collectIssues(checks, value, void 0, ast, options);
+					if (issues) result = fail$3(new Composite(ast, issues, value, options));
+				}
+			} else result = flatMap(result, (value) => {
+				if (value !== missing) {
+					const issues = collectIssues(checks, value, void 0, ast, options);
+					if (issues) return fail$3(new Composite(ast, issues, value, options));
+				}
+				return succeed$1(value);
+			});
+		}
+		return result;
+	};
+	const parseLocal = specialize === void 0 ? parseChecks : specialize(parseChecks);
+	if (!links) return parseLocal;
+	return (input, options) => {
+		const parsers = encodingParsers ??= links.map((link) => compile(link.to));
+		let current = input;
+		let result = parsers[parsers.length - 1](input, options);
+		for (let i = links.length - 1; i >= 0; i--) {
+			result = transformations[i](result, current, options);
+			if (i !== 0) {
+				const next = parsers[i - 1];
+				if (result._tag === "Success") {
+					current = result[args];
+					result = next(current, options);
+				} else result = flatMapEager(result, (value) => {
+					const nextResult = next(value, options);
+					return nextResult === sameExit ? succeed(value) : nextResult;
+				});
+			}
+		}
+		if (result._tag === "Success") {
+			const value = result[args];
+			const local = parseLocal(value, options);
+			return local === sameExit ? result : local;
+		}
+		result = wrapEncoding(ast, input, options, result);
+		return flatMapEager(result, (value) => {
+			const local = parseLocal(value, options);
+			return local === sameExit ? succeed(value) : local;
+		});
+	};
+}
+var flatMapTransformation, fromOptionalEffect, wrapEncoding;
+var init_interpreter = __esmMin((() => {
+	init_Cause();
+	init_Effect();
+	init_SchemaAST();
+	init_SchemaIssue();
+	init_effect();
+	init_parser();
+	flatMapTransformation = (result, current, f) => result === sameExit ? f(current) : flatMapEager(result, f);
+	fromOptionalEffect = (effect) => flatMapEager(effect, fromOptionExit);
+	wrapEncoding = (ast, input, options, effect) => catchCause(effect, (cause) => failCauseSync(() => map(cause, (issue) => new Encoding(ast, issue, input, options))));
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/compilerRegistry.js
+/** @internal */
+function withDecode(fastDecode, decodeEffect) {
+	let detailed;
+	return (input, options) => {
+		if (input !== missing) try {
+			const value = fastDecode(input, options);
+			if (value !== invalid) return value === input ? sameExit : succeed(value);
+		} catch (error) {
+			return die(error);
+		}
+		return (detailed ??= decodeEffect())(input, options);
+	};
+}
+/** @internal */
+function lazyParser(resolve, ast, operation) {
+	const entry = resolve(ast);
+	if (entry.compiled === void 0 || Object.hasOwn(entry, operation)) return entry[operation];
+	let parser;
+	return (input, options) => (parser ??= entry[operation])(input, options);
+}
+/** @internal */
+function resolve$2(ast) {
+	const cached = cache.get(ast);
+	if (cached !== void 0) return cached;
+	const entry = compiler === void 0 ? new InterpretedEntry(ast) : new CompilerEntry(ast, compiler(ast, resolve$2), resolve$2);
+	cache.set(ast, entry);
+	return entry;
+}
+var invalid, cache, compiler, compilerAdaptersEnabled, decodeChild, makeChild, makeField, InterpretedEntry, CompilerEntry;
+var init_compilerRegistry = __esmMin((() => {
+	init_Effect();
+	init_interpreter();
+	init_parser();
+	invalid = /*#__PURE__*/ Symbol();
+	cache = /*#__PURE__*/ new WeakMap();
+	compilerAdaptersEnabled = false;
+	decodeChild = (ast) => compilerAdaptersEnabled ? lazyParser(resolve$2, ast, "parser") : resolve$2(ast).parser;
+	makeChild = (ast) => compilerAdaptersEnabled ? lazyParser(resolve$2, ast, "makeEffect") : resolve$2(ast).makeEffect;
+	makeField = (ast) => compileField(ast, makeChild);
+	InterpretedEntry = class {
+		ast;
+		constructor(ast) {
+			this.ast = ast;
+		}
+		get decodeEffect() {
+			return this.cachedDecodeEffect ??= compile(this.ast, decodeChild);
+		}
+		get parser() {
+			return this.decodeEffect;
+		}
+		get makeEffect() {
+			return this.cachedMakeEffect ??= compile(this.ast, makeChild, makeField);
+		}
+	};
+	CompilerEntry = class extends InterpretedEntry {
+		compiled;
+		resolve;
+		constructor(ast, compiled, resolve) {
+			super(ast);
+			this.compiled = compiled;
+			this.resolve = resolve;
+		}
+		save(key, value) {
+			Object.defineProperty(this, key, { value });
+			return value;
+		}
+		operation(key) {
+			const compiled = this.compiled;
+			return typeof compiled === "function" ? compiled(this.ast, this.resolve, key) : compiled?.[key];
+		}
+		get is() {
+			return this.save("is", this.operation("is"));
+		}
+		get decode() {
+			return this.save("decode", this.operation("decode"));
+		}
+		get make() {
+			return this.save("make", this.operation("make"));
+		}
+		get decodeEffect() {
+			return this.save("decodeEffect", this.operation("decodeEffect") ?? compile(this.ast, (ast) => lazyParser(this.resolve, ast, "parser")));
+		}
+		get parser() {
+			const decode = this.decode;
+			return decode === void 0 ? this.decodeEffect : this.save("parser", withDecode(decode, () => this.decodeEffect));
+		}
+		get makeEffect() {
+			const makeEffect = this.operation("makeEffect");
+			if (makeEffect !== void 0) return this.save("makeEffect", makeEffect);
+			const child = (ast) => lazyParser(this.resolve, ast, "makeEffect");
+			return this.save("makeEffect", compile(this.ast, child, (ast) => compileField(ast, child)));
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/SchemaParser.js
+/**
+* Creates an effectful maker for the schema's decoded type side.
+*
+* **When to use**
+*
+* Use to construct decoded schema values in `Effect` while preserving
+* construction failures as `SchemaIssue.Issue` values in the error channel.
+*
+* **Details**
+*
+* The returned function accepts constructor input, applies constructor defaults,
+* runs type-side validation unless checks are disabled, and fails with a
+* `SchemaIssue.Issue` when construction fails.
+*
+* @category constructors
+* @since 4.0.0
+*/
+function makeEffect(schema) {
+	const ast = schema.ast;
+	let parser;
+	return (input, options) => {
+		return (parser ??= runWithCompiler(constructorCompiler, toType(ast)))(input, options?.disableChecks ? options?.parseOptions ? {
+			...options.parseOptions,
+			disableChecks: true
+		} : { disableChecks: true } : options?.parseOptions);
+	};
+}
+/**
+* Creates a synchronous maker that returns `Option.some` with the constructed
+* value on success, or `Option.none` when construction fails with schema issues.
+*
+* **When to use**
+*
+* Use when you need to validate schema constructor input and only care whether
+* construction succeeds, without exposing `SchemaIssue.Issue` details.
+*
+* **Gotchas**
+*
+* Only causes made entirely of schema issues are converted to `Option.none`.
+* Causes that contain defects, interruptions, or asynchronous work at this
+* synchronous boundary throw an `Error` whose cause is the underlying `Cause`.
+*
+* @category constructors
+* @since 4.0.0
+*/
+function makeOption(schema) {
+	const parser = makeEffect(schema);
+	return (input, options) => {
+		const exit = runSyncExit(parser(input, options));
+		if (isSuccess(exit)) return some(exit.value);
+		getSchemaIssueOrThrow(exit.cause, "Option adapter can only return none for schema issues");
+		return none();
+	};
+}
+/**
+* Creates a synchronous maker for the schema's decoded type side.
+*
+* **When to use**
+*
+* Use to construct decoded schema values synchronously when invalid input
+* should throw an `Error` whose cause is `SchemaIssue.Issue`.
+*
+* **Details**
+*
+* The returned function constructs a value from constructor input and throws an
+* `Error` with the `SchemaIssue.Issue` in its `cause` when construction fails.
+* Schema validation failures use the generic message `"Schema validation failed"`.
+* Format the `cause` explicitly with `SchemaIssue.makeFormatterDefault()` when
+* human-readable details are needed.
+*
+* **Gotchas**
+*
+* Causes that contain defects, interruptions, or asynchronous work at this
+* synchronous boundary throw an `Error` whose cause is the underlying `Cause`,
+* instead of being converted to a schema validation error.
+*
+* @category constructors
+* @since 4.0.0
+*/
+function make$2(schema) {
+	return makeConstructorSync(toType(schema.ast));
+}
+/**
+* Creates an effectful decoder for `unknown` input.
+*
+* **When to use**
+*
+* Use when you need to decode untyped boundary input in an `Effect` whose
+* failure channel is `SchemaIssue.Issue`, while preserving transformations
+* and service requirements.
+*
+* **Details**
+*
+* The returned function succeeds with the schema's decoded `Type` or fails with a
+* `SchemaIssue.Issue`. Decoding service requirements are preserved in the returned
+* `Effect`. Parse options may be provided when creating the decoder and overridden
+* when applying it.
+*
+* @see {@link decodeEffect} for input already typed as the schema's `Encoded` type
+*
+* @category decoding
+* @since 4.0.0
+*/
+function decodeUnknownEffect$1(schema, options) {
+	const parser = run(schema.ast);
+	return options === void 0 ? parser : (input, overrideOptions) => parser(input, mergeParseOptions(options, overrideOptions));
+}
+/** @internal */
+function run(ast) {
+	return runWithCompiler(normalCompiler, ast);
+}
+function parserResult(result, input) {
+	if (result === sameExit) return succeed$1(input);
+	if (!effectIsExit(result)) return flatMapEager(result, getValue);
+	return result[args] === missing ? getValue(missing) : result;
+}
+function runWithCompiler(compiler, ast) {
+	let parser;
+	return (input, options) => {
+		const result = (parser ??= compiler(ast))(input, options ?? defaultParseOptions);
+		if (result === sameExit) return succeed$1(input);
+		if (!effectIsExit(result)) return flatMapEager(result, getValue);
+		return result[args] === missing ? getValue(missing) : result;
+	};
+}
+function runSync(effect, message) {
+	const exit = runSyncExit(effect);
+	if (isSuccess(exit)) return exit.value;
+	const issue = getSchemaIssueOrThrow(exit.cause, message);
+	throw new Error("Schema validation failed", { cause: issue });
+}
+function makeConstructorSync(ast) {
+	let entry;
+	let parser;
+	return (input, options) => {
+		entry ??= resolve$2(ast);
+		const parseOptions = options?.disableChecks ? options.parseOptions ? {
+			...options.parseOptions,
+			disableChecks: true
+		} : { disableChecks: true } : options?.parseOptions ?? defaultParseOptions;
+		const make = entry.make;
+		if (make !== void 0 && input !== missing) {
+			let output;
+			try {
+				output = make(input, parseOptions);
+			} catch (error) {
+				getSchemaIssueOrThrow(die$1(error), "Constructor adapter can only throw schema issues");
+				throw error;
+			}
+			if (output !== invalid && output !== missing) return output;
+		}
+		return runSync(parserResult((parser ??= entry.makeEffect)(input, parseOptions), input), "Constructor adapter can only throw schema issues");
+	};
+}
+var mergeParseOptions, getValue, normalCompiler, constructorCompiler;
+var init_SchemaParser = __esmMin((() => {
+	init_Cause();
+	init_Effect();
+	init_Exit();
+	init_effect();
+	init_cause();
+	init_compilerRegistry();
+	init_parser();
+	init_Option();
+	init_SchemaAST();
+	init_SchemaIssue();
+	mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
+		...options,
+		...overrideOptions
+	} : options;
+	getValue = (value) => {
+		if (value === missing) return fail$3(new InvalidValue());
+		return succeed$1(value);
+	};
+	normalCompiler = (ast) => resolve$2(ast).parser;
+	constructorCompiler = (ast) => resolve$2(ast).makeEffect;
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/make.js
+/** @internal */
+function make$1(ast, options) {
+	function Schema() {}
+	const self = Object.setPrototypeOf(Schema, SchemaProto);
+	if (options && (Object.hasOwn(options, "name") || Object.hasOwn(options, "length") || Object.hasOwn(options, "__proto__"))) Object.defineProperties(self, Object.getOwnPropertyDescriptors({ ...options }));
+	else Object.assign(self, options);
+	self[RebuildOptions] = options;
+	self.ast = ast;
+	return self;
+}
+var TypeId, RebuildOptions, SchemaProto;
+var init_make = __esmMin((() => {
+	init_Pipeable();
+	init_SchemaAST();
+	init_SchemaParser();
+	TypeId = "~effect/Schema/Schema";
+	RebuildOptions = /*#__PURE__*/ Symbol();
+	SchemaProto = {
+		[TypeId]: TypeId,
+		get make() {
+			const value = make$2(this);
+			Object.defineProperty(this, "make", {
+				value,
+				enumerable: true
+			});
+			return value;
+		},
+		get makeEffect() {
+			const value = makeEffect(this);
+			Object.defineProperty(this, "makeEffect", {
+				value,
+				enumerable: true
+			});
+			return value;
+		},
+		get makeOption() {
+			const value = makeOption(this);
+			Object.defineProperty(this, "makeOption", {
+				value,
+				enumerable: true
+			});
+			return value;
+		},
+		pipe() {
+			return pipeArguments(this, arguments);
+		},
+		annotate(annotations) {
+			return this.rebuild(annotate(this.ast, annotations));
+		},
+		annotateKey(annotations) {
+			return this.rebuild(annotateKey(this.ast, annotations));
+		},
+		check(...checks) {
+			return this.rebuild(appendChecks(this.ast, checks));
+		},
+		rebuild(ast) {
+			return make$1(ast, this[RebuildOptions]);
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schema/standardSchema.js
+function makeStandardResult(exit) {
+	return isSuccess(exit) ? exit.value : { issues: [{ message: pretty(exit.cause) }] };
+}
+/** @internal */
+function toStandardSchemaV1$1(self, options) {
+	const decodeUnknownEffect = decodeUnknownEffect$1(self);
+	const parseOptions = {
+		errors: "all",
+		...options?.parseOptions
+	};
+	const formatter = makeFormatterStandardSchemaV1(options);
+	const validate = (value) => {
+		const scheduler = new MixedScheduler("sync");
+		const fiber = runFork(match(decodeUnknownEffect(value, parseOptions), {
+			onFailure: formatter,
+			onSuccess: (value) => ({ value })
+		}), { scheduler });
+		fiber.currentDispatcher?.flush();
+		const exit = fiber.pollUnsafe();
+		if (exit) return makeStandardResult(exit);
+		return new Promise((resolve) => {
+			fiber.addObserver((exit) => {
+				resolve(makeStandardResult(exit));
+			});
+		});
+	};
+	if ("~standard" in self) {
+		const out = self;
+		if ("validate" in out["~standard"]) return out;
+		Object.assign(out["~standard"], { validate });
+		return out;
+	}
+	return Object.assign(self, { "~standard": {
+		version: 1,
+		vendor: "effect",
+		validate
+	} });
+}
+var init_standardSchema = __esmMin((() => {
+	init_Cause();
+	init_Effect();
+	init_Exit();
+	init_Scheduler();
+	init_SchemaIssue();
+	init_SchemaParser();
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Struct.js
+var lambda;
+var init_Struct = __esmMin((() => {
+	lambda = (f) => f;
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/internal/schemaError.js
+function isSchemaError$1(u) {
+	return hasProperty(u, "~effect/Schema/SchemaError") && u["~effect/Schema/SchemaError"] === "~effect/Schema/SchemaError";
+}
+var SchemaErrorTypeId;
+var init_schemaError = __esmMin((() => {
+	init_Predicate();
+	SchemaErrorTypeId = "~effect/Schema/SchemaError";
+}));
+/**
+* Returns `true` if `u` is a {@link SchemaError}.
+*
+* **When to use**
+*
+* Use when you need to narrow an unknown value to `SchemaError`.
+*
+* **Example** (Narrowing Schema errors)
+*
+* ```ts import.meta.vitest
+* import { Result, Schema } from "effect"
+*
+* const result = Result.try(() => Schema.decodeUnknownSync(Schema.Number)("oops"))
+* const error: unknown = Result.isFailure(result) ? result.failure : undefined
+* Schema.isSchemaError(error) // => true
+* ```
+*
+* @category guards
+* @since 4.0.0
+*/
+function isSchemaError(u) {
+	return isSchemaError$1(u);
+}
+function fromIssueEffect(self) {
+	if (effectIsExit(self)) return fromIssueExit(self);
+	return catchCause(self, (cause) => failCauseSync(() => map(cause, (issue) => new SchemaError(issue))));
+}
+function fromIssueExit(exit) {
+	return isSuccess(exit) ? exit : failCause(map(exit.cause, (issue) => new SchemaError(issue)));
+}
+function getSchemaErrorOrThrow(cause, message) {
+	let schemaError;
+	for (const reason of cause.reasons) {
+		if (!isFailReason(reason) || !isSchemaError(reason.error)) throw new globalThis.Error(message, { cause });
+		schemaError ??= reason.error;
+	}
+	if (schemaError === void 0) throw new globalThis.Error(message, { cause });
+	return schemaError;
+}
+function runSchemaErrorSync(self) {
+	const exit = runSyncExit(self);
+	if (isSuccess(exit)) return exit.value;
+	throw getSchemaErrorOrThrow(exit.cause, "Sync adapter can only throw schema errors");
+}
+/**
+* Returns a "Standard Schema" object conforming to the [Standard Schema
+* v1](https://standardschema.dev/) specification.
+*
+* **Details**
+*
+* This function creates a schema whose `validate` method attempts to decode and
+* validate the provided input synchronously. If the underlying `Schema`
+* includes any asynchronous components (e.g., asynchronous message resolutions
+* or checks), then validation will necessarily return a `Promise` instead.
+*
+* **Example** (Creating a standard schema from a regular schema)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* // Define custom hook functions for error formatting
+* const leafHook = (issue: any) => {
+*   switch (issue._tag) {
+*     case "InvalidType":
+*       return "Expected different type"
+*     case "InvalidValue":
+*       return "Invalid value provided"
+*     case "MissingKey":
+*       return "Required property missing"
+*     case "UnexpectedKey":
+*       return "Unexpected property found"
+*     case "Forbidden":
+*       return "Operation not allowed"
+*     case "OneOf":
+*       return "Multiple valid options available"
+*     default:
+*       return "Validation error"
+*   }
+* }
+*
+* // Create a standard schema from a regular schema
+* const PersonSchema = Schema.Struct({
+*   name: Schema.NonEmptyString,
+*   age: Schema.Finite.check(Schema.isBetween({ minimum: 0, maximum: 150 }))
+* })
+*
+* const standardSchema = Schema.toStandardSchemaV1(PersonSchema, {
+*   leafHook
+* })
+*
+* // The standard schema can be used with any Standard Schema v1 compatible library
+* const validResult = standardSchema["~standard"].validate({
+*   name: "Alice",
+*   age: 30
+* })
+* const invalidResult = standardSchema["~standard"].validate({
+*   name: "",
+*   age: 200
+* })
+*
+* if (validResult instanceof Promise || invalidResult instanceof Promise) {
+*   throw new Error("Expected synchronous validation")
+* }
+* if ("value" in validResult) {
+*   validResult.value // => { name: "Alice", age: 30 }
+* }
+* invalidResult.issues?.map((issue) => issue.path) // => [["name"], ["age"]]
+* ```
+*
+* @category converting
+* @since 4.0.0
+*/
+function toStandardSchemaV1(self, options) {
+	return toStandardSchemaV1$1(self, options);
+}
+/**
+* Decodes an `unknown` input against a schema, returning an `Effect` that
+* succeeds with the decoded value or fails with a {@link SchemaError}.
+*
+* **When to use**
+*
+* Use when you need to decode unknown input in an `Effect` whose failure
+* channel is `SchemaError`.
+*
+* **Details**
+*
+* Prefer {@link decodeEffect} when the input is already typed as the schema's
+* `Encoded` type.
+* Options may be provided either when creating the decoder or when applying it;
+* application options override creation options.
+*
+* @see {@link SchemaParser.decodeUnknownEffect} for the adapter that fails with `SchemaIssue.Issue` directly
+*
+* @category decoding
+* @since 4.0.0
+*/
+function decodeUnknownEffect(schema, options) {
+	const parser = decodeUnknownEffect$1(schema, options);
+	return (input, options) => {
+		return fromIssueEffect(parser(input, options));
+	};
+}
+/**
+* Decodes an `unknown` input against a schema synchronously, returning the
+* decoded value or throwing a {@link SchemaError} for schema mismatches.
+*
+* **When to use**
+*
+* Use when you need to validate unknown data at a synchronous boundary and want
+* schema mismatches to throw `SchemaError`.
+*
+* **Details**
+*
+* For input already typed as the schema's `Encoded` type use `decodeSync`.
+* Only service-free schemas can be decoded synchronously. For alternatives that
+* do not throw on schema mismatches, see `decodeUnknownOption`,
+* `decodeUnknownExit`, or `decodeUnknownEffect`. Options may be provided either
+* when creating the decoder or when applying it; application options override
+* creation options.
+*
+* **Gotchas**
+*
+* Non-schema failures may throw a runtime failure instead of `SchemaError`.
+*
+* **Example** (Decoding with a transformation schema)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const NumberFromString = Schema.NumberFromString
+*
+* Schema.decodeUnknownSync(NumberFromString)("42") // => 42
+* ```
+*
+* @see {@link SchemaParser.decodeUnknownSync} for the adapter that throws an `Error` whose cause is `SchemaIssue.Issue`
+*
+* @category decoding
+* @since 4.0.0
+*/
+function decodeUnknownSync(schema, options) {
+	const parser = decodeUnknownEffect(schema, options);
+	return (input, options) => {
+		return runSchemaErrorSync(parser(input, options));
+	};
+}
+/**
+* Creates a schema for a single literal value (string, number, bigint, boolean, or null).
+*
+* **Example** (Defining a string literal)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Literal("hello")
+* // Type: Schema.Literal<"hello">
+* Schema.decodeSync(schema)("hello") // => "hello"
+* ```
+*
+* @see {@link Literals} for a schema that represents a union of literals.
+* @see {@link tag} for a schema that represents a literal value that can be
+* used as a discriminator field in tagged unions and has a constructor default.
+* @category constructors
+* @since 3.10.0
+*/
+function Literal(literal) {
+	const out = make(new Literal$1(literal), {
+		literal,
+		transform(to) {
+			return out.pipe(decodeTo(Literal(to), {
+				decode: transform$1(() => to),
+				encode: transform$1(() => literal)
+			}));
+		}
+	});
+	return out;
+}
+function makeStruct(ast, fields) {
+	return make(ast, {
+		fields,
+		mapFields(f, options) {
+			const fields = f(this.fields);
+			return makeStruct(struct(fields, options?.unsafePreserveChecks ? this.ast.checks : void 0), fields);
+		}
+	});
+}
+/**
+* Defines a struct schema from a map of field schemas.
+*
+* **Details**
+*
+* Each field value is a schema. Use {@link optionalKey} or {@link optional} to
+* mark fields as optional, and {@link mutableKey} to mark them as mutable.
+*
+* The resulting schema's `Type` is a readonly object type with the fields'
+* decoded types. The `Encoded` form mirrors the field schemas' encoded types.
+* Declared fields may be inherited and are copied to own properties in the
+* output. The `__proto__` field is accepted only when it is an own property.
+* Parsing does not guarantee that output keys retain their input order.
+*
+* **Example** (Defining a basic struct)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const Person = Schema.Struct({
+*   name: Schema.String,
+*   age: Schema.Number,
+*   email: Schema.optionalKey(Schema.String)
+* })
+*
+* // { readonly name: string; readonly age: number; readonly email?: string }
+* type Person = typeof Person.Type
+*
+* Schema.decodeUnknownSync(Person)({ name: "Alice", age: 30 }) // => { name: "Alice", age: 30 }
+* ```
+*
+* @category constructors
+* @since 3.10.0
+*/
+function Struct(fields) {
+	return makeStruct(struct(fields, void 0), fields);
+}
+function makeUnion(ast, members) {
+	return make(ast, {
+		members,
+		mapMembers(f, options) {
+			const members = f(this.members);
+			return makeUnion(union(members, this.ast.options, options?.unsafePreserveChecks ? this.ast.checks : void 0), members);
+		}
+	});
+}
+/**
+* Creates a union schema from an array of member schemas. Members are tested in
+* order; the first match is returned.
+*
+* **Details**
+*
+* Optionally, specify `mode`:
+* - `"anyOf"` (default) — matches if any member matches.
+* - `"oneOf"` — matches if exactly one member matches.
+*
+* **Example** (Defining a string or number union)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Union([Schema.String, Schema.Number])
+*
+* Schema.decodeUnknownSync(schema)("hello") // => "hello"
+* Schema.decodeUnknownSync(schema)(42) // => 42
+* ```
+*
+* @category constructors
+* @since 3.10.0
+*/
+function Union(members, options) {
+	return makeUnion(union(members, options, void 0), members);
+}
+/**
+* Creates a union schema from an array of literal values.
+*
+* **Example** (Defining status codes)
+*
+* ```ts import.meta.vitest
+* import { Schema } from "effect"
+*
+* const schema = Schema.Literals(["active", "inactive", "pending"])
+* Schema.decodeSync(schema)("active") // => "active"
+* ```
+*
+* @see {@link Literal} for a schema that represents a single literal.
+* @category constructors
+* @since 4.0.0
+*/
+function Literals(literals) {
+	const members = literals.map(Literal);
+	return make(union(members, void 0, void 0), {
+		literals,
+		members,
+		mapMembers(f) {
+			return Union(f(this.members));
+		},
+		pick(literals) {
+			return Literals(literals);
+		},
+		transform(to) {
+			return Union(members.map((member, index) => member.transform(to[index])));
+		}
+	});
+}
+function decodeTo(to, transformation) {
+	return (from) => {
+		return make(decodeTo$1(from.ast, to.ast, transformation ? makeTransformation(transformation) : passthrough()), {
+			from,
+			to
+		});
+	};
+}
+var SchemaError, make, optional, Unknown, Undefined, String$1, Number$1, Boolean$1, ArraySchema, UndefinedOr;
+var init_Schema = __esmMin((() => {
+	init_BigDecimal();
+	init_Cause();
+	init_Data();
+	init_DateTime();
+	init_Effect();
+	init_Base64();
+	init_Exit();
+	init_Formatter();
+	init_Cookies();
+	init_UrlParams();
+	init_effect();
+	init_make();
+	init_standardSchema();
+	init_schemaError();
+	init_stackTraceLimit();
+	init_Option();
+	init_Order();
+	init_Result();
+	init_SchemaAST();
+	init_SchemaGetter();
+	init_SchemaIssue();
+	init_SchemaParser();
+	init_SchemaTransformation();
+	init_Struct();
+	SchemaError = class extends (/*#__PURE__*/ TaggedError("SchemaError")) {
+		[SchemaErrorTypeId] = SchemaErrorTypeId;
+		constructor(issue) {
+			const stackTraceLimit = getStackTraceLimit();
+			setStackTraceLimit(0);
+			try {
+				super({ issue });
+			} finally {
+				setStackTraceLimit(stackTraceLimit);
+			}
+		}
+		get message() {
+			return defaultFormatter(this.issue);
+		}
+		toString() {
+			return `SchemaError(${this.message})`;
+		}
+	};
+	make = make$1;
+	optional = /*#__PURE__*/ lambda((self) => {
+		const schema = UndefinedOr(self);
+		return make(optional$1(self.ast), { schema });
+	});
+	Unknown = /*#__PURE__*/ make(unknown$1);
+	Undefined = /*#__PURE__*/ make(undefined_);
+	String$1 = /*#__PURE__*/ make(string);
+	Number$1 = /*#__PURE__*/ make(number$1);
+	Boolean$1 = /*#__PURE__*/ make(boolean$1);
+	ArraySchema = /*#__PURE__*/ lambda((schema) => make(new Arrays(false, [], [schema.ast]), { value: schema }));
+	UndefinedOr = /*#__PURE__*/ lambda((self) => Union([self, Undefined]));
+	globalThis.RegExp;
+	globalThis.URL;
+	globalThis.File;
+	globalThis.FormData;
+	globalThis.URLSearchParams;
+	globalThis.Uint8Array;
+}));
+//#endregion
+//#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/index.js
+var init_dist$2 = __esmMin((() => {
+	init_Function();
+	init_Cause();
+	init_Formatter();
+	init_Effect();
+	init_Option();
+	init_Pipeable();
+	init_Context();
+	init_Predicate();
+	init_Scheduler();
+	init_core();
+	init_array();
+	init_BigDecimal();
+	init_Equal();
+	init_Hash();
+	init_Order();
+	init_Schema();
+	init_SchemaAST();
+	init_SchemaGetter();
+	init_SchemaParser();
+	init_effect();
+	init_Array();
+	init_Equivalence();
+	init_Result();
+	init_SchemaIssue();
+	init_Duration();
+	init_Tuple();
+	init_Inspectable();
+	init_Exit();
+	init_stackTraceLimit();
+	init_references();
+	init_Tracer();
+	init_Data();
+	init_dateTime();
+	init_Utils();
+	init_Effectable();
+	init_Record();
+	init_SchemaTransformation();
+	init_DateTime();
+	init_hash();
+	init_metric();
+	init_Struct();
+	init_Redactable();
+	init_Base64();
+	init_make();
+	init_annotations();
+}));
+//#endregion
+//#region runtime/keybindings/registry.ts
+/** Domain decoders: manifest ownership stays with the producer, profile/policy with the consumer. */
+var ProducerSchema, keybindingProviders, ConsumerSchema, keybindingConsumers;
+var init_registry$2 = __esmMin((() => {
+	init_dist$2();
+	init_context$1();
+	ProducerSchema = Struct({
+		version: Literal(1),
+		producer: String$1,
+		order: Number$1,
+		resources: ArraySchema(Struct({ path: String$1 })),
+		targets: ArraySchema(Literals(["niri", "umbriel"])),
+		enabled: optional(Boolean$1)
+	});
+	keybindingProviders = {
+		collection: "keybindings/providers.d",
+		decode(value) {
+			const manifest = decodeUnknownSync(ProducerSchema)(value);
+			if (!Number.isFinite(manifest.order) || manifest.resources.some((entry) => !isAbsolute(entry.path))) throw new Error("producer requires finite order and absolute exact resource paths");
+			return manifest;
+		},
+		identity: (value) => value.producer,
+		enabled: (value) => value.enabled !== false,
+		scope: () => void 0
+	};
+	ConsumerSchema = Struct({
+		version: Literal(1),
+		id: String$1,
+		adapter: String$1,
+		audience: Literals(["user", "system"]),
+		enabled: optional(Boolean$1),
+		profile: Unknown,
+		contexts: ArraySchema(String$1),
+		defaultContext: String$1
+	});
+	keybindingConsumers = {
+		collection: "keybindings/consumers.d",
+		decode(value) {
+			const consumer = decodeUnknownSync(ConsumerSchema)(value);
+			if (!consumer.adapter.trim() || consumer.contexts.some((id) => !id.trim()) || !consumer.contexts.includes(consumer.defaultContext) || new Set(consumer.contexts).size !== consumer.contexts.length) throw new Error("consumer requires adapter and nonempty unique contexts containing defaultContext");
+			return {
+				...consumer,
+				profile: validatePathSelector(consumer.profile, "consumer profile")
+			};
+		},
+		identity: (value) => value.id,
+		enabled: (value) => value.enabled !== false,
+		scope: (value) => value.audience
+	};
+}));
+//#endregion
+//#region runtime/registry/register.ts
+/** Owner-side registration material. No declaration copies, pruning, reloads or native publication. */
+async function planRegistration(request) {
+	if (!isAbsolute(request.source)) throw new Error("registration requires an absolute owner descriptor path");
+	const source = resolve(request.source);
+	const policy = explicitPolicy(request.policy.scope, request.policy.roots, request.policy.writeRoot);
+	const payload = request.domain.decode(await loadOwner(source));
+	const id = request.domain.identity(payload);
+	assertId(id);
+	const scope = request.domain.scope(payload);
+	if (scope !== void 0 && scope !== policy.scope) throw new Error("owner descriptor audience disagrees with registration scope");
+	const snapshot = await inspectRegistry(request.domain, policy);
+	if (!snapshot.complete) throw new Error("cannot register into an incompletely observed registry; inspect root errors");
+	const effective = snapshot.records.find((record) => record.id === id);
+	const activePath = join(policy.writeRoot, `${id}.json`);
+	const disabledPath = `${activePath}.disabled`;
+	const [active, disabled] = await Promise.all([inspectDeliveryEntry(activePath), inspectDeliveryEntry(disabledPath)]);
+	const activePresent = active.kind !== "missing";
+	const disabledPresent = disabled.kind !== "missing";
+	const local = effective?.source.participating.filter((entry) => entry.root === policy.writeRoot) ?? [];
+	if (activePresent && disabledPresent || local.length > 1) throw new Error(`conflicting local registration slots for ${id}`);
+	const existing = local[0];
+	const disabledSlot = existing?.disabled ?? (disabledPresent || !activePresent && !request.domain.enabled(payload));
+	const participation = disabledSlot || !request.domain.enabled(payload) ? "disabled" : "active";
+	const destination = existing?.path ?? (disabledSlot ? disabledPath : activePath);
+	const slot = existing ? await inspectDeliveryEntry(existing.path) : disabledSlot ? disabled : active;
+	const base = {
+		id,
+		source,
+		destination,
+		participation,
+		guard: JSON.stringify({
+			roots: snapshot.roots,
+			source: effective?.source,
+			state: effective?.state,
+			active,
+			disabled
+		}),
+		effective: {
+			state: effective?.state ?? "missing",
+			winner: effective?.source.winner.path
+		}
+	};
+	const blocked = (reason) => ({
+		...base,
+		disposition: "blocked",
+		reason,
+		material: {
+			version: 1,
+			links: []
+		}
+	});
+	if (slot.kind !== "missing" && !linkMatches(slot, source)) return blocked(`local slot is not this owner's reference: ${destination}`);
+	const disposition = slot.kind === "missing" ? "create" : "current";
+	return {
+		...base,
+		disposition,
+		reason: participation === "disabled" ? "retained disabled registration (not activation)" : "owner reference only (not accepted membership)",
+		material: {
+			version: 1,
+			links: [{
+				id: `registry-${id}`,
+				scope: policy.scope,
+				src: source,
+				dest: destination,
+				policy: "replace",
+				state: "present"
+			}]
+		}
+	};
+}
+/** Recheck policy/slots immediately before delivery. Concurrent writers are not locked. */
+async function applyRegistration(request, plan) {
+	const current = await planRegistration(request);
+	if (JSON.stringify(current) !== JSON.stringify(plan)) throw new Error("registration changed since planning; inspect and plan again");
+	if (current.disposition === "create") await replaceWithLink(current.source, current.destination);
+	return current;
+}
+async function register(request) {
+	return applyRegistration(request, await planRegistration(request));
+}
+var init_register = __esmMin((() => {
+	init_figments();
+	init_delivery();
+	init_read$1();
+	init_policy();
+	init_model$2();
+}));
 //#endregion
 //#region node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
 var require_identity = /* @__PURE__ */ __commonJSMin(((exports) => {
@@ -10430,8 +22510,8 @@ var require_public_api = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.stringify = stringify;
 }));
 //#endregion
-//#region files/config/keybindings/decode.ts
-var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
+//#region node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/index.js
+var require_dist = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var composer = require_composer();
 	var Document = require_Document();
 	var Schema = require_Schema();
@@ -10476,9 +22556,9 @@ var import_dist = (/* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.stringify = publicApi.stringify;
 	exports.visit = visit.visit;
 	exports.visitAsync = visit.visitAsync;
-})))();
-const ID$1 = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
-const NAME$1 = /^[A-Za-z][A-Za-z0-9_-]*$/;
+}));
+//#endregion
+//#region files/config/keybindings/decode.ts
 function object$1(value, label) {
 	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label}: expected mapping`);
 	return value;
@@ -10487,16 +22567,16 @@ function known(value, fields, label) {
 	const unknown = Object.keys(value).filter((key) => !fields.includes(key));
 	if (unknown.length) throw new Error(`${label}: unknown fields ${unknown.join(", ")}`);
 }
-function text(value, label, empty = false) {
+function text$1(value, label, empty = false) {
 	if (typeof value !== "string" || !empty && !value || value.includes("\0")) throw new Error(`${label}: expected ${empty ? "" : "non-empty "}string without NUL`);
 	return value;
 }
 function id(value, label) {
-	const result = text(value, label);
+	const result = text$1(value, label);
 	if (!ID$1.test(result)) throw new Error(`${label}: invalid identifier ${result}`);
 	return result;
 }
-function bool(value, label) {
+function bool$1(value, label) {
 	if (typeof value !== "boolean") throw new Error(`${label}: expected boolean`);
 	return value;
 }
@@ -10504,15 +22584,15 @@ function sequence(value, label) {
 	if (!Array.isArray(value)) throw new Error(`${label}: expected sequence`);
 	return value;
 }
-function scalar(value, label) {
-	if (typeof value === "string") return text(value, label, true);
+function scalar$1(value, label) {
+	if (typeof value === "string") return text$1(value, label, true);
 	if (typeof value === "boolean" || typeof value === "number" && Number.isFinite(value)) return value;
 	throw new Error(`${label}: expected string, boolean or finite number`);
 }
 function properties(value, label) {
 	return Object.fromEntries(Object.entries(object$1(value, label)).map(([key, entry]) => {
 		if (!NAME$1.test(key)) throw new Error(`${label}: invalid property name ${key}`);
-		return [key, scalar(entry, `${label}.${key}`)];
+		return [key, scalar$1(entry, `${label}.${key}`)];
 	}));
 }
 function implementation(value, label, target) {
@@ -10524,7 +22604,7 @@ function implementation(value, label, target) {
 	if (kinds.length > 1) throw new Error(`${label}: exec, script and native replace one another; specify only one`);
 	if (!kinds.length) return void 0;
 	if (kinds[0] === "exec") {
-		const argv = sequence(value.exec, `${label}.exec`).map((entry, index) => text(entry, `${label}.exec[${index}]`, index > 0));
+		const argv = sequence(value.exec, `${label}.exec`).map((entry, index) => text$1(entry, `${label}.exec[${index}]`, index > 0));
 		if (!argv.length) throw new Error(`${label}.exec: command argv must not be empty`);
 		return {
 			kind: "exec",
@@ -10536,14 +22616,14 @@ function implementation(value, label, target) {
 		known(script, ["shell", "body"], `${label}.script`);
 		return {
 			kind: "script",
-			shell: text(script.shell, `${label}.script.shell`),
-			body: text(script.body, `${label}.script.body`)
+			shell: text$1(script.shell, `${label}.script.shell`),
+			body: text$1(script.body, `${label}.script.body`)
 		};
 	}
 	if (!target) throw new Error(`${label}: native requires a target specifier`);
 	if (target === "umbriel") return {
 		kind: "umbriel-native",
-		value: text(value.native, `${label}.native`)
+		value: text$1(value.native, `${label}.native`)
 	};
 	const native = object$1(value.native, `${label}.native`);
 	known(native, [
@@ -10551,13 +22631,13 @@ function implementation(value, label, target) {
 		"args",
 		"properties"
 	], `${label}.native`);
-	const name = text(native.name, `${label}.native.name`);
+	const name = text$1(native.name, `${label}.native.name`);
 	if (!NAME$1.test(name)) throw new Error(`${label}.native.name: invalid node name`);
 	return {
 		kind: "niri-native",
 		value: {
 			name,
-			args: sequence(native.args ?? [], `${label}.native.args`).map((entry) => scalar(entry, `${label}.native.args`)),
+			args: sequence(native.args ?? [], `${label}.native.args`).map((entry) => scalar$1(entry, `${label}.native.args`)),
 			properties: native.properties === void 0 ? {} : properties(native.properties, `${label}.native.properties`)
 		}
 	};
@@ -10572,7 +22652,7 @@ function actionFields(raw, label, target) {
 	const result = {};
 	const body = implementation(raw, label, target);
 	if (body) result.implementation = body;
-	if (raw.enabled !== void 0) result.enabled = bool(raw.enabled, `${label}.enabled`);
+	if (raw.enabled !== void 0) result.enabled = bool$1(raw.enabled, `${label}.enabled`);
 	return result;
 }
 function bindingFields(raw, label) {
@@ -10589,14 +22669,14 @@ function bindingFields(raw, label) {
 	for (const [field, property] of [["keys", "keys"], ["add-keys", "addKeys"]]) {
 		if (raw[field] === void 0) continue;
 		result[property] = sequence(raw[field], `${label}.${field}`).map((entry) => {
-			const chord = text(entry, `${label}.${field}`);
+			const chord = text$1(entry, `${label}.${field}`);
 			if (!/^[A-Za-z0-9_]+(?:\+[A-Za-z0-9_]+)*$/.test(chord)) throw new Error(`${label}.${field}: unsupported chord syntax ${chord}`);
 			return chord;
 		});
 	}
-	if (raw.title !== void 0) result.title = text(raw.title, `${label}.title`, true);
+	if (raw.title !== void 0) result.title = text$1(raw.title, `${label}.title`, true);
 	if (raw.options !== void 0) result.options = properties(raw.options, `${label}.options`);
-	if (raw.enabled !== void 0) result.enabled = bool(raw.enabled, `${label}.enabled`);
+	if (raw.enabled !== void 0) result.enabled = bool$1(raw.enabled, `${label}.enabled`);
 	return result;
 }
 /**
@@ -10614,7 +22694,7 @@ function decodeContribution(value, source) {
 	if (version !== 1) throw new Error(`${source}: expected version: 1`);
 	const common = {
 		id: id(rawId, `${source}.id`),
-		patch: patch === void 0 ? false : bool(patch, `${source}.patch`),
+		patch: patch === void 0 ? false : bool$1(patch, `${source}.patch`),
 		source
 	};
 	if (kind === "action") return {
@@ -10656,6 +22736,12 @@ function decodeYaml(text, source) {
 	if (document.warnings.length) throw new Error(`${source}: unsupported YAML syntax: ${document.warnings.map((warning) => warning.message).join("; ")}`);
 	return decodeContribution(document.toJS({ maxAliasCount: 0 }), source);
 }
+var import_dist, ID$1, NAME$1;
+var init_decode$1 = __esmMin((() => {
+	import_dist = require_dist();
+	ID$1 = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+	NAME$1 = /^[A-Za-z][A-Za-z0-9_-]*$/;
+}));
 //#endregion
 //#region files/config/keybindings/model.ts
 /**
@@ -10772,6 +22858,7 @@ function compose(contributions, target) {
 		bindings: resolved
 	};
 }
+var init_model$1 = __esmMin((() => {}));
 //#endregion
 //#region files/config/keybindings/render.ts
 /**
@@ -10863,6 +22950,7 @@ function renderInclude(target, effectivePath) {
 	if (!effectivePath || /[\0\r\n\t]/.test(effectivePath)) throw new Error("include path must be non-empty without NUL/newlines");
 	return target === "niri" ? `include ${kdlString(effectivePath)}\n` : `${JSON.stringify(effectivePath)},\n`;
 }
+var init_render = __esmMin((() => {}));
 //#endregion
 //#region files/config/keybindings/processor.ts
 /**
@@ -10937,420 +23025,423 @@ async function runProcessor(argv, environment) {
 	}
 	await writeFile(candidate, text);
 }
+var init_processor = __esmMin((() => {
+	init_capture$1();
+	init_decode$1();
+	init_model$1();
+	init_render();
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/identifier.js
-/**
-* An identifier
-*/
-var Identifier = class Identifier {
-	/**
-	* @readonly
-	* @hidden
-	*/
-	type = "identifier";
-	/**
-	* @readonly
-	* @hidden
-	*/
-	static type = "identifier";
-	/**
-	* String representation of the identifier
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	representation;
-	/**
-	* @param {string} name
-	*/
-	constructor(name) {
+var Identifier;
+var init_identifier = __esmMin((() => {
+	Identifier = class Identifier {
 		/**
-		* The identifier itself
-		*
-		* @type {string}
+		* @readonly
 		* @hidden
 		*/
-		this.name = name;
-	}
-	/**
-	* Returns the name of this identifier
-	*/
-	getName() {
-		return this.name;
-	}
-	/**
-	* Change the name of the identifier
-	*
-	* @param {string} name
-	*/
-	setName(name) {
-		if (name !== this.name) {
+		type = "identifier";
+		/**
+		* @readonly
+		* @hidden
+		*/
+		static type = "identifier";
+		/**
+		* String representation of the identifier
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		representation;
+		/**
+		* @param {string} name
+		*/
+		constructor(name) {
+			/**
+			* The identifier itself
+			*
+			* @type {string}
+			* @hidden
+			*/
 			this.name = name;
-			this.representation = void 0;
 		}
-	}
-	/**
-	* Create an identical copy of this identifier
-	*
-	* @returns {Identifier}
-	*/
-	clone() {
-		const clone = new Identifier(this.name);
-		clone.representation = this.representation;
-		return clone;
-	}
-};
+		/**
+		* Returns the name of this identifier
+		*/
+		getName() {
+			return this.name;
+		}
+		/**
+		* Change the name of the identifier
+		*
+		* @param {string} name
+		*/
+		setName(name) {
+			if (name !== this.name) {
+				this.name = name;
+				this.representation = void 0;
+			}
+		}
+		/**
+		* Create an identical copy of this identifier
+		*
+		* @returns {Identifier}
+		*/
+		clone() {
+			const clone = new Identifier(this.name);
+			clone.representation = this.representation;
+			return clone;
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/tag.js
-/**
-* A tag is tied to anode or entry
-*/
-var Tag = class Tag {
-	/**
-	* @readonly
-	* @hidden
-	*/
-	type = "tag";
-	/**
-	* @readonly
-	* @hidden
-	*/
-	static type = "tag";
-	/**
-	* String representation of the tag
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	representation;
-	/**
-	* Leading whitespace
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	leading;
-	/**
-	* Trailing whitespace
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	trailing;
-	/**
-	* Whether the tag is shown as suffix or not
-	* @type {boolean=}
-	* @hidden
-	*/
-	suffix;
-	/**
-	* @param {string} name
-	*/
-	constructor(name) {
+var Tag;
+var init_tag = __esmMin((() => {
+	Tag = class Tag {
 		/**
-		* The tag itself
-		*
-		* @type {string}
 		* @readonly
 		* @hidden
 		*/
-		this.name;
-		Object.defineProperty(this, "name", {
-			enumerable: true,
-			configurable: true,
-			writable: false,
-			value: name
-		});
-	}
-	/**
-	* Return the tag name
-	*
-	* @returns {string}
-	*/
-	getName() {
-		return this.name;
-	}
-	/**
-	* Change the tag name
-	*
-	* @param {string} name
-	*/
-	setName(name) {
-		if (name !== this.name) {
-			/** @type {{name: string}} */ this.name = name;
-			this.representation = void 0;
+		type = "tag";
+		/**
+		* @readonly
+		* @hidden
+		*/
+		static type = "tag";
+		/**
+		* String representation of the tag
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		representation;
+		/**
+		* Leading whitespace
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		leading;
+		/**
+		* Trailing whitespace
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		trailing;
+		/**
+		* Whether the tag is shown as suffix or not
+		* @type {boolean=}
+		* @hidden
+		*/
+		suffix;
+		/**
+		* @param {string} name
+		*/
+		constructor(name) {
+			/**
+			* The tag itself
+			*
+			* @type {string}
+			* @readonly
+			* @hidden
+			*/
+			this.name;
+			Object.defineProperty(this, "name", {
+				enumerable: true,
+				configurable: true,
+				writable: false,
+				value: name
+			});
 		}
-	}
-	/**
-	* Create an identical copy of this tag
-	*
-	* @returns {Tag}
-	*/
-	clone() {
-		const clone = new Tag(this.name);
-		clone.representation = this.representation;
-		clone.leading = this.leading;
-		clone.trailing = this.trailing;
-		clone.suffix = this.suffix;
-		return clone;
-	}
-};
+		/**
+		* Return the tag name
+		*
+		* @returns {string}
+		*/
+		getName() {
+			return this.name;
+		}
+		/**
+		* Change the tag name
+		*
+		* @param {string} name
+		*/
+		setName(name) {
+			if (name !== this.name) {
+				/** @type {{name: string}} */ this.name = name;
+				this.representation = void 0;
+			}
+		}
+		/**
+		* Create an identical copy of this tag
+		*
+		* @returns {Tag}
+		*/
+		clone() {
+			const clone = new Tag(this.name);
+			clone.representation = this.representation;
+			clone.leading = this.leading;
+			clone.trailing = this.trailing;
+			clone.suffix = this.suffix;
+			return clone;
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/value.js
-/**
-* @typedef {string | number | boolean | null} Primitive
-* A primitive is any type that can be represented as an argument or property
-*/
-/**
-* A value represents a primitive in KDL, i.e. a string, boolean, number, or null
-*
-* Values are always tied to an entry.
-*/
-var Value = class Value {
-	/**
-	* @readonly
-	* @hidden
-	*/
-	type = "value";
-	/**
-	* @readonly
-	* @hidden
-	*/
-	static type = "value";
-	/**
-	* String representation of the value
-	*
-	* @type {string=}
-	*/
-	representation;
-	/**
-	* Tag attached to this value, if any
-	*
-	* @type {Tag | null}
-	* @hidden
-	*/
-	tag = null;
-	/**
-	* Whitespace between the tag and the value
-	*
-	* @type {string=}
-	*/
-	betweenTagAndValue;
-	/**
-	* @param {Primitive} value
-	*/
-	constructor(value) {
+var Value;
+var init_value = __esmMin((() => {
+	init_tag();
+	Value = class Value {
 		/**
-		* The value itself
-		*
-		* @type {Primitive}
 		* @readonly
 		* @hidden
 		*/
-		this.value = value;
-	}
-	/**
-	* Create an identical copy of this value
-	*
-	* @returns {Value}
-	*/
-	clone() {
-		const clone = new Value(this.value);
-		clone.tag = this.tag?.clone() ?? null;
-		clone.betweenTagAndValue = this.betweenTagAndValue;
-		clone.representation = this.representation;
-		return clone;
-	}
-	/**
-	* Return the value itself
-	*
-	* @returns {Primitive}
-	*/
-	getValue() {
-		return this.value;
-	}
-	/**
-	* Change the value
-	*
-	* @param {Primitive} value
-	*/
-	setValue(value) {
-		if (value !== this.value) {
-			/** @type {{value: Primitive}} */ this.value = value;
-			this.representation = void 0;
+		type = "value";
+		/**
+		* @readonly
+		* @hidden
+		*/
+		static type = "value";
+		/**
+		* String representation of the value
+		*
+		* @type {string=}
+		*/
+		representation;
+		/**
+		* Tag attached to this value, if any
+		*
+		* @type {Tag | null}
+		* @hidden
+		*/
+		tag = null;
+		/**
+		* Whitespace between the tag and the value
+		*
+		* @type {string=}
+		*/
+		betweenTagAndValue;
+		/**
+		* @param {Primitive} value
+		*/
+		constructor(value) {
+			/**
+			* The value itself
+			*
+			* @type {Primitive}
+			* @readonly
+			* @hidden
+			*/
+			this.value = value;
 		}
-	}
-	/**
-	* Return the tag of this entry, if any
-	*
-	* @returns {string | null}
-	*/
-	getTag() {
-		return this.tag ? this.tag.name : null;
-	}
-	/**
-	* Set the tag of this entry to the given tag
-	*
-	* @param {string | null | undefined} tag
-	*/
-	setTag(tag) {
-		if (tag == null) this.tag = null;
-		else if (this.tag != null) this.tag.setName(tag);
-		else this.tag = new Tag(tag);
-	}
-};
+		/**
+		* Create an identical copy of this value
+		*
+		* @returns {Value}
+		*/
+		clone() {
+			const clone = new Value(this.value);
+			clone.tag = this.tag?.clone() ?? null;
+			clone.betweenTagAndValue = this.betweenTagAndValue;
+			clone.representation = this.representation;
+			return clone;
+		}
+		/**
+		* Return the value itself
+		*
+		* @returns {Primitive}
+		*/
+		getValue() {
+			return this.value;
+		}
+		/**
+		* Change the value
+		*
+		* @param {Primitive} value
+		*/
+		setValue(value) {
+			if (value !== this.value) {
+				/** @type {{value: Primitive}} */ this.value = value;
+				this.representation = void 0;
+			}
+		}
+		/**
+		* Return the tag of this entry, if any
+		*
+		* @returns {string | null}
+		*/
+		getTag() {
+			return this.tag ? this.tag.name : null;
+		}
+		/**
+		* Set the tag of this entry to the given tag
+		*
+		* @param {string | null | undefined} tag
+		*/
+		setTag(tag) {
+			if (tag == null) this.tag = null;
+			else if (this.tag != null) this.tag.setName(tag);
+			else this.tag = new Tag(tag);
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/entry.js
-/**
-* An entry represents either an argument or a property to a node
-*/
-var Entry = class Entry {
-	/**
-	* Create a new argument entry with the given value
-	*
-	* @param {Value['value']} value
-	* @returns {Entry}
-	*/
-	static createArgument(value) {
-		return new Entry(new Value(value), null);
-	}
-	/**
-	* Create a new property entry for the given key and value
-	*
-	* @param {string} name
-	* @param {Value['value']} value
-	* @returns {Entry}
-	*/
-	static createProperty(name, value) {
-		return new Entry(new Value(value), new Identifier(name));
-	}
-	/**
-	* @readonly
-	* @hidden
-	*/
-	type = "entry";
-	/**
-	* @readonly
-	* @hidden
-	*/
-	static type = "entry";
-	/**
-	* The name of this entry if it's a property, or null if it's an argument
-	*
-	* @type {Identifier | null}
-	*/
-	name;
-	/**
-	* The value of this entry
-	*
-	* @type {Value}
-	*/
-	value;
-	/**
-	* Leading whitespace
-	*
-	* @type {string=}
-	*/
-	leading;
-	/**
-	* Trailing whitespace
-	*
-	* @type {string=}
-	*/
-	trailing;
-	/**
-	* Equals sign
-	*
-	* @type {string=}
-	*/
-	equals;
-	/**
-	* @param {Value} value
-	* @param {Identifier | null} name
-	*/
-	constructor(value, name) {
-		this.value = value;
-		this.name = name;
-	}
-	/**
-	* Create an identical copy of this entry
-	*
-	* @returns {Entry}
-	*/
-	clone() {
-		const clone = new Entry(this.value.clone(), this.name?.clone() ?? null);
-		clone.leading = this.leading;
-		clone.trailing = this.trailing;
-		clone.equals = this.equals;
-		return clone;
-	}
-	/**
-	* Return the tag of this entry, if any
-	*
-	* @returns {string | null}
-	* @see {@link Value.prototype.getTag}
-	*/
-	getTag() {
-		return this.value.getTag();
-	}
-	/**
-	* Set the tag of this entry to the given tag
-	*
-	* @param {string | null | undefined} tag
-	* @see {@link Value.prototype.setTag}
-	*/
-	setTag(tag) {
-		this.value.setTag(tag);
-	}
-	/**
-	* Return the name of this entry, if any
-	*
-	* @returns {string | null}
-	*/
-	getName() {
-		return this.name ? this.name.name : null;
-	}
-	/**
-	* Set the name of this entry to the given name
-	*
-	* @param {string | null | undefined} name
-	*/
-	setName(name) {
-		this.name = name != null ? new Identifier(name) : null;
-	}
-	/**
-	* Return the value of this entry
-	*
-	* @returns {Value['value']}
-	*/
-	getValue() {
-		return this.value.value;
-	}
-	/**
-	* Set the name of this entry to the given name
-	*
-	* @param {Value['value']} value
-	*/
-	setValue(value) {
-		this.value = new Value(value);
-	}
-	/**
-	* Return whether this entry is an argument
-	*
-	* @returns {boolean}
-	*/
-	isArgument() {
-		return this.name == null;
-	}
-	/**
-	* Return whether this entry is a named property
-	*
-	* @returns {boolean}
-	*/
-	isProperty() {
-		return this.name != null;
-	}
-};
+var Entry;
+var init_entry = __esmMin((() => {
+	init_identifier();
+	init_value();
+	Entry = class Entry {
+		/**
+		* Create a new argument entry with the given value
+		*
+		* @param {Value['value']} value
+		* @returns {Entry}
+		*/
+		static createArgument(value) {
+			return new Entry(new Value(value), null);
+		}
+		/**
+		* Create a new property entry for the given key and value
+		*
+		* @param {string} name
+		* @param {Value['value']} value
+		* @returns {Entry}
+		*/
+		static createProperty(name, value) {
+			return new Entry(new Value(value), new Identifier(name));
+		}
+		/**
+		* @readonly
+		* @hidden
+		*/
+		type = "entry";
+		/**
+		* @readonly
+		* @hidden
+		*/
+		static type = "entry";
+		/**
+		* The name of this entry if it's a property, or null if it's an argument
+		*
+		* @type {Identifier | null}
+		*/
+		name;
+		/**
+		* The value of this entry
+		*
+		* @type {Value}
+		*/
+		value;
+		/**
+		* Leading whitespace
+		*
+		* @type {string=}
+		*/
+		leading;
+		/**
+		* Trailing whitespace
+		*
+		* @type {string=}
+		*/
+		trailing;
+		/**
+		* Equals sign
+		*
+		* @type {string=}
+		*/
+		equals;
+		/**
+		* @param {Value} value
+		* @param {Identifier | null} name
+		*/
+		constructor(value, name) {
+			this.value = value;
+			this.name = name;
+		}
+		/**
+		* Create an identical copy of this entry
+		*
+		* @returns {Entry}
+		*/
+		clone() {
+			const clone = new Entry(this.value.clone(), this.name?.clone() ?? null);
+			clone.leading = this.leading;
+			clone.trailing = this.trailing;
+			clone.equals = this.equals;
+			return clone;
+		}
+		/**
+		* Return the tag of this entry, if any
+		*
+		* @returns {string | null}
+		* @see {@link Value.prototype.getTag}
+		*/
+		getTag() {
+			return this.value.getTag();
+		}
+		/**
+		* Set the tag of this entry to the given tag
+		*
+		* @param {string | null | undefined} tag
+		* @see {@link Value.prototype.setTag}
+		*/
+		setTag(tag) {
+			this.value.setTag(tag);
+		}
+		/**
+		* Return the name of this entry, if any
+		*
+		* @returns {string | null}
+		*/
+		getName() {
+			return this.name ? this.name.name : null;
+		}
+		/**
+		* Set the name of this entry to the given name
+		*
+		* @param {string | null | undefined} name
+		*/
+		setName(name) {
+			this.name = name != null ? new Identifier(name) : null;
+		}
+		/**
+		* Return the value of this entry
+		*
+		* @returns {Value['value']}
+		*/
+		getValue() {
+			return this.value.value;
+		}
+		/**
+		* Set the name of this entry to the given name
+		*
+		* @param {Value['value']} value
+		*/
+		setValue(value) {
+			this.value = new Value(value);
+		}
+		/**
+		* Return whether this entry is an argument
+		*
+		* @returns {boolean}
+		*/
+		isArgument() {
+			return this.name == null;
+		}
+		/**
+		* Return whether this entry is a named property
+		*
+		* @returns {boolean}
+		*/
+		isProperty() {
+			return this.name != null;
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/utils.js
 /**
@@ -11360,6 +23451,7 @@ var Entry = class Entry {
 function* reverseIterate(items) {
 	for (let i = items.length - 1; i >= 0; i--) yield items[i];
 }
+var init_utils = __esmMin((() => {}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/node.js
 /**
@@ -11368,468 +23460,473 @@ function* reverseIterate(items) {
 function getOrCreateDocument(node) {
 	return node.children ?? (node.children = new Document());
 }
-/**
-* A node is a node name, followed by zero or more arguments and/or properties, and children
-*/
-var Node = class Node {
-	/**
-	* Create a new node with the given name
-	*
-	* @param {string} name
-	* @returns {Node}
-	*/
-	static create(name) {
-		return new Node(new Identifier(name));
-	}
-	/**
-	* @readonly
-	* @hidden
-	*/
-	type = "node";
-	/**
-	* @readonly
-	* @hidden
-	*/
-	static type = "node";
-	/**
-	* The name (also known as "tag name") of this node
-	*
-	* @type {Identifier}
-	*/
-	name;
-	/**
-	* Tag attached to this node, if any
-	*
-	* @type {Tag | null}
-	*/
-	tag = null;
-	/**
-	* Entries of the node
-	*
-	* @type {Entry[]}
-	*/
-	entries;
-	/**
-	* Children of the node
-	*
-	* An empty array means the children block is present but empty,
-	* if the value is `null` then there is no children block.
-	*
-	* @type {Document | null}
-	*/
-	children;
-	/**
-	* Leading whitespace
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	leading;
-	/**
-	* Trailing whitespace
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	trailing;
-	/**
-	* Whitespace between the last entry and the children
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	beforeChildren;
-	/**
-	* Whitespace between the tag and the node name
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	betweenTagAndName;
-	/**
-	* @param {Identifier} name
-	* @param {Entry[]} [entries]
-	* @param {Document | null} [children]
-	*/
-	constructor(name, entries = [], children = null) {
-		this.name = name;
-		this.entries = entries;
-		this.children = children;
-	}
-	/**
-	* Create an identical copy of this node
-	*
-	* @param {object} [options]
-	* @param {boolean} [options.shallow] If true, only copy this node but don't clone this node's children.
-	* @returns {Node}
-	*/
-	clone({ shallow = false } = {}) {
-		const clone = new Node(this.name.clone(), shallow ? [] : this.entries.map((entry) => entry.clone()), this.children?.clone({ shallow }));
-		if (this.tag) clone.tag = this.tag.clone();
-		clone.leading = this.leading;
-		clone.betweenTagAndName = this.betweenTagAndName;
-		clone.beforeChildren = this.beforeChildren;
-		clone.trailing = this.trailing;
-		return clone;
-	}
-	/**
-	* Return the tag of this node, if any
-	*
-	* @returns {string | null}
-	*/
-	getTag() {
-		return this.tag ? this.tag.name : null;
-	}
-	/**
-	* Set the tag of this node to the given tag
-	*
-	* @param {string | null | undefined} tag
-	*/
-	setTag(tag) {
-		this.tag = tag != null ? new Tag(tag) : null;
-	}
-	/**
-	* Return the name of this node
-	*
-	* @returns {string}
-	*/
-	getName() {
-		return this.name.name;
-	}
-	/**
-	* Set the name of this node to the given name
-	*
-	* @param {string} name
-	*/
-	setName(name) {
-		this.name.setName(name);
-	}
-	/**
-	* Return whether this node has arguments
-	*
-	* @returns {boolean}
-	*/
-	hasArguments() {
-		return this.entries.some((entry) => entry.isArgument());
-	}
-	/**
-	* Return a snapshot of all arguments of this node
-	*
-	* Changes to the returned array are not reflected back onto this node
-	* itself, and updates to the node won't reflect in the returned array.
-	*
-	* @returns {Value['value'][]}
-	*/
-	getArguments() {
-		return this.getArgumentEntries().map((entry) => entry.getValue());
-	}
-	/**
-	* Return a snapshot of all arguments of this node
-	*
-	* Changes to the returned array are not reflected back onto this node
-	* itself, and updates to the node won't reflect in the returned array.
-	*
-	* @returns {Entry[]}
-	*/
-	getArgumentEntries() {
-		return this.entries.filter((entry) => entry.isArgument());
-	}
-	/**
-	* Return the value at the given index, if present
-	*
-	* This index counts towards the arguments only, i.e. if the node has five
-	* entries, three of which are arguments then passing `1` returns the second
-	* argument, regardless of the whether properties and arguments are
-	* interspersed or not.
-	*
-	* @param {number} index
-	* @returns {boolean}
-	*/
-	hasArgument(index) {
-		return this.getArgumentEntry(index) != null;
-	}
-	/**
-	* Return the argument at the given index, if present
-	*
-	* This index counts towards the arguments only, i.e. if the node has five
-	* entries, three of which are arguments then passing `1` returns the second
-	* argument, regardless of the whether properties and arguments are
-	* interspersed or not.
-	*
-	* @param {number} index
-	* @returns {Value['value'] | undefined}
-	*/
-	getArgument(index) {
-		return this.getArgumentEntry(index)?.getValue();
-	}
-	/**
-	* Return the argument entry at the given index, if present
-	*
-	* This index counts towards the arguments only, i.e. if the node has five
-	* entries, three of which are arguments then passing `1` returns the second
-	* argument, regardless of the whether properties and arguments are
-	* interspersed or not.
-	*
-	* @param {number} index
-	* @returns {Entry | undefined}
-	*/
-	getArgumentEntry(index) {
-		for (const entry of this.entries) {
-			if (!entry.isArgument()) continue;
-			if (index === 0) return entry;
-			index--;
+var Node;
+var init_node = __esmMin((() => {
+	init_document();
+	init_entry();
+	init_identifier();
+	init_tag();
+	init_utils();
+	Node = class Node {
+		/**
+		* Create a new node with the given name
+		*
+		* @param {string} name
+		* @returns {Node}
+		*/
+		static create(name) {
+			return new Node(new Identifier(name));
 		}
-	}
-	/**
-	* Add the given value as argument to this node
-	*
-	* The argument is added at the given index, or at the end.
-	* This index counts towards the arguments only, i.e. if the node has five
-	* entries, three of which are arguments then inserting an argument between
-	* the second and third can be achieved by passing `2` regardless of the
-	* whether properties and arguments are interspersed or not.
-	*
-	* @param {Value['value']} value The value to insert as argument
-	* @param {string | null} [tag] The tag to attach to the argument, if any
-	* @param {number} [index] The index
-	*/
-	addArgument(value, tag, index) {
-		const entry = Entry.createArgument(value);
-		entry.value.setTag(tag);
-		if (index != null) for (const [i, entry] of this.entries.entries()) {
-			if (!entry.isArgument()) continue;
-			if (index === 0) {
-				this.entries.splice(i, 0, entry);
-				return;
+		/**
+		* @readonly
+		* @hidden
+		*/
+		type = "node";
+		/**
+		* @readonly
+		* @hidden
+		*/
+		static type = "node";
+		/**
+		* The name (also known as "tag name") of this node
+		*
+		* @type {Identifier}
+		*/
+		name;
+		/**
+		* Tag attached to this node, if any
+		*
+		* @type {Tag | null}
+		*/
+		tag = null;
+		/**
+		* Entries of the node
+		*
+		* @type {Entry[]}
+		*/
+		entries;
+		/**
+		* Children of the node
+		*
+		* An empty array means the children block is present but empty,
+		* if the value is `null` then there is no children block.
+		*
+		* @type {Document | null}
+		*/
+		children;
+		/**
+		* Leading whitespace
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		leading;
+		/**
+		* Trailing whitespace
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		trailing;
+		/**
+		* Whitespace between the last entry and the children
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		beforeChildren;
+		/**
+		* Whitespace between the tag and the node name
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		betweenTagAndName;
+		/**
+		* @param {Identifier} name
+		* @param {Entry[]} [entries]
+		* @param {Document | null} [children]
+		*/
+		constructor(name, entries = [], children = null) {
+			this.name = name;
+			this.entries = entries;
+			this.children = children;
+		}
+		/**
+		* Create an identical copy of this node
+		*
+		* @param {object} [options]
+		* @param {boolean} [options.shallow] If true, only copy this node but don't clone this node's children.
+		* @returns {Node}
+		*/
+		clone({ shallow = false } = {}) {
+			const clone = new Node(this.name.clone(), shallow ? [] : this.entries.map((entry) => entry.clone()), this.children?.clone({ shallow }));
+			if (this.tag) clone.tag = this.tag.clone();
+			clone.leading = this.leading;
+			clone.betweenTagAndName = this.betweenTagAndName;
+			clone.beforeChildren = this.beforeChildren;
+			clone.trailing = this.trailing;
+			return clone;
+		}
+		/**
+		* Return the tag of this node, if any
+		*
+		* @returns {string | null}
+		*/
+		getTag() {
+			return this.tag ? this.tag.name : null;
+		}
+		/**
+		* Set the tag of this node to the given tag
+		*
+		* @param {string | null | undefined} tag
+		*/
+		setTag(tag) {
+			this.tag = tag != null ? new Tag(tag) : null;
+		}
+		/**
+		* Return the name of this node
+		*
+		* @returns {string}
+		*/
+		getName() {
+			return this.name.name;
+		}
+		/**
+		* Set the name of this node to the given name
+		*
+		* @param {string} name
+		*/
+		setName(name) {
+			this.name.setName(name);
+		}
+		/**
+		* Return whether this node has arguments
+		*
+		* @returns {boolean}
+		*/
+		hasArguments() {
+			return this.entries.some((entry) => entry.isArgument());
+		}
+		/**
+		* Return a snapshot of all arguments of this node
+		*
+		* Changes to the returned array are not reflected back onto this node
+		* itself, and updates to the node won't reflect in the returned array.
+		*
+		* @returns {Value['value'][]}
+		*/
+		getArguments() {
+			return this.getArgumentEntries().map((entry) => entry.getValue());
+		}
+		/**
+		* Return a snapshot of all arguments of this node
+		*
+		* Changes to the returned array are not reflected back onto this node
+		* itself, and updates to the node won't reflect in the returned array.
+		*
+		* @returns {Entry[]}
+		*/
+		getArgumentEntries() {
+			return this.entries.filter((entry) => entry.isArgument());
+		}
+		/**
+		* Return the value at the given index, if present
+		*
+		* This index counts towards the arguments only, i.e. if the node has five
+		* entries, three of which are arguments then passing `1` returns the second
+		* argument, regardless of the whether properties and arguments are
+		* interspersed or not.
+		*
+		* @param {number} index
+		* @returns {boolean}
+		*/
+		hasArgument(index) {
+			return this.getArgumentEntry(index) != null;
+		}
+		/**
+		* Return the argument at the given index, if present
+		*
+		* This index counts towards the arguments only, i.e. if the node has five
+		* entries, three of which are arguments then passing `1` returns the second
+		* argument, regardless of the whether properties and arguments are
+		* interspersed or not.
+		*
+		* @param {number} index
+		* @returns {Value['value'] | undefined}
+		*/
+		getArgument(index) {
+			return this.getArgumentEntry(index)?.getValue();
+		}
+		/**
+		* Return the argument entry at the given index, if present
+		*
+		* This index counts towards the arguments only, i.e. if the node has five
+		* entries, three of which are arguments then passing `1` returns the second
+		* argument, regardless of the whether properties and arguments are
+		* interspersed or not.
+		*
+		* @param {number} index
+		* @returns {Entry | undefined}
+		*/
+		getArgumentEntry(index) {
+			for (const entry of this.entries) {
+				if (!entry.isArgument()) continue;
+				if (index === 0) return entry;
+				index--;
 			}
-			index--;
 		}
-		this.entries.push(entry);
-	}
-	/**
-	* Remove the argument at the given index
-	*
-	* The index counts towards the arguments only, i.e. if the node has five
-	* entries, three of which are arguments then the last argument can be
-	* removed by passing `2`, regardless of whether the third argument is also
-	* the third entry.
-	*
-	* @param {number} index
-	*/
-	removeArgument(index) {
-		for (const [i, entry] of this.entries.entries()) {
-			if (!entry.isArgument()) continue;
-			if (index === 0) {
-				this.entries.splice(i, 1);
-				return;
-			}
-			index--;
-		}
-	}
-	/**
-	* Return whether this node has properties
-	*
-	* @returns {boolean}
-	*/
-	hasProperties() {
-		return this.entries.some((entry) => entry.isProperty());
-	}
-	/**
-	* Return a snapshot of all properties of this node
-	*
-	* Changes to the returned object are not reflected back onto this node
-	* itself, and updates to the node won't reflect in the returned object.
-	*
-	* @returns {Map<string, Value['value']>}
-	*/
-	getProperties() {
-		return new Map(this.getPropertyEntries().map((entry) => [entry.getName(), entry.getValue()]));
-	}
-	/**
-	* Return a snapshot of all properties of this node
-	*
-	* Changes to the returned array are not reflected back onto this node
-	* itself, and updates to the node won't reflect in the returned array.
-	*
-	* @returns {Entry[]}
-	*/
-	getPropertyEntries() {
-		return this.entries.filter((entry) => entry.isProperty());
-	}
-	/**
-	* Return a snapshot of all properties of this node
-	*
-	* Changes to the returned map are not reflected back onto this node
-	* itself, and updates to the node won't reflect in the returned map.
-	*
-	* @returns {Map<string, Entry>}
-	*/
-	getPropertyEntryMap() {
-		return new Map(this.getPropertyEntries().map((entry) => [entry.getName(), entry]));
-	}
-	/**
-	* Return whether this node has the given property
-	*
-	* @param {string} name
-	* @returns {boolean}
-	*/
-	hasProperty(name) {
-		return this.getPropertyEntry(name) != null;
-	}
-	/**
-	* Return the value of the property with the given name, or undefined
-	* if it doesn't exist.
-	*
-	* @param {string} name
-	* @returns {Value['value'] | undefined}
-	*/
-	getProperty(name) {
-		return this.getPropertyEntry(name)?.getValue();
-	}
-	/**
-	* Return the property entry with the given name, or undefined if it doesn't
-	* exist.
-	*
-	* @param {string} name
-	* @returns {Entry | undefined}
-	*/
-	getPropertyEntry(name) {
-		for (const entry of reverseIterate(this.entries)) if (entry.getName() === name) return entry;
-	}
-	/**
-	* Set the given property on this node
-	*
-	* This function updates the property entry with the given name,
-	* if it exists.
-	*
-	* @param {string} name
-	* @param {Value['value']} value
-	* @param {string | null} [tag]
-	*/
-	setProperty(name, value, tag) {
-		for (const entry of reverseIterate(this.entries)) if (entry.getName() === name) {
-			entry.setValue(value);
+		/**
+		* Add the given value as argument to this node
+		*
+		* The argument is added at the given index, or at the end.
+		* This index counts towards the arguments only, i.e. if the node has five
+		* entries, three of which are arguments then inserting an argument between
+		* the second and third can be achieved by passing `2` regardless of the
+		* whether properties and arguments are interspersed or not.
+		*
+		* @param {Value['value']} value The value to insert as argument
+		* @param {string | null} [tag] The tag to attach to the argument, if any
+		* @param {number} [index] The index
+		*/
+		addArgument(value, tag, index) {
+			const entry = Entry.createArgument(value);
 			entry.value.setTag(tag);
-			return;
+			if (index != null) for (const [i, entry] of this.entries.entries()) {
+				if (!entry.isArgument()) continue;
+				if (index === 0) {
+					this.entries.splice(i, 0, entry);
+					return;
+				}
+				index--;
+			}
+			this.entries.push(entry);
 		}
-		const entry = Entry.createProperty(name, value);
-		entry.value.setTag(tag);
-		this.entries.push(entry);
-	}
-	/**
-	* Delete the property with the given name
-	*
-	* @param {string} name
-	*/
-	deleteProperty(name) {
-		this.entries = this.entries.filter((entry) => entry.getName() !== name);
-	}
-	/**
-	* Return whether this node has child nodes
-	*
-	* @returns {boolean}
-	*/
-	hasChildren() {
-		return this.children != null && !this.children.isEmpty();
-	}
-	/**
-	* Add the given node at the end of this node's children
-	*
-	* @param {Node | Document} node
-	*/
-	appendNode(node) {
-		getOrCreateDocument(this).appendNode(node);
-	}
-	/**
-	* Insert the given node to the node's children before the referenceNode, or at the end if no reference is passed
-	*
-	* @param {Node | Document} newNode
-	* @param {Node | null} referenceNode
-	* @throws {Error} If the given referenceNode is not part of this node's children
-	*/
-	insertNodeBefore(newNode, referenceNode) {
-		getOrCreateDocument(this).insertNodeBefore(newNode, referenceNode);
-	}
-	/**
-	* Insert the given node to the node's children after the referenceNode, or at the beginning if no reference is passed
-	*
-	* @param {Node | Document} newNode
-	* @param {Node | null} referenceNode
-	* @throws {Error} If the given referenceNode is not part of this document
-	*/
-	insertNodeAfter(newNode, referenceNode) {
-		getOrCreateDocument(this).insertNodeAfter(newNode, referenceNode);
-	}
-	/**
-	* Remove the given node from this node's children
-	*
-	* @param {Node} node
-	* @throws {Error} if the given node is not in this node's children
-	*/
-	removeNode(node) {
-		if (this.children == null) throw new Error("Node to remove is not in document");
-		this.children.removeNode(node);
-	}
-	/**
-	* Replace the old node with the new node in this node's children
-	*
-	* @param {Node} oldNode
-	* @param {Node | Document} newNode
-	* @throws {Error} if the oldNode is not in this node's children
-	*/
-	replaceNode(oldNode, newNode) {
-		if (this.children == null) throw new Error("Node to remove is not in document");
-		this.children.replaceNode(oldNode, newNode);
-	}
-	/**
-	* Return all nodes with the given node name
-	*
-	* Changes to the returned array are not reflected back onto this document
-	* itself, and updates to the document won't reflect in the returned array.
-	*
-	* @param {string} name
-	* @returns {Node[]}
-	*/
-	findNodesByName(name) {
-		return this.children != null ? this.children.findNodesByName(name) : [];
-	}
-	/**
-	* Return the last node in this node's children with the given name
-	*
-	* This function returns the last node instead of first to be in line with
-	* how properties are defined in the KDL specification where the last
-	* property with the given name is used and the rest is shadowed.
-	*
-	* @param {string} name
-	* @returns {Node | undefined}
-	*/
-	findNodeByName(name) {
-		return this.children?.findNodeByName(name);
-	}
-	/**
-	* Return the last node in this node's children with the given name, matching the parameter
-	*
-	* If the parameter is `undefined`, this method looks for a node with any single
-	* arguments. If a parameter is passed, this method looks for a node with
-	* a single parameter, equal to the given parameter.
-	*
-	* @param {string} name
-	* @param {Value['value']} [parameter]
-	* @returns {Node | undefined}
-	*/
-	findParameterizedNode(name, parameter) {
-		return this.children?.findParameterizedNode(name, parameter);
-	}
-	/**
-	* Remove all nodes with the given name from this document
-	*
-	* @param {string} name
-	* @returns {void}
-	*/
-	removeNodesByName(name) {
-		this.children?.removeNodesByName(name);
-	}
-};
+		/**
+		* Remove the argument at the given index
+		*
+		* The index counts towards the arguments only, i.e. if the node has five
+		* entries, three of which are arguments then the last argument can be
+		* removed by passing `2`, regardless of whether the third argument is also
+		* the third entry.
+		*
+		* @param {number} index
+		*/
+		removeArgument(index) {
+			for (const [i, entry] of this.entries.entries()) {
+				if (!entry.isArgument()) continue;
+				if (index === 0) {
+					this.entries.splice(i, 1);
+					return;
+				}
+				index--;
+			}
+		}
+		/**
+		* Return whether this node has properties
+		*
+		* @returns {boolean}
+		*/
+		hasProperties() {
+			return this.entries.some((entry) => entry.isProperty());
+		}
+		/**
+		* Return a snapshot of all properties of this node
+		*
+		* Changes to the returned object are not reflected back onto this node
+		* itself, and updates to the node won't reflect in the returned object.
+		*
+		* @returns {Map<string, Value['value']>}
+		*/
+		getProperties() {
+			return new Map(this.getPropertyEntries().map((entry) => [entry.getName(), entry.getValue()]));
+		}
+		/**
+		* Return a snapshot of all properties of this node
+		*
+		* Changes to the returned array are not reflected back onto this node
+		* itself, and updates to the node won't reflect in the returned array.
+		*
+		* @returns {Entry[]}
+		*/
+		getPropertyEntries() {
+			return this.entries.filter((entry) => entry.isProperty());
+		}
+		/**
+		* Return a snapshot of all properties of this node
+		*
+		* Changes to the returned map are not reflected back onto this node
+		* itself, and updates to the node won't reflect in the returned map.
+		*
+		* @returns {Map<string, Entry>}
+		*/
+		getPropertyEntryMap() {
+			return new Map(this.getPropertyEntries().map((entry) => [entry.getName(), entry]));
+		}
+		/**
+		* Return whether this node has the given property
+		*
+		* @param {string} name
+		* @returns {boolean}
+		*/
+		hasProperty(name) {
+			return this.getPropertyEntry(name) != null;
+		}
+		/**
+		* Return the value of the property with the given name, or undefined
+		* if it doesn't exist.
+		*
+		* @param {string} name
+		* @returns {Value['value'] | undefined}
+		*/
+		getProperty(name) {
+			return this.getPropertyEntry(name)?.getValue();
+		}
+		/**
+		* Return the property entry with the given name, or undefined if it doesn't
+		* exist.
+		*
+		* @param {string} name
+		* @returns {Entry | undefined}
+		*/
+		getPropertyEntry(name) {
+			for (const entry of reverseIterate(this.entries)) if (entry.getName() === name) return entry;
+		}
+		/**
+		* Set the given property on this node
+		*
+		* This function updates the property entry with the given name,
+		* if it exists.
+		*
+		* @param {string} name
+		* @param {Value['value']} value
+		* @param {string | null} [tag]
+		*/
+		setProperty(name, value, tag) {
+			for (const entry of reverseIterate(this.entries)) if (entry.getName() === name) {
+				entry.setValue(value);
+				entry.value.setTag(tag);
+				return;
+			}
+			const entry = Entry.createProperty(name, value);
+			entry.value.setTag(tag);
+			this.entries.push(entry);
+		}
+		/**
+		* Delete the property with the given name
+		*
+		* @param {string} name
+		*/
+		deleteProperty(name) {
+			this.entries = this.entries.filter((entry) => entry.getName() !== name);
+		}
+		/**
+		* Return whether this node has child nodes
+		*
+		* @returns {boolean}
+		*/
+		hasChildren() {
+			return this.children != null && !this.children.isEmpty();
+		}
+		/**
+		* Add the given node at the end of this node's children
+		*
+		* @param {Node | Document} node
+		*/
+		appendNode(node) {
+			getOrCreateDocument(this).appendNode(node);
+		}
+		/**
+		* Insert the given node to the node's children before the referenceNode, or at the end if no reference is passed
+		*
+		* @param {Node | Document} newNode
+		* @param {Node | null} referenceNode
+		* @throws {Error} If the given referenceNode is not part of this node's children
+		*/
+		insertNodeBefore(newNode, referenceNode) {
+			getOrCreateDocument(this).insertNodeBefore(newNode, referenceNode);
+		}
+		/**
+		* Insert the given node to the node's children after the referenceNode, or at the beginning if no reference is passed
+		*
+		* @param {Node | Document} newNode
+		* @param {Node | null} referenceNode
+		* @throws {Error} If the given referenceNode is not part of this document
+		*/
+		insertNodeAfter(newNode, referenceNode) {
+			getOrCreateDocument(this).insertNodeAfter(newNode, referenceNode);
+		}
+		/**
+		* Remove the given node from this node's children
+		*
+		* @param {Node} node
+		* @throws {Error} if the given node is not in this node's children
+		*/
+		removeNode(node) {
+			if (this.children == null) throw new Error("Node to remove is not in document");
+			this.children.removeNode(node);
+		}
+		/**
+		* Replace the old node with the new node in this node's children
+		*
+		* @param {Node} oldNode
+		* @param {Node | Document} newNode
+		* @throws {Error} if the oldNode is not in this node's children
+		*/
+		replaceNode(oldNode, newNode) {
+			if (this.children == null) throw new Error("Node to remove is not in document");
+			this.children.replaceNode(oldNode, newNode);
+		}
+		/**
+		* Return all nodes with the given node name
+		*
+		* Changes to the returned array are not reflected back onto this document
+		* itself, and updates to the document won't reflect in the returned array.
+		*
+		* @param {string} name
+		* @returns {Node[]}
+		*/
+		findNodesByName(name) {
+			return this.children != null ? this.children.findNodesByName(name) : [];
+		}
+		/**
+		* Return the last node in this node's children with the given name
+		*
+		* This function returns the last node instead of first to be in line with
+		* how properties are defined in the KDL specification where the last
+		* property with the given name is used and the rest is shadowed.
+		*
+		* @param {string} name
+		* @returns {Node | undefined}
+		*/
+		findNodeByName(name) {
+			return this.children?.findNodeByName(name);
+		}
+		/**
+		* Return the last node in this node's children with the given name, matching the parameter
+		*
+		* If the parameter is `undefined`, this method looks for a node with any single
+		* arguments. If a parameter is passed, this method looks for a node with
+		* a single parameter, equal to the given parameter.
+		*
+		* @param {string} name
+		* @param {Value['value']} [parameter]
+		* @returns {Node | undefined}
+		*/
+		findParameterizedNode(name, parameter) {
+			return this.children?.findParameterizedNode(name, parameter);
+		}
+		/**
+		* Remove all nodes with the given name from this document
+		*
+		* @param {string} name
+		* @returns {void}
+		*/
+		removeNodesByName(name) {
+			this.children?.removeNodesByName(name);
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model/document.js
 /**
@@ -11839,176 +23936,190 @@ function* getNodes(node) {
 	if (node instanceof Document) yield* node.nodes;
 	else yield node;
 }
+var Document;
+var init_document = __esmMin((() => {
+	init_utils();
+	Document = class Document {
+		/**
+		* @readonly
+		* @hidden
+		*/
+		type = "document";
+		/**
+		* @readonly
+		* @hidden
+		*/
+		static type = "document";
+		/**
+		* The nodes in this document
+		*
+		* @type {Node[]}
+		*/
+		nodes;
+		/**
+		* Trailing whitespace
+		*
+		* @type {string=}
+		* @hidden
+		*/
+		trailing;
+		/**
+		* @param {Node[]} [nodes]
+		*/
+		constructor(nodes = []) {
+			this.nodes = nodes;
+		}
+		/**
+		* Create an identical copy of this document
+		*
+		* @returns {Document}
+		* @param {object} [options]
+		* @param {boolean} [options.shallow] If true, only clone this document and without any children
+		*/
+		clone({ shallow } = {}) {
+			const clone = new Document(shallow ? [] : this.nodes.map((node) => node.clone()));
+			clone.trailing = this.trailing;
+			return clone;
+		}
+		/**
+		* Add the given node at the end of this document
+		*
+		* @param {Node | Document} node
+		*/
+		appendNode(node) {
+			this.nodes.push(...getNodes(node));
+		}
+		/**
+		* Insert the given node to the document before the referenceNode, or at the end if no reference is passed
+		*
+		* @param {Node | Document} newNode
+		* @param {Node | null} referenceNode
+		* @throws {Error} If the given referenceNode is not part of this document
+		*/
+		insertNodeBefore(newNode, referenceNode) {
+			if (referenceNode == null) {
+				this.nodes.push(...getNodes(newNode));
+				return;
+			}
+			const index = this.nodes.indexOf(referenceNode);
+			if (index === -1) throw new Error("Reference node is not in document");
+			this.nodes.splice(index, 0, ...getNodes(newNode));
+		}
+		/**
+		* Insert the given node to the document after the referenceNode, or at the beginning if no reference is passed
+		*
+		* @param {Node | Document} newNode
+		* @param {Node | null} referenceNode
+		* @throws {Error} If the given referenceNode is not part of this document
+		*/
+		insertNodeAfter(newNode, referenceNode) {
+			if (referenceNode == null) {
+				this.nodes.unshift(...getNodes(newNode));
+				return;
+			}
+			const index = this.nodes.indexOf(referenceNode);
+			if (index === -1) throw new Error("Reference node is not in document");
+			this.nodes.splice(index + 1, 0, ...getNodes(newNode));
+		}
+		/**
+		* Remove the given node from this document
+		*
+		* @param {Node} node
+		* @throws {Error} if the given node is not in this document
+		*/
+		removeNode(node) {
+			const index = this.nodes.indexOf(node);
+			if (index === -1) throw new Error("Node to remove is not in document");
+			this.nodes.splice(index, 1);
+		}
+		/**
+		* Replace the old node with the new node in this document
+		*
+		* @param {Node} oldNode
+		* @param {Node | Document} newNode
+		* @throws {Error} if the oldNode is not in this document
+		*/
+		replaceNode(oldNode, newNode) {
+			const index = this.nodes.indexOf(oldNode);
+			if (index === -1) throw new Error("Node to replace is not in document");
+			this.nodes.splice(index, 1, ...getNodes(newNode));
+		}
+		/**
+		* Return all nodes with the given node name
+		*
+		* Changes to the returned array are not reflected back onto this document
+		* itself, and updates to the document won't reflect in the returned array.
+		*
+		* @param {string} name
+		* @returns {Node[]}
+		*/
+		findNodesByName(name) {
+			return this.nodes.filter((node) => node.name.name === name);
+		}
+		/**
+		* Return the last node in this document with the given name
+		*
+		* This function returns the last node instead of first to be in line with
+		* how properties are defined in the KDL specification where the last
+		* property with the given name is used and the rest is shadowed.
+		*
+		* @param {string} name
+		* @returns {Node | undefined}
+		*/
+		findNodeByName(name) {
+			for (const node of reverseIterate(this.nodes)) if (node.name.name === name) return node;
+		}
+		/**
+		* Return the last node in this document with the given name, matching the parameter
+		*
+		* If the parameter is `undefined`, this method looks for a node with any single
+		* arguments. If a parameter is passed, this method looks for a node with
+		* a single parameter, equal to the given parameter.
+		*
+		* @param {string} name
+		* @param {Value['value']} [parameter]
+		* @returns {Node | undefined}
+		*/
+		findParameterizedNode(name, parameter) {
+			for (const node of reverseIterate(this.nodes)) {
+				if (node.name.name !== name) continue;
+				const args = node.getArguments();
+				if (args.length !== 1 || parameter !== void 0 && args[0] !== parameter) continue;
+				return node;
+			}
+		}
+		/**
+		* Remove all nodes with the given name from this document
+		*
+		* @param {string} name
+		* @returns {void}
+		*/
+		removeNodesByName(name) {
+			this.nodes = this.nodes.filter((node) => node.name.name !== name);
+		}
+		/**
+		* Return whether the document is empty
+		*
+		* @returns {boolean}
+		*/
+		isEmpty() {
+			return this.nodes.length === 0;
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/model.js
+var init_model = __esmMin((() => {
+	init_document();
+	init_entry();
+	init_identifier();
+	init_node();
+	init_value();
+	init_tag();
+}));
 /**
-* A document is a collection of zero or mode {@link Node}s
+* @typedef {import('./model/value.js').Primitive} Primitive
 */
-var Document = class Document {
-	/**
-	* @readonly
-	* @hidden
-	*/
-	type = "document";
-	/**
-	* @readonly
-	* @hidden
-	*/
-	static type = "document";
-	/**
-	* The nodes in this document
-	*
-	* @type {Node[]}
-	*/
-	nodes;
-	/**
-	* Trailing whitespace
-	*
-	* @type {string=}
-	* @hidden
-	*/
-	trailing;
-	/**
-	* @param {Node[]} [nodes]
-	*/
-	constructor(nodes = []) {
-		this.nodes = nodes;
-	}
-	/**
-	* Create an identical copy of this document
-	*
-	* @returns {Document}
-	* @param {object} [options]
-	* @param {boolean} [options.shallow] If true, only clone this document and without any children
-	*/
-	clone({ shallow } = {}) {
-		const clone = new Document(shallow ? [] : this.nodes.map((node) => node.clone()));
-		clone.trailing = this.trailing;
-		return clone;
-	}
-	/**
-	* Add the given node at the end of this document
-	*
-	* @param {Node | Document} node
-	*/
-	appendNode(node) {
-		this.nodes.push(...getNodes(node));
-	}
-	/**
-	* Insert the given node to the document before the referenceNode, or at the end if no reference is passed
-	*
-	* @param {Node | Document} newNode
-	* @param {Node | null} referenceNode
-	* @throws {Error} If the given referenceNode is not part of this document
-	*/
-	insertNodeBefore(newNode, referenceNode) {
-		if (referenceNode == null) {
-			this.nodes.push(...getNodes(newNode));
-			return;
-		}
-		const index = this.nodes.indexOf(referenceNode);
-		if (index === -1) throw new Error("Reference node is not in document");
-		this.nodes.splice(index, 0, ...getNodes(newNode));
-	}
-	/**
-	* Insert the given node to the document after the referenceNode, or at the beginning if no reference is passed
-	*
-	* @param {Node | Document} newNode
-	* @param {Node | null} referenceNode
-	* @throws {Error} If the given referenceNode is not part of this document
-	*/
-	insertNodeAfter(newNode, referenceNode) {
-		if (referenceNode == null) {
-			this.nodes.unshift(...getNodes(newNode));
-			return;
-		}
-		const index = this.nodes.indexOf(referenceNode);
-		if (index === -1) throw new Error("Reference node is not in document");
-		this.nodes.splice(index + 1, 0, ...getNodes(newNode));
-	}
-	/**
-	* Remove the given node from this document
-	*
-	* @param {Node} node
-	* @throws {Error} if the given node is not in this document
-	*/
-	removeNode(node) {
-		const index = this.nodes.indexOf(node);
-		if (index === -1) throw new Error("Node to remove is not in document");
-		this.nodes.splice(index, 1);
-	}
-	/**
-	* Replace the old node with the new node in this document
-	*
-	* @param {Node} oldNode
-	* @param {Node | Document} newNode
-	* @throws {Error} if the oldNode is not in this document
-	*/
-	replaceNode(oldNode, newNode) {
-		const index = this.nodes.indexOf(oldNode);
-		if (index === -1) throw new Error("Node to replace is not in document");
-		this.nodes.splice(index, 1, ...getNodes(newNode));
-	}
-	/**
-	* Return all nodes with the given node name
-	*
-	* Changes to the returned array are not reflected back onto this document
-	* itself, and updates to the document won't reflect in the returned array.
-	*
-	* @param {string} name
-	* @returns {Node[]}
-	*/
-	findNodesByName(name) {
-		return this.nodes.filter((node) => node.name.name === name);
-	}
-	/**
-	* Return the last node in this document with the given name
-	*
-	* This function returns the last node instead of first to be in line with
-	* how properties are defined in the KDL specification where the last
-	* property with the given name is used and the rest is shadowed.
-	*
-	* @param {string} name
-	* @returns {Node | undefined}
-	*/
-	findNodeByName(name) {
-		for (const node of reverseIterate(this.nodes)) if (node.name.name === name) return node;
-	}
-	/**
-	* Return the last node in this document with the given name, matching the parameter
-	*
-	* If the parameter is `undefined`, this method looks for a node with any single
-	* arguments. If a parameter is passed, this method looks for a node with
-	* a single parameter, equal to the given parameter.
-	*
-	* @param {string} name
-	* @param {Value['value']} [parameter]
-	* @returns {Node | undefined}
-	*/
-	findParameterizedNode(name, parameter) {
-		for (const node of reverseIterate(this.nodes)) {
-			if (node.name.name !== name) continue;
-			const args = node.getArguments();
-			if (args.length !== 1 || parameter !== void 0 && args[0] !== parameter) continue;
-			return node;
-		}
-	}
-	/**
-	* Remove all nodes with the given name from this document
-	*
-	* @param {string} name
-	* @returns {void}
-	*/
-	removeNodesByName(name) {
-		this.nodes = this.nodes.filter((node) => node.name.name !== name);
-	}
-	/**
-	* Return whether the document is empty
-	*
-	* @returns {boolean}
-	*/
-	isEmpty() {
-		return this.nodes.length === 0;
-	}
-};
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/types.js
 /** @param {number} codePoint  */
@@ -12087,11 +24198,9 @@ function isBinaryDigitOrUnderscore(codePoint) {
 function isNumberSign(codePoint) {
 	return codePoint === 45 || codePoint === 43;
 }
+var init_types = __esmMin((() => {}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/context.js
-/** @import {Location, Token} from "../token.js" */
-/** @type {Intl.Segmenter=} */
-let segmenter;
 /** @param {string} text */
 function* iterateGraphemes(text) {
 	for (const segment of (segmenter ??= new Intl.Segmenter("en")).segment(text)) yield segment.segment;
@@ -12306,6 +24415,11 @@ function mkError$1(ctx, message) {
 function pushError(ctx, message) {
 	(ctx.errorsInToken ??= []).push(mkError$1(ctx, message));
 }
+var segmenter;
+var init_context = __esmMin((() => {
+	init_error$1();
+	init_types();
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/tokenize.js
 /** @import {Token} from "../token.js" */
@@ -12478,11 +24592,6 @@ function createBaseNumberHandler(type, tokenType, isDigit, isDigitOrUnderscore) 
 		}
 	};
 }
-/** @type {(((ctx: TokenizeContext) => Token) | null)[]} */
-const baseNumberHandlers = Array(256).fill(null);
-baseNumberHandlers[98] = createBaseNumberHandler("binary", 17, isBinaryDigit, isBinaryDigitOrUnderscore);
-baseNumberHandlers[111] = createBaseNumberHandler("octal", 16, isOctalDigit, isOctalDigitOrUnderscore);
-baseNumberHandlers[120] = createBaseNumberHandler("hexadecimal", 14, isHexadecimalDigit, isHexadecimalDigitOrUnderscore);
 /** @param {TokenizeContext} ctx */
 function handleNumberCharacter(ctx) {
 	if (consumeCodePoint(ctx, 48)) {
@@ -12584,146 +24693,132 @@ function handleIdentifierCharacter(ctx) {
 function handleInvalidCharacter(ctx) {
 	throw mkError$1(ctx, `Unexpected character ${JSON.stringify(String.fromCodePoint(ctx.current))}, did you forget to quote an identifier?`);
 }
-/** @type {((ctx: TokenizeContext) => Token)[]} */
-const characterHandlers$1 = Array(255);
-characterHandlers$1.fill(handleIdentifierCharacter);
-for (let i = 0; i < 32; i++) characterHandlers$1[i] = handleInvalidCharacter;
-characterHandlers$1[9] = handleWhitespaceCharacter;
-characterHandlers$1[10] = handleNewlineCharacter;
-characterHandlers$1[11] = handleNewlineCharacter;
-characterHandlers$1[12] = handleNewlineCharacter;
-characterHandlers$1[13] = handleNewlineCharacter;
-characterHandlers$1[32] = handleWhitespaceCharacter;
-characterHandlers$1[34] = handleQuoteCharacter$1;
-characterHandlers$1[35] = handleHashCharacter;
-characterHandlers$1[40] = createSingleCharacterToken(4);
-characterHandlers$1[41] = createSingleCharacterToken(6);
-characterHandlers$1[43] = handleSignCharacter;
-characterHandlers$1[45] = handleSignCharacter;
-characterHandlers$1[46] = handleDotCharacter$1;
-characterHandlers$1[47] = handleSlashCharacter$1;
-characterHandlers$1[48] = handleNumberCharacter;
-characterHandlers$1[49] = handleNumberCharacter;
-characterHandlers$1[50] = handleNumberCharacter;
-characterHandlers$1[51] = handleNumberCharacter;
-characterHandlers$1[52] = handleNumberCharacter;
-characterHandlers$1[53] = handleNumberCharacter;
-characterHandlers$1[54] = handleNumberCharacter;
-characterHandlers$1[55] = handleNumberCharacter;
-characterHandlers$1[56] = handleNumberCharacter;
-characterHandlers$1[57] = handleNumberCharacter;
-characterHandlers$1[59] = createSingleCharacterToken(8);
-characterHandlers$1[61] = createSingleCharacterToken(12);
-characterHandlers$1[91] = handleInvalidCharacter;
-characterHandlers$1[92] = createSingleCharacterToken(20);
-characterHandlers$1[93] = handleInvalidCharacter;
-characterHandlers$1[114] = handleR;
-characterHandlers$1[123] = createSingleCharacterToken(5);
-characterHandlers$1[125] = createSingleCharacterToken(7);
-characterHandlers$1[133] = handleNewlineCharacter;
-characterHandlers$1[160] = handleWhitespaceCharacter;
+var baseNumberHandlers, characterHandlers$1;
+var init_tokenize$2 = __esmMin((() => {
+	init_error$1();
+	init_context();
+	init_types();
+	baseNumberHandlers = Array(256).fill(null);
+	baseNumberHandlers[98] = createBaseNumberHandler("binary", 17, isBinaryDigit, isBinaryDigitOrUnderscore);
+	baseNumberHandlers[111] = createBaseNumberHandler("octal", 16, isOctalDigit, isOctalDigitOrUnderscore);
+	baseNumberHandlers[120] = createBaseNumberHandler("hexadecimal", 14, isHexadecimalDigit, isHexadecimalDigitOrUnderscore);
+	characterHandlers$1 = Array(255);
+	characterHandlers$1.fill(handleIdentifierCharacter);
+	for (let i = 0; i < 32; i++) characterHandlers$1[i] = handleInvalidCharacter;
+	characterHandlers$1[9] = handleWhitespaceCharacter;
+	characterHandlers$1[10] = handleNewlineCharacter;
+	characterHandlers$1[11] = handleNewlineCharacter;
+	characterHandlers$1[12] = handleNewlineCharacter;
+	characterHandlers$1[13] = handleNewlineCharacter;
+	characterHandlers$1[32] = handleWhitespaceCharacter;
+	characterHandlers$1[34] = handleQuoteCharacter$1;
+	characterHandlers$1[35] = handleHashCharacter;
+	characterHandlers$1[40] = createSingleCharacterToken(4);
+	characterHandlers$1[41] = createSingleCharacterToken(6);
+	characterHandlers$1[43] = handleSignCharacter;
+	characterHandlers$1[45] = handleSignCharacter;
+	characterHandlers$1[46] = handleDotCharacter$1;
+	characterHandlers$1[47] = handleSlashCharacter$1;
+	characterHandlers$1[48] = handleNumberCharacter;
+	characterHandlers$1[49] = handleNumberCharacter;
+	characterHandlers$1[50] = handleNumberCharacter;
+	characterHandlers$1[51] = handleNumberCharacter;
+	characterHandlers$1[52] = handleNumberCharacter;
+	characterHandlers$1[53] = handleNumberCharacter;
+	characterHandlers$1[54] = handleNumberCharacter;
+	characterHandlers$1[55] = handleNumberCharacter;
+	characterHandlers$1[56] = handleNumberCharacter;
+	characterHandlers$1[57] = handleNumberCharacter;
+	characterHandlers$1[59] = createSingleCharacterToken(8);
+	characterHandlers$1[61] = createSingleCharacterToken(12);
+	characterHandlers$1[91] = handleInvalidCharacter;
+	characterHandlers$1[92] = createSingleCharacterToken(20);
+	characterHandlers$1[93] = handleInvalidCharacter;
+	characterHandlers$1[114] = handleR;
+	characterHandlers$1[123] = createSingleCharacterToken(5);
+	characterHandlers$1[125] = createSingleCharacterToken(7);
+	characterHandlers$1[133] = handleNewlineCharacter;
+	characterHandlers$1[160] = handleWhitespaceCharacter;
+}));
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize.js
+var init_tokenize$1 = __esmMin((() => {
+	init_types();
+	init_tokenize$2();
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/error.js
-/** @import {Location, Token} from "./parser/token.js" */
-/**
-* Error thrown when invalid KDL is encountered
-*/
-var InvalidKdlError = class extends Error {
-	/**
-	* @hidden
-	*/
-	name = "InvalidKdlError";
-	/**
-	* The location of the start of the error, if it can be tied to a single location
-	*
-	* @readonly
-	* @type {Location=}
-	*/
-	start;
-	/**
-	* The location of the end of the error, if it can be tied to a single location
-	*
-	* @readonly
-	* @type {Location=}
-	*/
-	end;
-	/**
-	* Token tied to the error, if it can be tied to a single token
-	*
-	* @readonly
-	* @type {Token=}
-	*/
-	token;
-	/**
-	* Collection of more specific errors
-	*
-	* If this property is present, then the message of this error will be something generic and
-	* the errors in this property will contain more useful information.
-	*
-	* @readonly
-	* @type {InvalidKdlError[]=}
-	*/
-	errors;
-	/**
-	* @param {string} message
-	* @param {ErrorOptions & {token?: Token; start?: Location; end?: Location; errors?: InvalidKdlError[]}} [options]
-	*/
-	constructor(message, { token, start = token?.start, end = token?.end, errors, ...options } = {}) {
-		if (token?.type === 1) message = `${message} at end of input`;
-		else if (start) message = `${message} at ${start.line}:${start.column}`;
-		super(message, options);
-		this.token = token;
-		this.start = start;
-		this.end = end;
-		this.errors = errors;
-	}
-	/**
-	* Returns an iterable for the details of this error
-	*
-	* If this error contains more detailed errors, this iterable yields those detailed errors.
-	* If this error doesn't have more detailed errors, this iterable yields this error itself.
-	*
-	* @returns {Generator<InvalidKdlError, void, void>}
-	*/
-	*flat() {
-		if (this.errors == null) {
-			yield this;
-			return;
+var InvalidKdlError;
+var init_error$1 = __esmMin((() => {
+	init_tokenize$1();
+	InvalidKdlError = class extends Error {
+		/**
+		* @hidden
+		*/
+		name = "InvalidKdlError";
+		/**
+		* The location of the start of the error, if it can be tied to a single location
+		*
+		* @readonly
+		* @type {Location=}
+		*/
+		start;
+		/**
+		* The location of the end of the error, if it can be tied to a single location
+		*
+		* @readonly
+		* @type {Location=}
+		*/
+		end;
+		/**
+		* Token tied to the error, if it can be tied to a single token
+		*
+		* @readonly
+		* @type {Token=}
+		*/
+		token;
+		/**
+		* Collection of more specific errors
+		*
+		* If this property is present, then the message of this error will be something generic and
+		* the errors in this property will contain more useful information.
+		*
+		* @readonly
+		* @type {InvalidKdlError[]=}
+		*/
+		errors;
+		/**
+		* @param {string} message
+		* @param {ErrorOptions & {token?: Token; start?: Location; end?: Location; errors?: InvalidKdlError[]}} [options]
+		*/
+		constructor(message, { token, start = token?.start, end = token?.end, errors, ...options } = {}) {
+			if (token?.type === 1) message = `${message} at end of input`;
+			else if (start) message = `${message} at ${start.line}:${start.column}`;
+			super(message, options);
+			this.token = token;
+			this.start = start;
+			this.end = end;
+			this.errors = errors;
 		}
-		for (const error of this.errors) yield* error.flat();
-	}
-};
+		/**
+		* Returns an iterable for the details of this error
+		*
+		* If this error contains more detailed errors, this iterable yields those detailed errors.
+		* If this error doesn't have more detailed errors, this iterable yields this error itself.
+		*
+		* @returns {Generator<InvalidKdlError, void, void>}
+		*/
+		*flat() {
+			if (this.errors == null) {
+				yield this;
+				return;
+			}
+			for (const error of this.errors) yield* error.flat();
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/string-utils.js
-/** @import {ParserCtx} from "./parser/parse.js" */
-/** @import {Location, Token} from "./parser/token.js" */
-const escapedCodePointsInStringify = new Map([
-	...Array.from({ length: 32 }, (_, codePoint) => [codePoint, `\\u{${codePoint.toString(16).padStart(2, "0")}}`]),
-	[127, "\\u{7f}"],
-	[8206, "\\u{200e}"],
-	[8207, "\\u{200f}"],
-	[8234, "\\u{202a}"],
-	[8235, "\\u{202b}"],
-	[8236, "\\u{202c}"],
-	[8237, "\\u{202d}"],
-	[8238, "\\u{202e}"],
-	[8294, "\\u{2066}"],
-	[8295, "\\u{2067}"],
-	[8296, "\\u{2068}"],
-	[8297, "\\u{2069}"],
-	[65279, "\\u{feff}"],
-	[34, "\\\""],
-	[92, "\\\\"],
-	[10, "\\n"],
-	[11, "\\u{0b}"],
-	[12, "\\f"],
-	[13, "\\r"],
-	[133, "\\u{85}"],
-	[8232, "\\u{2028}"],
-	[8233, "\\u{2029}"],
-	[8, "\\b"],
-	[9, "\\t"]
-]);
 /**
 * @param {string} string
 */
@@ -12745,10 +24840,41 @@ function stringifyString(string) {
 	if (isValidBareIdentifier) return string;
 	return stringified + "\"";
 }
-const reNewline = /\x0D\x0A|[\x0A\x0B\x0C\x0D\x85\u2028\u2029]/;
+var escapedCodePointsInStringify, reNewline;
+var init_string_utils = __esmMin((() => {
+	init_error$1();
+	init_tokenize$1();
+	escapedCodePointsInStringify = new Map([
+		...Array.from({ length: 32 }, (_, codePoint) => [codePoint, `\\u{${codePoint.toString(16).padStart(2, "0")}}`]),
+		[127, "\\u{7f}"],
+		[8206, "\\u{200e}"],
+		[8207, "\\u{200f}"],
+		[8234, "\\u{202a}"],
+		[8235, "\\u{202b}"],
+		[8236, "\\u{202c}"],
+		[8237, "\\u{202d}"],
+		[8238, "\\u{202e}"],
+		[8294, "\\u{2066}"],
+		[8295, "\\u{2067}"],
+		[8296, "\\u{2068}"],
+		[8297, "\\u{2069}"],
+		[65279, "\\u{feff}"],
+		[34, "\\\""],
+		[92, "\\\\"],
+		[10, "\\n"],
+		[11, "\\u{0b}"],
+		[12, "\\f"],
+		[13, "\\r"],
+		[133, "\\u{85}"],
+		[8232, "\\u{2028}"],
+		[8233, "\\u{2029}"],
+		[8, "\\b"],
+		[9, "\\t"]
+	]);
+	reNewline = /\x0D\x0A|[\x0A\x0B\x0C\x0D\x85\u2028\u2029]/;
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/format.js
-const reStartsWithInlineWhitespace = /^[\uFEFF\u0009\u0020\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/;
 /**
 * @param {Tag | null} tag
 * @returns {string}
@@ -12837,14 +24963,6 @@ function formatNode(node, indentation) {
 function formatDocument(document, indentation) {
 	return `${document.nodes[0] != null && document.nodes[0].leading == null && indentation ? "\n" : ""}${document.nodes.map((node) => formatNode(node, indentation)).join("")}${document.trailing ?? "	".repeat((indentation || 1) - 1)}`;
 }
-const formatters = /* @__PURE__ */ new Map([
-	[Value.type, formatValue],
-	[Identifier.type, formatIdentifier],
-	[Tag.type, formatTag],
-	[Entry.type, formatEntry],
-	[Node.type, formatNode],
-	[Document.type, formatDocument]
-]);
 /**
 * @param {Value | Identifier | Tag | Entry | Node | Document} v
 * @returns {string}
@@ -12854,21 +24972,23 @@ function format(v) {
 	if (formatter == null) throw new InvalidKdlError(`Cannot format non-KDL ${v}`);
 	return formatter(v, 0);
 }
+var reStartsWithInlineWhitespace, formatters;
+var init_format = __esmMin((() => {
+	init_kdl();
+	init_model();
+	init_string_utils();
+	reStartsWithInlineWhitespace = /^[\uFEFF\u0009\u0020\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/;
+	formatters = /* @__PURE__ */ new Map([
+		[Value.type, formatValue],
+		[Identifier.type, formatIdentifier],
+		[Tag.type, formatTag],
+		[Entry.type, formatEntry],
+		[Node.type, formatNode],
+		[Document.type, formatDocument]
+	]);
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/locations.js
-/** @import {Document, Entry, Identifier, Node, Tag, Value} from "./model.js" */
-/** @import {Token, Location} from "./parser/token.js" */
-/**
-* @typedef {object} StoredLocation
-* Stored location of a {@link Document}, {@link Entry}, {@link Identifier}, {@link Node}, {@link Tag}, or {@link Value}.
-*
-* @prop {Location} start The location of the first character
-* @prop {Location} end The location after the last character
-*/
-/**
-* @type {WeakMap<Value | Identifier | Tag | Entry | Node | Document, StoredLocation>}
-*/
-const locations = /* @__PURE__ */ new WeakMap();
 /**
 * Get location information of the given parsed element
 *
@@ -12892,9 +25012,12 @@ function storeLocation$1(element, { start }, { end }) {
 		end
 	});
 }
+var locations;
+var init_locations = __esmMin((() => {
+	locations = /* @__PURE__ */ new WeakMap();
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/parse.js
-/** @import {Token} from "./token.js" */
 /**
 * @typedef {object} ParserCtx
 * @prop {string} text
@@ -12928,7 +25051,8 @@ function consume(ctx, tokenType) {
 * @param {string} message
 */
 function mkError(ctx, message) {
-	return new InvalidKdlError(message, { token: "current" in ctx ? ctx.current.value ?? ctx.lastToken : ctx });
+	const token = "current" in ctx ? ctx.current.value ?? ctx.lastToken : ctx;
+	return new InvalidKdlError(message, { token });
 }
 /**
 * @param {ParserCtx} ctx
@@ -12994,10 +25118,51 @@ function finalize(ctx, fatalError) {
 		else throw new InvalidKdlError("Encountered multiple errors", { errors });
 	}
 }
+var init_parse$2 = __esmMin((() => {
+	init_error$1();
+	init_locations();
+	init_tokenize$1();
+}));
+//#endregion
+//#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/index.js
+var init_kdl = __esmMin((() => {
+	init_kdl();
+	init_model();
+	init_error$1();
+	init_format();
+	init_locations();
+	init_tokenize$1();
+	init_parse$2();
+}));
+/**
+* @typedef {import('./flags.js').ParserFlags} ParserFlags
+*/
+/**
+* @typedef {import('./model.js').Primitive} Primitive
+*/
+/**
+* @typedef {import("./parser/token.js").Token} Token
+*/
+/**
+* @typedef {import("./parser/token.js").Location} Location
+*/
+/**
+* @typedef {import("./locations.js").StoredLocation} StoredLocation
+*/
+/** @typedef {import('./model/whitespace.js').BOM} BOM */
+/** @typedef {import('./model/whitespace.js').EscLine} EscLine */
+/** @typedef {import('./model/whitespace.js').InlineWhitespace} InlineWhitespace */
+/** @typedef {import('./model/whitespace.js').LineSpace} LineSpace */
+/** @typedef {import('./model/whitespace.js').SlashDashInDocument} SlashDashInDocument */
+/** @typedef {import('./model/whitespace.js').MultilineComment} MultilineComment */
+/** @typedef {import('./model/whitespace.js').Newline} Newline */
+/** @typedef {import('./model/whitespace.js').NodeSpace} NodeSpace */
+/** @typedef {import('./model/whitespace.js').SlashDashInNode} SlashDashInNode */
+/** @typedef {import('./model/whitespace.js').WhitespaceInNode} WhitespaceInNode */
+/** @typedef {import('./model/whitespace.js').WhitespaceInDocument} WhitespaceInDocument */
+/** @typedef {import('./model/whitespace.js').SingleLineComment} SingleLineComment */
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/parse-v1.js
-/** @import {ParserCtx} from "./parse.js"; */
-/** @import {Token} from "./token.js" */
 /**
 * @param {ParserCtx} ctx
 * @returns {Value=}
@@ -13042,16 +25207,6 @@ function parseNonStringValue(ctx) {
 	storeLocation(ctx, result, token);
 	return result;
 }
-const escapes = /* @__PURE__ */ new Map([
-	["\\n", "\n"],
-	["\\r", "\r"],
-	["\\t", "	"],
-	["\\\\", "\\"],
-	["\\/", "/"],
-	["\\\"", "\""],
-	["\\b", "\b"],
-	["\\f", "\f"]
-]);
 /**
 * @param {ParserCtx} ctx
 * @returns {[string, string, Token]=}
@@ -13343,6 +25498,24 @@ function _parseDocument(ctx) {
 	document.trailing = space ?? "";
 	return document;
 }
+var escapes;
+var init_parse_v1 = __esmMin((() => {
+	init_format();
+	init_model();
+	init_string_utils();
+	init_parse$2();
+	init_tokenize$1();
+	escapes = /* @__PURE__ */ new Map([
+		["\\n", "\n"],
+		["\\r", "\r"],
+		["\\t", "	"],
+		["\\\\", "\\"],
+		["\\/", "/"],
+		["\\\"", "\""],
+		["\\b", "\b"],
+		["\\f", "\f"]
+	]);
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/parser/tokenize/tokenize-v1.js
 /** @import {Token} from "../token.js" */
@@ -13456,52 +25629,12 @@ function handleV1RawStringOrIdentifier(ctx) {
 		} else consumeNewline(ctx) || pop$1(ctx);
 	}
 }
-/** @type {((ctx: TokenizeContext) => Token)[]} */
-const characterHandlers = Array(255);
-characterHandlers.fill(handleV1IdentifierCharacter);
-for (let i = 0; i < 32; i++) characterHandlers[i] = handleInvalidCharacter;
-characterHandlers[9] = handleWhitespaceCharacter;
-characterHandlers[10] = handleNewlineCharacter;
-characterHandlers[11] = handleNewlineCharacter;
-characterHandlers[12] = handleNewlineCharacter;
-characterHandlers[13] = handleNewlineCharacter;
-characterHandlers[32] = handleWhitespaceCharacter;
-characterHandlers[34] = handleQuoteCharacter;
-characterHandlers[40] = createSingleCharacterToken(4);
-characterHandlers[41] = createSingleCharacterToken(6);
-characterHandlers[43] = handleSignCharacter;
-characterHandlers[45] = handleSignCharacter;
-characterHandlers[46] = handleDotCharacter;
-characterHandlers[47] = handleSlashCharacter;
-characterHandlers[48] = handleNumberCharacter;
-characterHandlers[49] = handleNumberCharacter;
-characterHandlers[50] = handleNumberCharacter;
-characterHandlers[51] = handleNumberCharacter;
-characterHandlers[52] = handleNumberCharacter;
-characterHandlers[53] = handleNumberCharacter;
-characterHandlers[54] = handleNumberCharacter;
-characterHandlers[55] = handleNumberCharacter;
-characterHandlers[56] = handleNumberCharacter;
-characterHandlers[57] = handleNumberCharacter;
-characterHandlers[59] = createSingleCharacterToken(8);
-characterHandlers[61] = createSingleCharacterToken(12);
-characterHandlers[91] = handleInvalidCharacter;
-characterHandlers[92] = createSingleCharacterToken(20);
-characterHandlers[93] = handleInvalidCharacter;
-characterHandlers[102] = handleV1KeywordOrIdentifier("false");
-characterHandlers[110] = handleV1KeywordOrIdentifier("null");
-characterHandlers[114] = handleV1RawStringOrIdentifier;
-characterHandlers[116] = handleV1KeywordOrIdentifier("true");
-characterHandlers[123] = createSingleCharacterToken(5);
-characterHandlers[125] = createSingleCharacterToken(7);
-characterHandlers[133] = handleNewlineCharacter;
-characterHandlers[160] = handleWhitespaceCharacter;
 /**
 * @param {string} t
 * @param {{graphemeLocations?: boolean}} opts
 * @returns {Generator<Token, void>}
 */
-function* tokenize(t, { graphemeLocations }) {
+function* tokenize$1(t, { graphemeLocations }) {
 	const ctx = createContext(t, {
 		graphemeLocations,
 		flags: { experimentalSuffixedNumbers: false }
@@ -13525,6 +25658,51 @@ function* tokenize(t, { graphemeLocations }) {
 	}
 	yield mkToken(ctx, 1);
 }
+var characterHandlers;
+var init_tokenize_v1 = __esmMin((() => {
+	init_context();
+	init_tokenize$2();
+	init_types();
+	characterHandlers = Array(255);
+	characterHandlers.fill(handleV1IdentifierCharacter);
+	for (let i = 0; i < 32; i++) characterHandlers[i] = handleInvalidCharacter;
+	characterHandlers[9] = handleWhitespaceCharacter;
+	characterHandlers[10] = handleNewlineCharacter;
+	characterHandlers[11] = handleNewlineCharacter;
+	characterHandlers[12] = handleNewlineCharacter;
+	characterHandlers[13] = handleNewlineCharacter;
+	characterHandlers[32] = handleWhitespaceCharacter;
+	characterHandlers[34] = handleQuoteCharacter;
+	characterHandlers[40] = createSingleCharacterToken(4);
+	characterHandlers[41] = createSingleCharacterToken(6);
+	characterHandlers[43] = handleSignCharacter;
+	characterHandlers[45] = handleSignCharacter;
+	characterHandlers[46] = handleDotCharacter;
+	characterHandlers[47] = handleSlashCharacter;
+	characterHandlers[48] = handleNumberCharacter;
+	characterHandlers[49] = handleNumberCharacter;
+	characterHandlers[50] = handleNumberCharacter;
+	characterHandlers[51] = handleNumberCharacter;
+	characterHandlers[52] = handleNumberCharacter;
+	characterHandlers[53] = handleNumberCharacter;
+	characterHandlers[54] = handleNumberCharacter;
+	characterHandlers[55] = handleNumberCharacter;
+	characterHandlers[56] = handleNumberCharacter;
+	characterHandlers[57] = handleNumberCharacter;
+	characterHandlers[59] = createSingleCharacterToken(8);
+	characterHandlers[61] = createSingleCharacterToken(12);
+	characterHandlers[91] = handleInvalidCharacter;
+	characterHandlers[92] = createSingleCharacterToken(20);
+	characterHandlers[93] = handleInvalidCharacter;
+	characterHandlers[102] = handleV1KeywordOrIdentifier("false");
+	characterHandlers[110] = handleV1KeywordOrIdentifier("null");
+	characterHandlers[114] = handleV1RawStringOrIdentifier;
+	characterHandlers[116] = handleV1KeywordOrIdentifier("true");
+	characterHandlers[123] = createSingleCharacterToken(5);
+	characterHandlers[125] = createSingleCharacterToken(7);
+	characterHandlers[133] = handleNewlineCharacter;
+	characterHandlers[160] = handleWhitespaceCharacter;
+}));
 //#endregion
 //#region node_modules/.pnpm/@bgotink+kdl@0.4.0/node_modules/@bgotink/kdl/v1-compat.js
 /**
@@ -13539,12 +25717,12 @@ function* tokenize(t, { graphemeLocations }) {
 * @param {boolean} [options.graphemeLocations]
 * @returns {Document}
 */
-function parse$1(text, options = {}) {
+function parse$2(text, options = {}) {
 	if (typeof text !== "string") {
 		if (typeof TextDecoder !== "function") throw new TypeError("Uint8Array input is only supported on platforms that include TextDecoder");
 		text = new TextDecoder("utf-8", { fatal: true }).decode(text);
 	}
-	const tokens = tokenize(text, options);
+	const tokens = tokenize$1(text, options);
 	const ctx = createParserCtx(text, tokens, {
 		...options,
 		flags: { experimentalSuffixedNumbers: false }
@@ -13559,6 +25737,12 @@ function parse$1(text, options = {}) {
 	if (!value) throw new InvalidKdlError(`Expected a document`);
 	return value;
 }
+var init_v1_compat = __esmMin((() => {
+	init_error$1();
+	init_parse_v1();
+	init_parse$2();
+	init_tokenize_v1();
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/error.js
 /*!
@@ -13610,26 +25794,29 @@ function makeCodeBlock(string, line, column) {
 	}
 	return codeblock;
 }
-var TomlError = class TomlError extends Error {
-	line;
-	column;
-	codeblock;
-	constructor(message, options) {
-		const [line, column] = getLineColFromPtr(options.toml, options.ptr);
-		const codeblock = makeCodeBlock(options.toml, line, column);
-		super(`Invalid TOML document: ${message}\n\n${codeblock}`, options);
-		this.line = line;
-		this.column = column;
-		this.codeblock = codeblock;
-	}
-	/** @internal */
-	static x(message, ctx, ptr) {
-		throw new TomlError(message, {
-			toml: ctx.s,
-			ptr: ptr ?? ctx.p
-		});
-	}
-};
+var TomlError;
+var init_error = __esmMin((() => {
+	TomlError = class TomlError extends Error {
+		line;
+		column;
+		codeblock;
+		constructor(message, options) {
+			const [line, column] = getLineColFromPtr(options.toml, options.ptr);
+			const codeblock = makeCodeBlock(options.toml, line, column);
+			super(`Invalid TOML document: ${message}\n\n${codeblock}`, options);
+			this.line = line;
+			this.column = column;
+			this.codeblock = codeblock;
+		}
+		/** @internal */
+		static x(message, ctx, ptr) {
+			throw new TomlError(message, {
+				toml: ctx.s,
+				ptr: ptr ?? ctx.p
+			});
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/primitive.js
 /*!
@@ -13730,133 +25917,139 @@ function parseString(ctx) {
 	}
 	TomlError.x("unfinished string", ctx, startPtr);
 }
+var init_primitive = __esmMin((() => {
+	init_error();
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/date.js
-/*!
-* Copyright (c) Squirrel Chat et al., All rights reserved.
-* SPDX-License-Identifier: BSD-3-Clause
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are met:
-*
-* 1. Redistributions of source code must retain the above copyright notice, this
-*    list of conditions and the following disclaimer.
-* 2. Redistributions in binary form must reproduce the above copyright notice,
-*    this list of conditions and the following disclaimer in the
-*    documentation and/or other materials provided with the distribution.
-* 3. Neither the name of the copyright holder nor the names of its contributors
-*    may be used to endorse or promote products derived from this software without
-*    specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-*/
-let DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[Tt ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|z|[-+]\d{2}:\d{2})?$/i;
-var TomlDate = class TomlDate extends Date {
-	#hasDate = false;
-	#hasTime = false;
-	#offset = null;
-	constructor(date, fasttype, unsafeDelim) {
-		let hasDate = true;
-		let hasTime = true;
-		let offset = "Z";
-		let c;
-		if (typeof date === "string") {
-			if (fasttype) prep: {
-				if (fasttype < 3) {
-					if (+date.slice(11, 13) > 23) {
-						date = "";
-						break prep;
-					}
-					if (fasttype === 2) {
-						offset = null;
-						date += "Z";
-					} else if ((c = date.charCodeAt(date.length - 1)) !== 90 && c !== 122) offset = date.slice(date.length - 6);
-					if (unsafeDelim) date = date.slice(0, 10) + "T" + date.slice(11);
-				} else if (fasttype === 4) date = +date.slice(0, 2) > 23 ? "" : `0000-01-01T${date}Z`;
-				hasDate = fasttype !== 4;
-				hasTime = fasttype !== 3;
+var DATE_TIME_RE, TomlDate;
+var init_date = __esmMin((() => {
+	DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[Tt ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|z|[-+]\d{2}:\d{2})?$/i;
+	TomlDate = class TomlDate extends Date {
+		#hasDate = false;
+		#hasTime = false;
+		#offset = null;
+		constructor(date, fasttype, unsafeDelim) {
+			/*!
+			* Copyright (c) Squirrel Chat et al., All rights reserved.
+			* SPDX-License-Identifier: BSD-3-Clause
+			*
+			* Redistribution and use in source and binary forms, with or without
+			* modification, are permitted provided that the following conditions are met:
+			*
+			* 1. Redistributions of source code must retain the above copyright notice, this
+			*    list of conditions and the following disclaimer.
+			* 2. Redistributions in binary form must reproduce the above copyright notice,
+			*    this list of conditions and the following disclaimer in the
+			*    documentation and/or other materials provided with the distribution.
+			* 3. Neither the name of the copyright holder nor the names of its contributors
+			*    may be used to endorse or promote products derived from this software without
+			*    specific prior written permission.
+			*
+			* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+			* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+			* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+			* DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+			* FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+			* DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+			* SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+			* CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+			* OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+			* OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+			*/
+			let hasDate = true;
+			let hasTime = true;
+			let offset = "Z";
+			let c;
+			if (typeof date === "string") {
+				if (fasttype) prep: {
+					if (fasttype < 3) {
+						if (+date.slice(11, 13) > 23) {
+							date = "";
+							break prep;
+						}
+						if (fasttype === 2) {
+							offset = null;
+							date += "Z";
+						} else if ((c = date.charCodeAt(date.length - 1)) !== 90 && c !== 122) offset = date.slice(date.length - 6);
+						if (unsafeDelim) date = date.slice(0, 10) + "T" + date.slice(11);
+					} else if (fasttype === 4) date = +date.slice(0, 2) > 23 ? "" : `0000-01-01T${date}Z`;
+					hasDate = fasttype !== 4;
+					hasTime = fasttype !== 3;
+				}
+				else {
+					let match = date.match(DATE_TIME_RE);
+					if (match) {
+						if (!match[1]) {
+							hasDate = false;
+							date = `0000-01-01T${date}`;
+						}
+						hasTime = !!match[2];
+						hasTime && date[10] === " " && (date = date.replace(" ", "T"));
+						if (match[2] && +match[2] > 23) date = "";
+						else {
+							offset = match[3] || null;
+							if (!offset && hasTime) date += "Z";
+						}
+					} else date = "";
+				}
 			}
-			else {
-				let match = date.match(DATE_TIME_RE);
-				if (match) {
-					if (!match[1]) {
-						hasDate = false;
-						date = `0000-01-01T${date}`;
-					}
-					hasTime = !!match[2];
-					hasTime && date[10] === " " && (date = date.replace(" ", "T"));
-					if (match[2] && +match[2] > 23) date = "";
-					else {
-						offset = match[3] || null;
-						if (!offset && hasTime) date += "Z";
-					}
-				} else date = "";
+			super(date);
+			if (!isNaN(this.getTime())) {
+				this.#hasDate = hasDate;
+				this.#hasTime = hasTime;
+				this.#offset = offset;
 			}
 		}
-		super(date);
-		if (!isNaN(this.getTime())) {
-			this.#hasDate = hasDate;
-			this.#hasTime = hasTime;
-			this.#offset = offset;
+		isDateTime() {
+			return this.#hasDate && this.#hasTime;
 		}
-	}
-	isDateTime() {
-		return this.#hasDate && this.#hasTime;
-	}
-	isLocal() {
-		return !this.#hasDate || !this.#hasTime || !this.#offset;
-	}
-	isDate() {
-		return this.#hasDate && !this.#hasTime;
-	}
-	isTime() {
-		return this.#hasTime && !this.#hasDate;
-	}
-	isValid() {
-		return this.#hasDate || this.#hasTime;
-	}
-	toISOString() {
-		let iso = super.toISOString();
-		if (this.isDate()) return iso.slice(0, 10);
-		if (this.isTime()) return iso.slice(11, 23);
-		if (this.#offset === null) return iso.slice(0, -1);
-		if (this.#offset === "Z" || this.#offset === "z") return iso;
-		let offset = +this.#offset.slice(1, 3) * 60 + +this.#offset.slice(4, 6);
-		offset = this.#offset[0] === "-" ? offset : -offset;
-		return (/* @__PURE__ */ new Date(this.getTime() - offset * 6e4)).toISOString().slice(0, -1) + this.#offset;
-	}
-	static wrapAsOffsetDateTime(jsDate, offset = "Z") {
-		let date = new TomlDate(jsDate);
-		date.#offset = offset;
-		return date;
-	}
-	static wrapAsLocalDateTime(jsDate) {
-		let date = new TomlDate(jsDate);
-		date.#offset = null;
-		return date;
-	}
-	static wrapAsLocalDate(jsDate) {
-		let date = new TomlDate(jsDate);
-		date.#hasTime = false;
-		date.#offset = null;
-		return date;
-	}
-	static wrapAsLocalTime(jsDate) {
-		let date = new TomlDate(jsDate);
-		date.#hasDate = false;
-		date.#offset = null;
-		return date;
-	}
-};
+		isLocal() {
+			return !this.#hasDate || !this.#hasTime || !this.#offset;
+		}
+		isDate() {
+			return this.#hasDate && !this.#hasTime;
+		}
+		isTime() {
+			return this.#hasTime && !this.#hasDate;
+		}
+		isValid() {
+			return this.#hasDate || this.#hasTime;
+		}
+		toISOString() {
+			let iso = super.toISOString();
+			if (this.isDate()) return iso.slice(0, 10);
+			if (this.isTime()) return iso.slice(11, 23);
+			if (this.#offset === null) return iso.slice(0, -1);
+			if (this.#offset === "Z" || this.#offset === "z") return iso;
+			let offset = +this.#offset.slice(1, 3) * 60 + +this.#offset.slice(4, 6);
+			offset = this.#offset[0] === "-" ? offset : -offset;
+			return (/* @__PURE__ */ new Date(this.getTime() - offset * 6e4)).toISOString().slice(0, -1) + this.#offset;
+		}
+		static wrapAsOffsetDateTime(jsDate, offset = "Z") {
+			let date = new TomlDate(jsDate);
+			date.#offset = offset;
+			return date;
+		}
+		static wrapAsLocalDateTime(jsDate) {
+			let date = new TomlDate(jsDate);
+			date.#offset = null;
+			return date;
+		}
+		static wrapAsLocalDate(jsDate) {
+			let date = new TomlDate(jsDate);
+			date.#hasTime = false;
+			date.#offset = null;
+			return date;
+		}
+		static wrapAsLocalTime(jsDate) {
+			let date = new TomlDate(jsDate);
+			date.#hasDate = false;
+			date.#offset = null;
+			return date;
+		}
+	};
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/extract.js
 /*!
@@ -14023,6 +26216,12 @@ function readDate(ctx, str, type, unsafeDelim, errPtr, temporalSuffix) {
 		TomlError.x(e instanceof Error ? e.message : "" + e, ctx, errPtr);
 	}
 }
+var init_extract = __esmMin((() => {
+	init_primitive();
+	init_struct();
+	init_error();
+	init_date();
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/util.js
 /*!
@@ -14073,6 +26272,9 @@ function skipVoid(ctx, banNewLines, banComments) {
 		skipComment(ctx);
 	}
 }
+var init_util = __esmMin((() => {
+	init_error();
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/struct.js
 /*!
@@ -14196,6 +26398,12 @@ function parseArray(ctx) {
 	}
 	TomlError.x("unfinished array", ctx, startPtr);
 }
+var init_struct = __esmMin((() => {
+	init_primitive();
+	init_extract();
+	init_util();
+	init_error();
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/parse.js
 /*!
@@ -14295,7 +26503,7 @@ function peekTable(ctx, key, table, meta, type) {
 function validateTablePeek(ctx, peek, ptr) {
 	if (peek === null || ctx.uk === 2) TomlError.x(peek === null ? "trying to redefine an already defined table or value" : "document contains an unsafe property", ctx, ptr);
 }
-function parse(toml, options = {}) {
+function parse$1(toml, options = {}) {
 	let ctx = {
 		s: toml,
 		p: 0,
@@ -14344,6 +26552,12 @@ function parse(toml, options = {}) {
 	}
 	return res;
 }
+var init_parse$1 = __esmMin((() => {
+	init_struct();
+	init_extract();
+	init_util();
+	init_error();
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/stringify.js
 /*!
@@ -14373,8 +26587,6 @@ function parse(toml, options = {}) {
 * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-let BARE_KEY = /^[a-z0-9-_]+$/i;
-let HAS_WELLFORMED = !!"".isWellFormed;
 function extendedTypeOf(obj) {
 	let type = typeof obj;
 	if (type === "object") {
@@ -14499,8 +26711,18 @@ function stringify(obj, { maxDepth = 1e3, numbersAsFloat = false, strictTemporal
 	if (str[str.length - 1] !== "\n") return str + "\n";
 	return str;
 }
+var BARE_KEY, HAS_WELLFORMED;
+var init_stringify = __esmMin((() => {
+	BARE_KEY = /^[a-z0-9-_]+$/i;
+	HAS_WELLFORMED = !!"".isWellFormed;
+}));
 //#endregion
 //#region node_modules/.pnpm/smol-toml@1.9.0/node_modules/smol-toml/dist/index.js
+var init_dist$1 = __esmMin((() => {
+	init_parse$1();
+	init_stringify();
+	init_date();
+}));
 /*!
 * Copyright (c) Squirrel Chat et al., All rights reserved.
 * SPDX-License-Identifier: BSD-3-Clause
@@ -14530,16 +26752,6 @@ function stringify(obj, { maxDepth = 1e3, numbersAsFloat = false, strictTemporal
 */
 //#endregion
 //#region files/config/keybindings/native.ts
-/**
-* Pure native include inspection, resolution and text rebinding. Niri is parsed
-* as KDL v1 with source locations; Umbriel is parsed as TOML with large integers
-* preserved. No filesystem/env lookup, subprocess, registration or publication
-* occurs. Callers provide explicit environment and owner paths.
-* Rewriting is for private closure copies or deliberate Niri inline rebinding:
-* Umbriel normalization must not be mistaken for editing unrelated live user TOML.
-* Native validators still own complete compositor-schema admission.
-* @see /doc/config/keybinding-consumers.md
-*/
 function tomlIncludes(table) {
 	const entries = [];
 	const arrays = [];
@@ -14575,8 +26787,8 @@ function tomlIncludes(table) {
 * @throws On parse errors, invalid include tables/arrays or malformed Niri path arguments.
 */
 function nativeIncludes(text, target) {
-	if (target === "umbriel") return tomlIncludes(parse(text, { integersAsBigInt: "asNeeded" })).entries;
-	return parse$1(text).nodes.filter((node) => node.getName() === "include").map((node) => {
+	if (target === "umbriel") return tomlIncludes(parse$1(text, { integersAsBigInt: "asNeeded" })).entries;
+	return parse$2(text).nodes.filter((node) => node.getName() === "include").map((node) => {
 		const args = node.getArguments();
 		if (args.length !== 1 || typeof args[0] !== "string") throw new Error("Niri include requires exactly one string path");
 		return {
@@ -14599,13 +26811,13 @@ function nativeIncludes(text, target) {
 */
 function rewriteNativeIncludes(text, target, paths) {
 	if (target === "umbriel") {
-		const table = parse(text, { integersAsBigInt: "asNeeded" });
+		const table = parse$1(text, { integersAsBigInt: "asNeeded" });
 		const inclusion = tomlIncludes(table);
 		if (inclusion.entries.length !== paths.length) throw new Error("include replacement arity differs");
 		inclusion.rewrite([...paths]);
 		return stringify(table);
 	}
-	const includes = parse$1(text, { storeLocations: true }).nodes.filter((node) => node.getName() === "include");
+	const includes = parse$2(text, { storeLocations: true }).nodes.filter((node) => node.getName() === "include");
 	if (includes.length !== paths.length) throw new Error("include replacement arity differs");
 	const edits = includes.map((node, index) => {
 		const argument = node.getArgumentEntry(0);
@@ -14647,6 +26859,12 @@ function resolveNativeInclude(raw, owner, target, environment) {
 	if (!path || /[\0\t\r\n]/.test(path)) throw new Error(`invalid native include path ${raw}`);
 	return resolve(dirname(owner), path);
 }
+var init_native = __esmMin((() => {
+	init_kdl();
+	init_v1_compat();
+	init_dist$1();
+	init_render();
+}));
 //#endregion
 //#region files/config/keybindings/materials.ts
 /**
@@ -14740,6 +26958,9 @@ function renderRoot(target, materials, baseline, personal = []) {
 	];
 	return target === "niri" ? refs.join("") : `[include]\nfiles = [\n${refs.map((entry) => "  " + entry).join("")}]\n`;
 }
+var init_materials = __esmMin((() => {
+	init_render();
+}));
 //#endregion
 //#region files/config/keybindings/closure.ts
 /**
@@ -14752,7 +26973,6 @@ function renderRoot(target, materials, baseline, personal = []) {
 * @see /doc/config/keybinding-consumers.md
 * @see /design/keybindings/implementation1.gpt61sol.md
 */
-const exec$1 = promisify(execFile);
 /**
 * Identify a directory entry by resolved physical parent plus its literal basename.
 * Parent aliases are collapsed; the final entry is deliberately NOT followed, so a
@@ -14852,6 +27072,7 @@ async function validateClosure(planPath, environment) {
 	const map = JSON.parse(await readFile(environment.CONFIG_CANDIDATES_FILE, "utf8"));
 	if (plan.version !== 1 || map.version !== 1) throw new Error("unsupported candidate closure version");
 	await assertFileGuards(plan.guards);
+	await assertRegistryGuards(plan.registryGuards ?? []);
 	const planned = /* @__PURE__ */ new Map();
 	for (const candidate of map.candidates) planned.set(candidate.output, await readFile(candidate.candidate, "utf8"));
 	if (!planned.has(plan.root)) throw new Error("transaction does not select candidate root");
@@ -14893,7 +27114,17 @@ async function validateClosure(planPath, environment) {
 		await validateRoot(envelope);
 	}
 	await assertFileGuards(plan.guards);
+	await assertRegistryGuards(plan.registryGuards ?? []);
 }
+var exec$1;
+var init_closure = __esmMin((() => {
+	init_capture$1();
+	init_delivery();
+	init_native();
+	init_materials();
+	init_guard();
+	exec$1 = promisify(execFile);
+}));
 //#endregion
 //#region files/config/blocks.ts
 /**
@@ -14906,7 +27137,6 @@ async function validateClosure(planPath, environment) {
 * byte-for-byte intact; native structural scope is checked by the consumer separately.
 * @see /doc/config/keybinding-consumers.md
 */
-const exec = promisify(execFile);
 /**
 * Locate the single ordered adoption pair without interpreting native grammar.
 * @param text Complete root/area text; no file is read or modified.
@@ -15002,6 +27232,10 @@ async function assembleBlocks(text, blocks, options) {
 	areaOffsets(updated, options.area);
 	return text.slice(0, span.start) + updated + text.slice(span.end);
 }
+var exec;
+var init_blocks = __esmMin((() => {
+	exec = promisify(execFile);
+}));
 //#endregion
 //#region files/config/keybindings/consumer.ts
 /**
@@ -15267,12 +27501,14 @@ async function assembleConsumer(options) {
 			await writeFile(file, text, { mode: 384 });
 			capturedPaths[path] = file;
 		}
+		const guards = [...files.values()].map((file) => file.guard).concat(options.inputGuards ?? []);
 		const plan = {
+			registryGuards: options.registryGuards,
 			version: 1,
 			target,
 			root,
 			captured: capturedPaths,
-			guards: [...files.values()].map((file) => file.guard).concat(options.inputGuards ?? []),
+			guards,
 			environment,
 			validator: options.nativeValidator,
 			definitions: [...generated.keys()]
@@ -15334,6 +27570,18 @@ async function assembleConsumer(options) {
 		});
 	}
 }
+var init_consumer = __esmMin((() => {
+	init_assembly();
+	init_capture$1();
+	init_blocks();
+	init_delivery();
+	init_decode$1();
+	init_model$1();
+	init_materials();
+	init_render();
+	init_closure();
+	init_native();
+}));
 //#endregion
 //#region files/config/registration.ts
 /**
@@ -15449,6 +27697,10 @@ async function withInputBatch(records, operation, options) {
 		});
 	}
 }
+var init_registration = __esmMin((() => {
+	init_capture$1();
+	init_delivery();
+}));
 //#endregion
 //#region files/config/keybindings/membership.ts
 /**
@@ -15466,7 +27718,6 @@ async function withInputBatch(records, operation, options) {
 * @see /design/keybindings/implementation2.gpt61sol.md
 * @see /design/keybindings/review-fixes0.gpt61sol.md
 */
-const ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 /**
 * Return known user defaults without reading configuration or discovering targets.
 * The context uses invocation-time XDG resolution; native placement and managed
@@ -15630,6 +27881,7 @@ async function applyState(bound, state, guard, options, changed) {
 		...options,
 		request: selected.request,
 		inputGuards: [
+			...options.inputGuards ?? [],
 			guard,
 			...selected.guards,
 			...options.profileGuard ? [options.profileGuard] : []
@@ -15749,6 +28001,1305 @@ async function loadProfile(path) {
 		profileGuard: file.guard
 	};
 }
+var ID;
+var init_membership = __esmMin((() => {
+	init_capture$1();
+	init_context$1();
+	init_registration();
+	init_decode$1();
+	init_consumer();
+	ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+tab@0.0.22/node_modules/@bomb.sh/tab/dist/powershell-C1q3FW2e.mjs
+function t(t, n) {
+	return `#compdef ${t}
+compdef _${t} ${t}
+
+# zsh completion for ${t} -*- shell-script -*-
+
+__${t}_debug() {
+    local file="$BASH_COMP_DEBUG_FILE"
+    if [[ -n \${file} ]]; then
+        echo "$*" >> "\${file}"
+    fi
+}
+
+_${t}() {
+    local shellCompDirectiveError=${a.ShellCompDirectiveError}
+    local shellCompDirectiveNoSpace=${a.ShellCompDirectiveNoSpace}
+    local shellCompDirectiveNoFileComp=${a.ShellCompDirectiveNoFileComp}
+    local shellCompDirectiveFilterFileExt=${a.ShellCompDirectiveFilterFileExt}
+    local shellCompDirectiveFilterDirs=${a.ShellCompDirectiveFilterDirs}
+    local shellCompDirectiveKeepOrder=${a.ShellCompDirectiveKeepOrder}
+
+    local lastParam lastChar flagPrefix requestComp out directive comp lastComp noSpace keepOrder
+    local -a completions
+
+    __${t}_debug "\\n========= starting completion logic =========="
+    __${t}_debug "CURRENT: \${CURRENT}, words[*]: \${words[*]}"
+
+    # The user could have moved the cursor backwards on the command-line.
+    # We need to trigger completion from the $CURRENT location, so we need
+    # to truncate the command-line ($words) up to the $CURRENT location.
+    # (We cannot use $CURSOR as its value does not work when a command is an alias.)
+    words=( "\${=words[1,CURRENT]}" )
+    __${t}_debug "Truncated words[*]: \${words[*]},"
+
+    lastParam=\${words[-1]}
+    lastChar=\${lastParam[-1]}
+    __${t}_debug "lastParam: \${lastParam}, lastChar: \${lastChar}"
+
+    # For zsh, when completing a flag with an = (e.g., ${t} -n=<TAB>)
+    # completions must be prefixed with the flag
+    setopt local_options BASH_REMATCH
+    if [[ "\${lastParam}" =~ '-.*=' ]]; then
+        # We are dealing with a flag with an =
+        flagPrefix="-P \${BASH_REMATCH}"
+    fi
+
+    # Prepare the command to obtain completions, ensuring arguments are quoted for eval
+    local -a args_to_quote=("\${(@)words[2,-1]}")
+    if [ "\${lastChar}" = "" ] && [ "\${args_to_quote[-1]}" != "" ]; then
+        # If the last parameter is complete (there is a space following it)
+        # We add an extra empty parameter so we can indicate this to the go completion code.
+        __${t}_debug "Adding extra empty parameter"
+        args_to_quote+=("")
+    fi
+
+    # Use Zsh's (q) flag to quote each argument safely for eval
+    local quoted_args=("\${(@q)args_to_quote}")
+
+    # Join the main command and the quoted arguments into a single string for eval
+    requestComp="${n} complete -- \${quoted_args[*]}"
+
+    __${t}_debug "About to call: eval \${requestComp}"
+
+    # Use eval to handle any environment variables and such
+    out=$(eval \${requestComp} 2>/dev/null)
+    __${t}_debug "completion output: \${out}"
+
+    # Extract the directive integer following a : from the last line
+    local lastLine
+    while IFS='\n' read -r line; do
+        lastLine=\${line}
+    done < <(printf "%s\n" "\${out[@]}")
+    __${t}_debug "last line: \${lastLine}"
+
+    if [ "\${lastLine[1]}" = : ]; then
+        directive=\${lastLine[2,-1]}
+        # Remove the directive including the : and the newline
+        local suffix
+        (( suffix=\${#lastLine}+2))
+        out=\${out[1,-$suffix]}
+    else
+        # There is no directive specified.  Leave $out as is.
+        __${t}_debug "No directive found.  Setting to default"
+        directive=0
+    fi
+
+    __${t}_debug "directive: \${directive}"
+    __${t}_debug "completions: \${out}"
+    __${t}_debug "flagPrefix: \${flagPrefix}"
+
+    if [ $((directive & shellCompDirectiveError)) -ne 0 ]; then
+        __${t}_debug "Completion received error. Ignoring completions."
+        return
+    fi
+
+    local activeHelpMarker="%"
+    local endIndex=\${#activeHelpMarker}
+    local startIndex=$((\${#activeHelpMarker}+1))
+    local hasActiveHelp=0
+    while IFS='\n' read -r comp; do
+        # Check if this is an activeHelp statement (i.e., prefixed with $activeHelpMarker)
+        if [ "\${comp[1,$endIndex]}" = "$activeHelpMarker" ];then
+            __${t}_debug "ActiveHelp found: $comp"
+            comp="\${comp[$startIndex,-1]}"
+            if [ -n "$comp" ]; then
+                compadd -x "\${comp}"
+                __${t}_debug "ActiveHelp will need delimiter"
+                hasActiveHelp=1
+            fi
+            continue
+        fi
+
+        if [ -n "$comp" ]; then
+            # If requested, completions are returned with a description.
+            # The description is preceded by a TAB character.
+            # For zsh's _describe, we need to use a : instead of a TAB.
+            # We first need to escape any : as part of the completion itself.
+            comp=\${comp//:/\\:}
+
+            local tab="$(printf '\\t')"
+            comp=\${comp//$tab/:}
+
+            __${t}_debug "Adding completion: \${comp}"
+            completions+=\${comp}
+            lastComp=$comp
+        fi
+    done < <(printf "%s\n" "\${out[@]}")
+
+    # Add a delimiter after the activeHelp statements, but only if:
+    # - there are completions following the activeHelp statements, or
+    # - file completion will be performed (so there will be choices after the activeHelp)
+    if [ $hasActiveHelp -eq 1 ]; then
+        if [ \${#completions} -ne 0 ] || [ $((directive & shellCompDirectiveNoFileComp)) -eq 0 ]; then
+            __${t}_debug "Adding activeHelp delimiter"
+            compadd -x "--"
+            hasActiveHelp=0
+        fi
+    fi
+
+    if [ $((directive & shellCompDirectiveNoSpace)) -ne 0 ]; then
+        __${t}_debug "Activating nospace."
+        noSpace="-S ''"
+    fi
+
+    if [ $((directive & shellCompDirectiveKeepOrder)) -ne 0 ]; then
+        __${t}_debug "Activating keep order."
+        keepOrder="-V"
+    fi
+
+    if [ $((directive & shellCompDirectiveFilterFileExt)) -ne 0 ]; then
+        # File extension filtering
+        local filteringCmd
+        filteringCmd='_files'
+        for filter in \${completions[@]}; do
+            if [ \${filter[1]} != '*' ]; then
+                # zsh requires a glob pattern to do file filtering
+                filter="\\*.$filter"
+            fi
+            filteringCmd+=" -g $filter"
+        done
+        filteringCmd+=" \${flagPrefix}"
+
+        __${t}_debug "File filtering command: $filteringCmd"
+        _arguments '*:filename:'"$filteringCmd"
+    elif [ $((directive & shellCompDirectiveFilterDirs)) -ne 0 ]; then
+        # File completion for directories only
+        local subdir
+        subdir="\${completions[1]}"
+        if [ -n "$subdir" ]; then
+            __${t}_debug "Listing directories in $subdir"
+            pushd "\${subdir}" >/dev/null 2>&1
+        else
+            __${t}_debug "Listing directories in ."
+        fi
+
+        local result
+        _arguments '*:dirname:_files -/'" \${flagPrefix}"
+        result=$?
+        if [ -n "$subdir" ]; then
+            popd >/dev/null 2>&1
+        fi
+        return $result
+    else
+        __${t}_debug "Calling _describe"
+        if eval _describe $keepOrder "completions" completions -Q \${flagPrefix} \${noSpace}; then
+            __${t}_debug "_describe found some completions"
+
+            # Return the success of having called _describe
+            return 0
+        else
+            __${t}_debug "_describe did not find completions."
+            __${t}_debug "Checking if we should do file completion."
+            if [ $((directive & shellCompDirectiveNoFileComp)) -ne 0 ]; then
+                __${t}_debug "deactivating file completion"
+
+                # Return 0 to indicate completion is finished and prevent zsh from
+                # trying other completion algorithms (which could cause hanging).
+                # We use NoFileComp directive to explicitly disable file completion.
+                return 0
+            else
+                # Perform file completion
+                __${t}_debug "Activating file completion"
+
+                # We must return the result of this command, so it must be the
+                # last command, or else we must store its result to return it.
+                _arguments '*:filename:_files'" \${flagPrefix}"
+            fi
+        fi
+    fi
+}
+
+# don't run the completion function when being sourced or eval-ed
+if [ "\${funcstack[1]}" = "_${t}" ]; then
+    _${t}
+fi
+`;
+}
+function n(t, n) {
+	let r = t.replace(/[-:]/g, `_`);
+	return `# bash completion for ${t}
+
+# Define shell completion directives
+readonly ShellCompDirectiveError=${a.ShellCompDirectiveError}
+readonly ShellCompDirectiveNoSpace=${a.ShellCompDirectiveNoSpace}
+readonly ShellCompDirectiveNoFileComp=${a.ShellCompDirectiveNoFileComp}
+readonly ShellCompDirectiveFilterFileExt=${a.ShellCompDirectiveFilterFileExt}
+readonly ShellCompDirectiveFilterDirs=${a.ShellCompDirectiveFilterDirs}
+readonly ShellCompDirectiveKeepOrder=${a.ShellCompDirectiveKeepOrder}
+
+# Function to debug completion
+__${r}_debug() {
+    if [[ -n \${BASH_COMP_DEBUG_FILE:-} ]]; then
+        echo "$*" >> "\${BASH_COMP_DEBUG_FILE}"
+    fi
+}
+
+# Function to handle completions
+__${r}_complete() {
+    local cur prev words cword
+    _get_comp_words_by_ref -n "=:" cur prev words cword
+
+    local requestComp out directive
+    
+    # Build the command to get completions
+    requestComp="${n} complete -- \${words[@]:1}"
+    
+    # Add an empty parameter if the last parameter is complete
+    if [[ -z "$cur" ]]; then
+        requestComp="$requestComp ''"
+    fi
+    
+    # Get completions from the program
+    out=$(eval "$requestComp" 2>/dev/null)
+    
+    # Extract directive if present
+    directive=0
+    if [[ "$out" == *:* ]]; then
+        directive=\${out##*:}
+        out=\${out%:*}
+    fi
+    
+    # Process completions based on directive
+    if [[ $((directive & $ShellCompDirectiveError)) -ne 0 ]]; then
+        # Error, no completion
+        return
+    fi
+    
+    # Apply directives
+    if [[ $((directive & $ShellCompDirectiveNoSpace)) -ne 0 ]]; then
+        compopt -o nospace
+    fi
+    if [[ $((directive & $ShellCompDirectiveKeepOrder)) -ne 0 ]]; then
+        compopt -o nosort
+    fi
+    if [[ $((directive & $ShellCompDirectiveNoFileComp)) -ne 0 ]]; then
+        compopt +o default
+    fi
+    
+    # Handle file extension filtering
+    if [[ $((directive & $ShellCompDirectiveFilterFileExt)) -ne 0 ]]; then
+        local filter=""
+        for ext in $out; do
+            filter="$filter|$ext"
+        done
+        filter="\\.($filter)"
+        compopt -o filenames
+        COMPREPLY=( $(compgen -f -X "!$filter" -- "$cur") )
+        return
+    fi
+    
+    # Handle directory filtering
+    if [[ $((directive & $ShellCompDirectiveFilterDirs)) -ne 0 ]]; then
+        compopt -o dirnames
+        COMPREPLY=( $(compgen -d -- "$cur") )
+        return
+    fi
+    
+    # Process completions
+    local IFS=$'\\n'
+    local tab=$(printf '\\t')
+    
+    # Parse completions with descriptions
+    local completions=()
+    while read -r comp; do
+        if [[ "$comp" == *$tab* ]]; then
+            # Split completion and description
+            local value=\${comp%%$tab*}
+            local desc=\${comp#*$tab}
+            completions+=("$value")
+        else
+            completions+=("$comp")
+        fi
+    done <<< "$out"
+    
+    # Return completions
+    COMPREPLY=( $(compgen -W "\${completions[*]}" -- "$cur") )
+}
+
+# Register completion function
+complete -F __${r}_complete ${t}
+`;
+}
+function r(t, n) {
+	let r = t.replace(/[-:]/g, `_`), i = a.ShellCompDirectiveError, a$7 = a.ShellCompDirectiveNoSpace, o = a.ShellCompDirectiveNoFileComp, s = a.ShellCompDirectiveFilterFileExt, c = a.ShellCompDirectiveFilterDirs;
+	return `# fish completion for ${t} -*- shell-script -*-
+
+function __${r}_debug
+    set -l file "$BASH_COMP_DEBUG_FILE"
+    if test -n "$file"
+        echo "$argv" >> $file
+    end
+end
+
+function __${r}_perform_completion
+    __${r}_debug "Starting __${r}_perform_completion"
+
+    # Extract all args except the last one
+    set -l args (commandline -opc)
+    # Extract the token currently being completed (may be empty on a trailing space)
+    set -l lastArg (commandline -ct)
+
+    __${r}_debug "args: $args"
+    __${r}_debug "last arg: $lastArg"
+
+    # Pass each arg as its own token (no string join/eval, which would collapse multi-segment paths); quote "$lastArg" so an empty trailing token is still sent.
+    __${r}_debug "Calling ${n} complete -- $args[2..-1] $lastArg"
+    set -l results (${n} complete -- $args[2..-1] "$lastArg" 2> /dev/null)
+
+    # Some programs may output extra empty lines after the directive.
+    # Let's ignore them or else it will break completion.
+    # Ref: https://github.com/spf13/cobra/issues/1279
+    for line in $results[-1..1]
+        if test (string trim -- $line) = ""
+            # Found an empty line, remove it
+            set results $results[1..-2]
+        else
+            # Found non-empty line, we have our proper output
+            break
+        end
+    end
+
+    set -l comps $results[1..-2]
+    set -l directiveLine $results[-1]
+
+    # For Fish, when completing a flag with an = (e.g., <program> -n=<TAB>)
+    # completions must be prefixed with the flag
+    set -l flagPrefix (string match -r -- '-.*=' "$lastArg")
+
+    __${r}_debug "Comps: $comps"
+    __${r}_debug "DirectiveLine: $directiveLine"
+    __${r}_debug "flagPrefix: $flagPrefix"
+
+    for comp in $comps
+        printf "%s%s\\n" "$flagPrefix" "$comp"
+    end
+
+    printf "%s\\n" "$directiveLine"
+end
+
+# This function limits calls to __${r}_perform_completion, by caching the result
+function __${r}_perform_completion_once
+    __${r}_debug "Starting __${r}_perform_completion_once"
+
+    if test -n "$__${r}_perform_completion_once_result"
+        __${r}_debug "Seems like a valid result already exists, skipping __${r}_perform_completion"
+        return 0
+    end
+
+    set --global __${r}_perform_completion_once_result (__${r}_perform_completion)
+    if test -z "$__${r}_perform_completion_once_result"
+        __${r}_debug "No completions, probably due to a failure"
+        return 1
+    end
+
+    __${r}_debug "Performed completions and set __${r}_perform_completion_once_result"
+    return 0
+end
+
+# This function is used to clear the cached result after completions are run
+function __${r}_clear_perform_completion_once_result
+    __${r}_debug ""
+    __${r}_debug "========= clearing previously set __${r}_perform_completion_once_result variable =========="
+    set --erase __${r}_perform_completion_once_result
+    __${r}_debug "Successfully erased the variable __${r}_perform_completion_once_result"
+end
+
+function __${r}_requires_order_preservation
+    __${r}_debug ""
+    __${r}_debug "========= checking if order preservation is required =========="
+
+    __${r}_perform_completion_once
+    if test -z "$__${r}_perform_completion_once_result"
+        __${r}_debug "Error determining if order preservation is required"
+        return 1
+    end
+
+    set -l directive (string sub --start 2 $__${r}_perform_completion_once_result[-1])
+    __${r}_debug "Directive is: $directive"
+
+    set -l shellCompDirectiveKeepOrder ${a.ShellCompDirectiveKeepOrder}
+    set -l keeporder (math (math --scale 0 $directive / $shellCompDirectiveKeepOrder) % 2)
+    __${r}_debug "Keeporder is: $keeporder"
+
+    if test $keeporder -ne 0
+        __${r}_debug "This does require order preservation"
+        return 0
+    end
+
+    __${r}_debug "This doesn't require order preservation"
+    return 1
+end
+
+# This function does two things:
+# - Obtain the completions and store them in the global __${r}_comp_results
+# - Return false if file completion should be performed
+function __${r}_prepare_completions
+    __${r}_debug ""
+    __${r}_debug "========= starting completion logic =========="
+
+    # Start fresh
+    set --erase __${r}_comp_results
+
+    __${r}_perform_completion_once
+    __${r}_debug "Completion results: $__${r}_perform_completion_once_result"
+
+    if test -z "$__${r}_perform_completion_once_result"
+        __${r}_debug "No completion, probably due to a failure"
+        # Might as well do file completion, in case it helps
+        return 1
+    end
+
+    set -l directive (string sub --start 2 $__${r}_perform_completion_once_result[-1])
+    set --global __${r}_comp_results $__${r}_perform_completion_once_result[1..-2]
+
+    __${r}_debug "Completions are: $__${r}_comp_results"
+    __${r}_debug "Directive is: $directive"
+
+    set -l shellCompDirectiveError ${i}
+    set -l shellCompDirectiveNoSpace ${a$7}
+    set -l shellCompDirectiveNoFileComp ${o}
+    set -l shellCompDirectiveFilterFileExt ${s}
+    set -l shellCompDirectiveFilterDirs ${c}
+
+    if test -z "$directive"
+        set directive 0
+    end
+
+    set -l compErr (math (math --scale 0 $directive / $shellCompDirectiveError) % 2)
+    if test $compErr -eq 1
+        __${r}_debug "Received error directive: aborting."
+        # Might as well do file completion, in case it helps
+        return 1
+    end
+
+    set -l filefilter (math (math --scale 0 $directive / $shellCompDirectiveFilterFileExt) % 2)
+    set -l dirfilter (math (math --scale 0 $directive / $shellCompDirectiveFilterDirs) % 2)
+    if test $filefilter -eq 1; or test $dirfilter -eq 1
+        __${r}_debug "File extension filtering or directory filtering not supported"
+        # Do full file completion instead
+        return 1
+    end
+
+    set -l nospace (math (math --scale 0 $directive / $shellCompDirectiveNoSpace) % 2)
+    set -l nofiles (math (math --scale 0 $directive / $shellCompDirectiveNoFileComp) % 2)
+
+    __${r}_debug "nospace: $nospace, nofiles: $nofiles"
+
+    # If we want to prevent a space, or if file completion is NOT disabled,
+    # we need to count the number of valid completions.
+    # To do so, we will filter on prefix as the completions we have received
+    # may not already be filtered so as to allow fish to match on different
+    # criteria than the prefix.
+    if test $nospace -ne 0; or test $nofiles -eq 0
+        set -l prefix (commandline -t | string escape --style=regex)
+        __${r}_debug "prefix: $prefix"
+
+        set -l completions (string match -r -- "^$prefix.*" $__${r}_comp_results)
+        set --global __${r}_comp_results $completions
+        __${r}_debug "Filtered completions are: $__${r}_comp_results"
+
+        # Important not to quote the variable for count to work
+        set -l numComps (count $__${r}_comp_results)
+        __${r}_debug "numComps: $numComps"
+
+        if test $numComps -eq 1; and test $nospace -ne 0
+            # We must first split on \\t to get rid of the descriptions to be
+            # able to check what the actual completion will be.
+            # We don't need descriptions anyway since there is only a single
+            # real completion which the shell will expand immediately.
+            set -l split (string split --max 1 "\\t" $__${r}_comp_results[1])
+
+            # Fish won't add a space if the completion ends with any
+            # of the following characters: @=/:.,
+            set -l lastChar (string sub -s -1 -- $split)
+            if not string match -r -q "[@=/:.,]" -- "$lastChar"
+                # In other cases, to support the "nospace" directive we trick the shell
+                # by outputting an extra, longer completion.
+                __${r}_debug "Adding second completion to perform nospace directive"
+                set --global __${r}_comp_results $split[1] $split[1].
+                __${r}_debug "Completions are now: $__${r}_comp_results"
+            end
+        end
+
+        if test $numComps -eq 0; and test $nofiles -eq 0
+            # To be consistent with bash and zsh, we only trigger file
+            # completion when there are no other completions
+            __${r}_debug "Requesting file completion"
+            return 1
+        end
+    end
+
+    return 0
+end
+
+# Since Fish completions are only loaded once the user triggers them, we trigger them ourselves
+# so we can properly delete any completions provided by another script.
+# Only do this if the program can be found, or else fish may print some errors; besides,
+# the existing completions will only be loaded if the program can be found.
+if type -q "${t}"
+    # The space after the program name is essential to trigger completion for the program
+    # and not completion of the program name itself.
+    # Also, we use '> /dev/null 2>&1' since '&>' is not supported in older versions of fish.
+    complete --do-complete "${t} " > /dev/null 2>&1
+end
+
+# Remove any pre-existing completions for the program since we will be handling all of them.
+complete -c ${t} -e
+
+# This will get called after the two calls below and clear the cached result
+complete -c ${t} -n '__${r}_clear_perform_completion_once_result'
+# The call to __${r}_prepare_completions will setup __${r}_comp_results
+# which provides the program's completion choices.
+# If this doesn't require order preservation, we don't use the -k flag
+complete -c ${t} -n 'not __${r}_requires_order_preservation && __${r}_prepare_completions' -f -a '$__${r}_comp_results'
+# Otherwise we use the -k flag
+complete -k -c ${t} -n '__${r}_requires_order_preservation && __${r}_prepare_completions' -f -a '$__${r}_comp_results'
+`;
+}
+function i$1(t, n) {
+	let r = t.replace(/[-:]/g, `_`);
+	return `# powershell completion for ${t} -*- shell-script -*-
+
+  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    function __${t}_debug {
+        if ($env:BASH_COMP_DEBUG_FILE) {
+            "$args" | Out-File -Append -FilePath "$env:BASH_COMP_DEBUG_FILE"
+        }
+    }
+
+    filter __${t}_escapeStringWithSpecialChars {
+        $_ -replace '\\s|#|@|\\$|;|,|''|\\{|\\}|\\(|\\)|"|\\||<|>|&','\`$&'
+    }
+
+[scriptblock]$__${r}CompleterBlock = {
+    param(
+            $WordToComplete,
+            $CommandAst,
+            $CursorPosition
+        )
+
+    # Get the current command line and convert into a string
+    $Command = $CommandAst.CommandElements
+    $Command = "$Command"
+
+    __${t}_debug ""
+    __${t}_debug "========= starting completion logic =========="
+    __${t}_debug "WordToComplete: $WordToComplete Command: $Command CursorPosition: $CursorPosition"
+
+    # The user could have moved the cursor backwards on the command-line.
+    # We need to trigger completion from the $CursorPosition location, so we need
+    # to truncate the command-line ($Command) up to the $CursorPosition location.
+    # Make sure the $Command is longer then the $CursorPosition before we truncate.
+    # This happens because the $Command does not include the last space.
+    if ($Command.Length -gt $CursorPosition) {
+        $Command = $Command.Substring(0, $CursorPosition)
+    }
+    __${t}_debug "Truncated command: $Command"
+
+    $ShellCompDirectiveError=${a.ShellCompDirectiveError}
+    $ShellCompDirectiveNoSpace=${a.ShellCompDirectiveNoSpace}
+    $ShellCompDirectiveNoFileComp=${a.ShellCompDirectiveNoFileComp}
+    $ShellCompDirectiveFilterFileExt=${a.ShellCompDirectiveFilterFileExt}
+    $ShellCompDirectiveFilterDirs=${a.ShellCompDirectiveFilterDirs}
+    $ShellCompDirectiveKeepOrder=${a.ShellCompDirectiveKeepOrder}
+
+    # Prepare the command to request completions for the program.
+    # Split the command at the first space to separate the program and arguments.
+    $Program, $Arguments = $Command.Split(" ", 2)
+
+    $QuotedArgs = ($Arguments -split ' ' | ForEach-Object { "'" + ($_ -replace "'", "''") + "'" }) -join ' '
+    __${t}_debug "QuotedArgs: $QuotedArgs"
+
+    $RequestComp = "& ${n} complete '--' $QuotedArgs"
+    __${t}_debug "RequestComp: $RequestComp"
+
+    # we cannot use $WordToComplete because it
+    # has the wrong values if the cursor was moved
+    # so use the last argument
+    if ($WordToComplete -ne "" ) {
+        $WordToComplete = $Arguments.Split(" ")[-1]
+    }
+    __${t}_debug "New WordToComplete: $WordToComplete"
+
+
+    # Check for flag with equal sign
+    $IsEqualFlag = ($WordToComplete -Like "--*=*" )
+    if ( $IsEqualFlag ) {
+        __${t}_debug "Completing equal sign flag"
+        # Remove the flag part
+        $Flag, $WordToComplete = $WordToComplete.Split("=", 2)
+    }
+    $HasTrailingEmptyArg = $QuotedArgs -match "(^| )''$"
+    __${t}_debug "HasTrailingEmptyArg: $HasTrailingEmptyArg"
+    
+    if ( $WordToComplete -eq "" -And ( -Not $IsEqualFlag ) -And ( -Not $HasTrailingEmptyArg )) {
+        # If the last parameter is complete (there is a space following it)
+        # We add an extra empty parameter so we can indicate this to the go method.
+        __${t}_debug "Adding extra empty parameter"
+        # PowerShell 7.2+ changed the way how the arguments are passed to executables,
+        # so for pre-7.2 or when Legacy argument passing is enabled we need to use
+        if ($PSVersionTable.PsVersion -lt [version]'7.2.0' -or
+            ($PSVersionTable.PsVersion -lt [version]'7.3.0' -and -not [ExperimentalFeature]::IsEnabled("PSNativeCommandArgumentPassing")) -or
+            (($PSVersionTable.PsVersion -ge [version]'7.3.0' -or [ExperimentalFeature]::IsEnabled("PSNativeCommandArgumentPassing")) -and
+              $PSNativeCommandArgumentPassing -eq 'Legacy')) {
+             $RequestComp="$RequestComp" + ' \`"\`"'
+        } else {
+             $RequestComp = "$RequestComp" + ' ""'
+        }
+    }
+
+    __${t}_debug "Calling $RequestComp"
+    # First disable ActiveHelp which is not supported for Powershell
+    $env:ActiveHelp = 0
+
+    # call the command store the output in $out and redirect stderr and stdout to null
+    # $Out is an array contains each line per element
+    Invoke-Expression -OutVariable out "$RequestComp" 2>&1 | Out-Null
+
+    # get directive from last line
+    [int]$Directive = $Out[-1].TrimStart(':')
+    if ($Directive -eq "") {
+        # There is no directive specified
+        $Directive = 0
+    }
+    __${t}_debug "The completion directive is: $Directive"
+
+    # remove directive (last element) from out
+    $Out = $Out | Where-Object { $_ -ne $Out[-1] }
+    __${t}_debug "The completions are: $Out"
+
+    if (($Directive -band $ShellCompDirectiveError) -ne 0 ) {
+        # Error code.  No completion.
+        __${t}_debug "Received error from custom completion go code"
+        return
+    }
+
+    $Longest = 0
+    [Array]$Values = $Out | ForEach-Object {
+        # Split the output in name and description
+        $Name, $Description = $_.Split("\`t", 2)
+        __${t}_debug "Name: $Name Description: $Description"
+
+        # Look for the longest completion so that we can format things nicely
+        if ($Longest -lt $Name.Length) {
+            $Longest = $Name.Length
+        }
+
+        # Set the description to a one space string if there is none set.
+        # This is needed because the CompletionResult does not accept an empty string as argument
+        if (-Not $Description) {
+            $Description = " "
+        }
+        @{ Name = "$Name"; Description = "$Description" }
+    }
+
+
+    $Space = " "
+    if (($Directive -band $ShellCompDirectiveNoSpace) -ne 0 ) {
+        # remove the space here
+        __${t}_debug "ShellCompDirectiveNoSpace is called"
+        $Space = ""
+    }
+
+    if ((($Directive -band $ShellCompDirectiveFilterFileExt) -ne 0 ) -or
+       (($Directive -band $ShellCompDirectiveFilterDirs) -ne 0 ))  {
+        __${t}_debug "ShellCompDirectiveFilterFileExt ShellCompDirectiveFilterDirs are not supported"
+
+        # return here to prevent the completion of the extensions
+        return
+    }
+
+    $Values = $Values | Where-Object {
+        # filter the result
+        $_.Name -like "$WordToComplete*"
+
+        # Join the flag back if we have an equal sign flag
+        if ( $IsEqualFlag ) {
+            __${t}_debug "Join the equal sign flag back to the completion value"
+            $_.Name = $Flag + "=" + $_.Name
+        }
+    }
+
+    # we sort the values in ascending order by name if keep order isn't passed
+    if (($Directive -band $ShellCompDirectiveKeepOrder) -eq 0 ) {
+        $Values = $Values | Sort-Object -Property Name
+    }
+
+    if (($Directive -band $ShellCompDirectiveNoFileComp) -ne 0 ) {
+        __${t}_debug "ShellCompDirectiveNoFileComp is called"
+
+        if ($Values.Length -eq 0) {
+            # Just print an empty string here so the
+            # shell does not start to complete paths.
+            # We cannot use CompletionResult here because
+            # it does not accept an empty string as argument.
+            ""
+            return
+        }
+    }
+
+    # Get the current mode
+    $Mode = (Get-PSReadLineKeyHandler | Where-Object { $_.Key -eq "Tab" }).Function
+    __${t}_debug "Mode: $Mode"
+
+    $Values | ForEach-Object {
+
+        # store temporary because switch will overwrite $_
+        $comp = $_
+
+        # PowerShell supports three different completion modes
+        # - TabCompleteNext (default windows style - on each key press the next option is displayed)
+        # - Complete (works like bash)
+        # - MenuComplete (works like zsh)
+        # You set the mode with Set-PSReadLineKeyHandler -Key Tab -Function <mode>
+
+        # CompletionResult Arguments:
+        # 1) CompletionText text to be used as the auto completion result
+        # 2) ListItemText   text to be displayed in the suggestion list
+        # 3) ResultType     type of completion result
+        # 4) ToolTip        text for the tooltip with details about the object
+
+        switch ($Mode) {
+
+            # bash like
+            "Complete" {
+
+                if ($Values.Length -eq 1) {
+                    __${t}_debug "Only one completion left"
+
+                    # insert space after value
+                    [System.Management.Automation.CompletionResult]::new($($comp.Name | __${t}_escapeStringWithSpecialChars) + $Space, "$($comp.Name)", 'ParameterValue', "$($comp.Description)")
+
+                } else {
+                    # Add the proper number of spaces to align the descriptions
+                    while($comp.Name.Length -lt $Longest) {
+                        $comp.Name = $comp.Name + " "
+                    }
+
+                    # Check for empty description and only add parentheses if needed
+                    if ($($comp.Description) -eq " " ) {
+                        $Description = ""
+                    } else {
+                        $Description = "  ($($comp.Description))"
+                    }
+
+                    [System.Management.Automation.CompletionResult]::new("$($comp.Name)$Description", "$($comp.Name)$Description", 'ParameterValue', "$($comp.Description)")
+                }
+             }
+
+            # zsh like
+            "MenuComplete" {
+                # insert space after value
+                # MenuComplete will automatically show the ToolTip of
+                # the highlighted value at the bottom of the suggestions.
+                [System.Management.Automation.CompletionResult]::new($($comp.Name | __${t}_escapeStringWithSpecialChars) + $Space, "$($comp.Name)", 'ParameterValue', "$($comp.Description)")
+            }
+
+            # TabCompleteNext and in case we get something unknown
+            Default {
+                # Like MenuComplete but we don't want to add a space here because
+                # the user need to press space anyway to get the completion.
+                # Description will not be shown because that's not possible with TabCompleteNext
+                [System.Management.Automation.CompletionResult]::new($($comp.Name | __${t}_escapeStringWithSpecialChars), "$($comp.Name)", 'ParameterValue', "$($comp.Description)")
+            }
+        }
+
+    }
+}
+
+Register-ArgumentCompleter -CommandName '${t}' -ScriptBlock $__${r}CompleterBlock
+`;
+}
+var init_powershell_C1q3FW2e = __esmMin((() => {
+	init_dist();
+})), a, o, s, c, l;
+var init_dist = __esmMin((() => {
+	init_powershell_C1q3FW2e();
+	a = {
+		ShellCompDirectiveError: 1,
+		ShellCompDirectiveNoSpace: 2,
+		ShellCompDirectiveNoFileComp: 4,
+		ShellCompDirectiveFilterFileExt: 8,
+		ShellCompDirectiveFilterDirs: 16,
+		ShellCompDirectiveKeepOrder: 32,
+		shellCompDirectiveMaxValue: 64,
+		ShellCompDirectiveDefault: 0
+	};
+	o = class {
+		name;
+		variadic;
+		command;
+		handler;
+		constructor(e, t, n, r = !1) {
+			this.command = e, this.name = t, this.handler = n, this.variadic = r;
+		}
+	};
+	s = class {
+		value;
+		description;
+		command;
+		handler;
+		alias;
+		isBoolean;
+		constructor(e, t, n, r, i, a) {
+			this.command = e, this.value = t, this.description = n, this.handler = r, this.alias = i, this.isBoolean = a;
+		}
+	};
+	c = class {
+		value;
+		description;
+		options = /* @__PURE__ */ new Map();
+		arguments = /* @__PURE__ */ new Map();
+		parent;
+		constructor(e, t) {
+			this.value = e, this.description = t;
+		}
+		option(e, t, n, r) {
+			let i, a, o;
+			typeof n == `function` ? (i = n, a = r, o = !1) : typeof n == `string` ? (i = void 0, a = n, o = !0) : (i = void 0, a = void 0, o = !0);
+			let c = new s(this, e, t, i, a, o);
+			return this.options.set(e, c), this;
+		}
+		argument(e, t, n = !1) {
+			let r = new o(this, e, t, n);
+			return this.arguments.set(e, r), this;
+		}
+	};
+	l = class extends c {
+		commands = /* @__PURE__ */ new Map();
+		completions = [];
+		directive = a.ShellCompDirectiveDefault;
+		constructor() {
+			super(``, ``);
+		}
+		command(e, t) {
+			let n = new c(e, t);
+			return this.commands.set(e, n), n;
+		}
+		stripOptions(e) {
+			let t = [], n = 0;
+			for (; n < e.length;) {
+				let r = e[n];
+				if (r.startsWith(`-`)) {
+					n++;
+					let t = !1, i = this.findOption(this, r);
+					if (i) t = i.isBoolean ?? !1;
+					else for (let [, e] of this.commands) {
+						let n = this.findOption(e, r);
+						if (n) {
+							t = n.isBoolean ?? !1;
+							break;
+						}
+					}
+					!t && n < e.length && !e[n].startsWith(`-`) && n++;
+				} else t.push(r), n++;
+			}
+			return t;
+		}
+		matchCommand(e) {
+			e = this.stripOptions(e);
+			let t = [], n = [], r = null;
+			for (let i = 0; i < e.length; i++) {
+				let a = e[i];
+				t.push(a);
+				let o = this.commands.get(t.join(` `));
+				if (o) r = o;
+				else {
+					n = e.slice(i, e.length);
+					break;
+				}
+			}
+			return [r || this, n];
+		}
+		shouldCompleteFlags(e, t) {
+			if (t.startsWith(`-`)) return !0;
+			if (e?.startsWith(`-`)) {
+				let t = this.findOption(this, e);
+				if (!t) {
+					for (let [, n] of this.commands) if (t = this.findOption(n, e), t) break;
+				}
+				return !(t && t.isBoolean);
+			}
+			return !1;
+		}
+		shouldCompleteCommands(e) {
+			return !e.startsWith(`-`);
+		}
+		handleFlagCompletion(e, t, n, r) {
+			let i;
+			if (n.includes(`=`)) {
+				let [e] = n.split(`=`);
+				i = e;
+			} else if (r?.startsWith(`-`)) {
+				let t = this.findOption(e, r);
+				t && !t.isBoolean && (i = r);
+			}
+			if (i) {
+				let t = this.findOption(e, i);
+				if (t?.handler) {
+					let n = [];
+					t.handler.call(t, (e, t) => n.push({
+						value: e,
+						description: t
+					}), e.options), this.completions = n;
+				}
+				return;
+			}
+			if (n.startsWith(`-`)) {
+				let t = n.startsWith(`-`) && !n.startsWith(`--`), r = n.replace(/^-+/, ``);
+				for (let [i, a] of e.options) t && a.alias && `-${a.alias}`.startsWith(n) ? this.completions.push({
+					value: `-${a.alias}`,
+					description: a.description
+				}) : !t && i.startsWith(r) && this.completions.push({
+					value: `--${i}`,
+					description: a.description
+				});
+			}
+		}
+		findOption(e, t) {
+			let n = e.options.get(t);
+			if (n || (n = e.options.get(t.replace(/^-+/, ``)), n)) return n;
+			for (let [n, r] of e.options) if (r.alias && `-${r.alias}` === t) return r;
+		}
+		handleCommandCompletion(e, t) {
+			let n = this.stripOptions(e);
+			for (let [e, r] of this.commands) {
+				if (e === ``) continue;
+				let i = e.split(` `);
+				i.slice(0, n.length).every((e, t) => e === n[t]) && i[n.length]?.startsWith(t) && this.completions.push({
+					value: i[n.length],
+					description: r.description
+				});
+			}
+		}
+		handlePositionalCompletion(e, t) {
+			let n = this.stripOptions(t), r = e.value.split(` `).length, i = Math.max(0, n.length - r), a = Array.from(e.arguments.entries());
+			if (a.length > 0) {
+				let t;
+				if (i < a.length) {
+					let [e, n] = a[i];
+					t = n;
+				} else {
+					let e = a[a.length - 1][1];
+					e.variadic && (t = e);
+				}
+				if (t && t.handler && typeof t.handler == `function`) {
+					let n = [];
+					t.handler.call(t, (e, t) => n.push({
+						value: e,
+						description: t
+					}), e.options), this.completions.push(...n);
+				}
+			}
+		}
+		complete(e) {
+			this.directive = a.ShellCompDirectiveNoFileComp;
+			let t = /* @__PURE__ */ new Set();
+			this.completions.filter((e) => t.has(e.value) ? !1 : (t.add(e.value), !0)).filter((t) => {
+				if (e.includes(`=`)) {
+					let [, n] = e.split(`=`);
+					return t.value.startsWith(n);
+				}
+				return t.value.startsWith(e);
+			}).forEach((e) => console.log(`${e.value}\t${e.description ?? ``}`)), console.log(`:${this.directive}`);
+		}
+		parse(e) {
+			this.completions = [];
+			let t = e[e.length - 1] === ``;
+			t && e.pop();
+			let n = e[e.length - 1] || ``, r = e.slice(0, -1);
+			t && (n !== `` && r.push(n), n = ``);
+			let [i] = this.matchCommand(r), a = r[r.length - 1];
+			this.shouldCompleteFlags(a, n) ? this.handleFlagCompletion(i, r, n, a) : (this.shouldCompleteCommands(n) && this.handleCommandCompletion(r, n), i && i.arguments.size > 0 && this.handlePositionalCompletion(i, r)), this.complete(n);
+		}
+		setup(a, o, s) {
+			switch (i(s === `zsh` || s === `bash` || s === `fish` || s === `powershell`, `Unsupported shell`), s) {
+				case `zsh`: {
+					let t$5 = t(a, o);
+					console.log(t$5);
+					break;
+				}
+				case `bash`: {
+					let e = n(a, o);
+					console.log(e);
+					break;
+				}
+				case `fish`: {
+					let e = r(a, o);
+					console.log(e);
+					break;
+				}
+				case `powershell`: {
+					let e = i$1(a, o);
+					console.log(e);
+					break;
+				}
+			}
+		}
+	};
+	new l();
+}));
+//#endregion
+//#region runtime/keybindings/completion.ts
+var completion_exports = /* @__PURE__ */ __exportAll({ completeKeybindings: () => completeKeybindings });
+async function completeKeybindings(argv) {
+	const tab = new l();
+	const install = tab.command("install-offer", "Install an offer into advertised receivers");
+	const host = tab.command("host", "Install an owned advertised consumer");
+	for (const entry of [install, host]) {
+		entry.option("force-enable", "Invocation-only registration disabled override; masks remain vetoes");
+		entry.option("scope", "Invocation audience", (complete) => {
+			complete("user", "XDG user offers");
+			complete("system", "separate system offers");
+		});
+	}
+	if (argv[0] !== "--") {
+		const entry = process.argv[1];
+		const executable = `${shellQuote(process.execPath)} ${shellQuote(entry)}${basename(entry).startsWith("compfuzor-runtime.") ? " keybindings" : ""}`;
+		tab.setup("compfuzor-keybindings", executable, argv[0] ?? "bash");
+		return 0;
+	}
+	const words = argv.slice(1);
+	const scopeIndex = words.indexOf("--scope");
+	const scope = scopeIndex !== -1 && words[scopeIndex + 1] === "system" ? "system" : "user";
+	const view = await inspectRegistry(keybindingConsumers, registryPolicy(keybindingConsumers.collection, scope));
+	if (!view.complete) throw new Error("completion unavailable: consumer registry acquisition failed");
+	install.option("target", "Receiver identity", (complete) => {
+		for (const record of view.records.filter((entry) => entry.state === "active" || entry.state === "disabled")) complete(record.id, record.state === "disabled" ? "disabled; requires --force-enable" : record.payload?.adapter ?? record.state);
+	});
+	tab.parse(words);
+	return 0;
+}
+var init_completion = __esmMin((() => {
+	init_dist();
+	init_render();
+	init_registry$2();
+	init_policy();
+	init_read$1();
+}));
+//#endregion
+//#region runtime/keybindings/invocation.ts
+/** Domain batch admission. Receiver IDs are not native formats; membership commits remain per receiver. */
+var invocation_exports = /* @__PURE__ */ __exportAll({
+	admitKeybindingBatch: () => admitKeybindingBatch,
+	runAdmittedKeybindingBatch: () => runAdmittedKeybindingBatch
+});
+function selection(value) {
+	if (typeof value !== "object" || value === null || !("version" in value) || value.version !== 1 || !("receivers" in value)) throw new Error("invalid receiver selection policy");
+	if (value.receivers === null) return {
+		version: 1,
+		receivers: null
+	};
+	if (!Array.isArray(value.receivers)) throw new Error("selection receivers must be null or a list");
+	const seen = /* @__PURE__ */ new Set();
+	return {
+		version: 1,
+		receivers: value.receivers.map((raw) => {
+			if (!raw || typeof raw !== "object" || typeof raw.id !== "string" || seen.has(raw.id)) throw new Error("invalid/duplicate receiver selection");
+			seen.add(raw.id);
+			if (raw.context !== void 0 && (typeof raw.context !== "string" || !raw.context.trim())) throw new Error("invalid receiver context override");
+			if (raw.scope !== void 0 && raw.scope !== "user" && raw.scope !== "system") throw new Error("invalid receiver scope override");
+			return {
+				id: raw.id,
+				context: raw.context,
+				scope: raw.scope,
+				...raw.profile === void 0 ? {} : { profile: validatePathSelector(raw.profile, "receiver profile override") }
+			};
+		})
+	};
+}
+async function admitKeybindingBatch(request) {
+	const { values } = parseArgs({
+		args: request.args,
+		strict: true,
+		allowPositionals: false,
+		options: {
+			manifest: { type: "string" },
+			selection: { type: "string" },
+			target: {
+				type: "string",
+				multiple: true
+			},
+			scope: {
+				type: "string",
+				default: request.audience ?? "user"
+			},
+			context: { type: "string" },
+			profile: { type: "string" },
+			"profile-selector": { type: "string" },
+			"force-enable": {
+				type: "boolean",
+				default: false
+			},
+			mode: { type: "string" },
+			runner: { type: "string" }
+		}
+	});
+	if (values.scope !== "user" && values.scope !== "system") throw new Error("invalid keybinding scope");
+	if (request.audience && values.scope !== request.audience) throw new Error("batch audience override is not allowed");
+	const manifestPath = values.manifest ?? request.manifest;
+	if (!manifestPath) throw new Error("install-offer requires --manifest");
+	const manifestFile = await captureFile(resolve(manifestPath));
+	const manifestText = fileText(manifestFile);
+	if (manifestText === void 0) throw new Error("missing producer manifest");
+	const manifest = keybindingProviders.decode(JSON.parse(manifestText));
+	if (request.producer && manifest.producer !== request.producer) throw new Error("producer identity disagrees with declared operation");
+	const providerPolicy = registryPolicy(keybindingProviders.collection, values.scope);
+	const publicationRequest = {
+		domain: keybindingProviders,
+		policy: providerPolicy,
+		source: resolve(manifestPath)
+	};
+	const publicationPlan = await planRegistration(publicationRequest);
+	if (publicationPlan.disposition === "blocked") throw new Error(`provider publication blocked: ${publicationPlan.reason}`);
+	if (publicationPlan.effective.state === "masked") throw new Error("producer registration is masked");
+	if (publicationPlan.effective.state === "disabled" && !values["force-enable"]) throw new Error("producer registration is disabled; use --force-enable");
+	const guards = [manifestFile.guard];
+	if (manifest.enabled === false && !values["force-enable"]) throw new Error("producer offer is disabled; use --force-enable for invocation-only selection");
+	for (const resource of manifest.resources) guards.push((await captureFile(resource.path)).guard);
+	const policyPath = values.selection ?? request.selection;
+	const declared = policyPath ? selection(JSON.parse(await readFile(policyPath, "utf8"))) : {
+		version: 1,
+		receivers: null
+	};
+	if (policyPath) guards.push((await captureFile(resolve(policyPath))).guard);
+	const policy = request.policy ?? registryPolicy(keybindingConsumers.collection, values.scope);
+	if (policy.scope !== values.scope) throw new Error("registry scope mismatch");
+	const snapshot = await inspectRegistry(keybindingConsumers, policy);
+	if (!snapshot.complete) throw new Error("cannot admit receivers from an incomplete registry");
+	const requested = values.target;
+	if (requested && new Set(requested).size !== requested.length) throw new Error("duplicate receiver selection");
+	if (requested && declared.receivers && requested.some((id) => !declared.receivers.some((entry) => entry.id === id))) throw new Error("requested receiver is outside declared selection");
+	const explicit = requested ?? declared.receivers?.map((entry) => entry.id);
+	const candidates = explicit ? explicit.map((id) => lookup$1(snapshot, id)) : snapshot.records;
+	if ((values.profile || values["profile-selector"] || values.context) && candidates.length !== 1) throw new Error("profile/context override requires exactly one receiver");
+	const members = [];
+	for (const record of candidates) {
+		if (record.state === "masked") {
+			if (explicit) throw new Error(`receiver ${record.id} is masked`);
+			continue;
+		}
+		if (record.state === "disabled" && !values["force-enable"]) {
+			if (explicit) throw new Error(`receiver ${record.id} is disabled; use --force-enable`);
+			continue;
+		}
+		if (!record.payload || record.state === "invalid" || record.state === "conflict") throw new Error(`receiver ${record.id} is ${record.state}: ${record.error ?? "unusable registration"}`);
+		const consumer = record.payload;
+		if (consumer.adapter !== "niri" && consumer.adapter !== "umbriel") {
+			if (explicit) throw new Error(`unsupported receiver adapter ${consumer.adapter}`);
+			continue;
+		}
+		if (!manifest.targets.includes(consumer.adapter)) {
+			if (explicit) throw new Error(`producer does not support receiver ${record.id}'s adapter`);
+			continue;
+		}
+		const override = declared.receivers?.find((entry) => entry.id === record.id);
+		if (override?.scope && override.scope !== values.scope) throw new Error("receiver scope override disagrees with invocation audience");
+		const context = values.context ?? override?.context ?? consumer.defaultContext;
+		if (!consumer.contexts.includes(context)) throw new Error(`receiver ${record.id} does not advertise context ${context}`);
+		const profile = values.profile ?? resolvePathSelector(values["profile-selector"] ? JSON.parse(values["profile-selector"]) : override?.profile ?? consumer.profile, void 0, `receiver ${record.id} profile`);
+		const args = [
+			"--manifest",
+			resolve(manifestPath),
+			"--target",
+			consumer.adapter,
+			"--profile",
+			profile,
+			"--context",
+			context,
+			"--scope",
+			values.scope
+		];
+		if (values.mode) args.push("--mode", values.mode);
+		if (values.runner) args.push("--runner", values.runner);
+		const admitted = await admitKeybindingCommand("install", args, request.defaults, {
+			command: "install",
+			target: consumer.adapter,
+			audience: values.scope,
+			context,
+			producer: manifest.producer
+		});
+		admitted.manifest = {
+			version: 1,
+			producer: manifest.producer,
+			order: manifest.order,
+			resources: manifest.resources.map((entry) => ({ ...entry })),
+			targets: [...manifest.targets]
+		};
+		const registration = registryGuard(policy, record.source);
+		const descriptorGuard = (await captureFile(record.source.winner.path)).guard;
+		admitted.options.inputGuards = [...guards, descriptorGuard];
+		admitted.options.registryGuards = [registration];
+		members.push({
+			id: record.id,
+			originalState: record.state,
+			forced: record.state === "disabled" && values["force-enable"],
+			registry: registration,
+			admitted
+		});
+	}
+	if (members.length > 128) throw new Error("keybinding receiver batch exceeds admission bound");
+	for (let i = 0; i < members.length; i++) for (let j = 0; j < i; j++) {
+		const left = members[i].admitted.bound, right = members[j].admitted.bound;
+		if (await pathsSharePhysicalEntry(left.request.root.path, right.request.root.path) || await pathsSharePhysicalEntry(left.statePath, right.statePath)) throw new Error("selected receivers alias the same owned root/membership");
+	}
+	return {
+		version: 1,
+		kind: "keybinding-batch",
+		audience: values.scope,
+		forceEnable: values["force-enable"],
+		members,
+		guards,
+		publication: {
+			source: publicationRequest.source,
+			policy: providerPolicy,
+			plan: publicationPlan
+		}
+	};
+}
+async function runAdmittedKeybindingBatch(batch) {
+	await assertFileGuards(batch.guards);
+	await assertRegistryGuards(batch.members.map((member) => member.registry));
+	await applyRegistration({
+		domain: keybindingProviders,
+		policy: batch.publication.policy,
+		source: batch.publication.source
+	}, batch.publication.plan);
+	const provider = lookup$1(await inspectRegistry(keybindingProviders, batch.publication.policy), batch.publication.plan.id);
+	const providerGuard = registryGuard(batch.publication.policy, provider.source);
+	for (const member of batch.members) {
+		member.admitted.options.registryGuards = [...member.admitted.options.registryGuards ?? [], providerGuard];
+		console.log(`receiver ${member.id}: ${member.originalState}${member.forced ? " (forced for this invocation)" : ""}`);
+		const code = await runAdmittedKeybindingCommand(member.admitted);
+		if (code !== 0) return code;
+	}
+	return 0;
+}
+var init_invocation = __esmMin((() => {
+	init_capture$1();
+	init_context$1();
+	init_runtime();
+	init_delivery();
+	init_registry$2();
+	init_policy();
+	init_read$1();
+	init_guard();
+	init_register();
+}));
 //#endregion
 //#region files/config/keybindings/runtime.ts
 /**
@@ -15788,9 +29339,68 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 			group: { type: "string" },
 			mode: { type: "string" },
 			check: { type: "boolean" },
-			runner: { type: "string" }
+			runner: { type: "string" },
+			descriptor: { type: "string" },
+			"force-enable": {
+				type: "boolean",
+				default: false
+			}
 		}
 	});
+	let receiver;
+	let receiverProfile;
+	const registrationGuards = [];
+	const registrationFiles = [];
+	let publication;
+	if (values.descriptor) {
+		if (command !== "host") throw new Error("owned consumer descriptor applies only to host admission");
+		const file = await captureFile(values.descriptor);
+		const text = fileText(file);
+		if (text === void 0) throw new Error("missing owned consumer descriptor");
+		const own = keybindingConsumers.decode(JSON.parse(text));
+		if (own.audience !== values.scope) throw new Error("owned consumer audience mismatch");
+		const policy = registryPolicy(keybindingConsumers.collection, own.audience);
+		const publicationPlan = await planRegistration({
+			domain: keybindingConsumers,
+			policy,
+			source: values.descriptor
+		});
+		if (publicationPlan.disposition === "blocked") throw new Error(`owned receiver publication blocked: ${publicationPlan.reason}`);
+		publication = {
+			source: values.descriptor,
+			policy,
+			plan: publicationPlan
+		};
+		const view = await inspectRegistry(keybindingConsumers, policy);
+		if (!view.complete) throw new Error("incomplete consumer registry during host admission");
+		const record = view.records.find((entry) => entry.id === own.id);
+		if (record?.state === "masked") throw new Error(`receiver ${own.id} is masked`);
+		if (record && (record.state === "invalid" || record.state === "conflict")) throw new Error(`receiver ${own.id} is ${record.state}`);
+		const effective = record?.payload ?? own;
+		const state = record?.state === "disabled" || !record && own.enabled === false ? "disabled" : "active";
+		if (state === "disabled" && !values["force-enable"]) throw new Error(`receiver ${own.id} is disabled; use --force-enable`);
+		if (effective.adapter !== own.adapter || effective.audience !== own.audience) throw new Error("registered receiver disagrees with owned consumer");
+		receiverProfile = resolvePathSelector(effective.profile, void 0, "advertised host profile");
+		if (receiverProfile !== resolvePathSelector(own.profile, void 0, "owned host profile")) throw new Error("registered receiver redirects this owned host; select it through a producer instead");
+		if (!effective.contexts.includes(values.context)) throw new Error("host context is not advertised");
+		values.target ??= own.adapter;
+		if (values.target !== own.adapter) throw new Error("host native adapter mismatch");
+		registrationFiles.push(file.guard);
+		if (record) {
+			registrationGuards.push(registryGuard(policy, record.source));
+			registrationFiles.push((await captureFile(record.source.winner.path)).guard);
+		} else registrationGuards.push({
+			roots: [...policy.roots],
+			id: own.id,
+			expected: "missing"
+		});
+		receiver = {
+			id: own.id,
+			originalState: state,
+			forceEnable: values["force-enable"],
+			forced: state === "disabled" && values["force-enable"]
+		};
+	}
 	if (values.target !== "niri" && values.target !== "umbriel") throw new Error("explicit --target niri|umbriel required");
 	if (values.scope !== "user" && values.scope !== "system") throw new Error("--scope must be user or system");
 	if (binding) {
@@ -15809,7 +29419,8 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 	const runner = values.runner ?? defaults.runner;
 	if (!runner) throw new Error("installed CONFIG runner or --runner required");
 	if (values.profile && values["profile-selector"]) throw new Error("choose profile or profile-selector, not both");
-	const profilePath = values["profile-selector"] ? resolvePathSelector(JSON.parse(values["profile-selector"]), void 0, "consumer profile") : values.profile;
+	const profilePath = values["profile-selector"] ? resolvePathSelector(JSON.parse(values["profile-selector"]), void 0, "consumer profile") : values.profile ?? receiverProfile;
+	if (receiverProfile && profilePath !== receiverProfile) throw new Error("host profile override disagrees with advertised receiver");
 	const loaded = profilePath ? await loadProfile(profilePath) : { profile: defaultProfile(values.target) };
 	if (loaded.profile.target !== values.target) throw new Error("consumer profile target mismatch");
 	const options = {
@@ -15819,7 +29430,9 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 		runner,
 		validatorCommand: [...defaults.validatorCommand],
 		mode: values.mode ?? binding?.mode ?? (command === "host" ? "seed" : void 0),
-		check: values.check
+		check: values.check,
+		inputGuards: registrationFiles,
+		registryGuards: registrationGuards
 	};
 	const bound = bindProfile(options);
 	if (binding) {
@@ -15859,13 +29472,23 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 		options,
 		bound,
 		manifest,
-		group: values.group
+		group: values.group,
+		registrySelection: receiver,
+		publication
 	};
 }
 /** Reuse the admitted binding while keeping each complete domain operation's commit boundary. */
 async function runAdmittedKeybindingCommand(admitted) {
 	const { command, options, bound } = admitted;
-	return (command === "install" ? await installProducer(admitted.manifest, options, bound) : command === "host" ? await assembleHost(options, bound) : await toggleGroup(admitted.group, command === "enable", options, bound)).code;
+	await assertFileGuards(options.inputGuards ?? []);
+	await assertRegistryGuards(options.registryGuards ?? []);
+	const result = command === "install" ? await installProducer(admitted.manifest, options, bound) : command === "host" ? await assembleHost(options, bound) : await toggleGroup(admitted.group, command === "enable", options, bound);
+	if (result.code === 0 && admitted.publication) await applyRegistration({
+		domain: keybindingConsumers,
+		policy: admitted.publication.policy,
+		source: admitted.publication.source
+	}, admitted.publication.plan);
+	return result.code;
 }
 /**
 * Dispatch one explicit keybinding operation and return its process-style outcome.
@@ -15883,8 +29506,23 @@ async function runAdmittedKeybindingCommand(admitted) {
 * @throws On strict argument/protocol errors, scope/profile mismatch, invalid files
 * or delegated registration/preparation failures; the outer entry owns error reporting.
 */
-async function main$2(argv, defaults) {
+async function main$3(argv, defaults) {
 	const [command, ...args] = argv;
+	if (command === "complete") {
+		const { completeKeybindings } = await Promise.resolve().then(() => (init_completion(), completion_exports));
+		return completeKeybindings(args);
+	}
+	if (command === "install-offer") {
+		if (args.includes("--help") || args.includes("-h")) {
+			console.log("install-offer --manifest PATH [--selection POLICY] [--target RECEIVER ...] [--scope user|system] [--force-enable]\n--force-enable skips only registration disabled directives for this invocation; masks remain vetoes.");
+			return 0;
+		}
+		const { admitKeybindingBatch, runAdmittedKeybindingBatch } = await Promise.resolve().then(() => (init_invocation(), invocation_exports));
+		return runAdmittedKeybindingBatch(await admitKeybindingBatch({
+			args,
+			defaults
+		}));
+	}
 	if ([
 		"install",
 		"host",
@@ -15938,6 +29576,20 @@ async function main$2(argv, defaults) {
 	} else result = await assemble();
 	return result.code;
 }
+var init_runtime = __esmMin((() => {
+	init_capture$1();
+	init_policy();
+	init_read$1();
+	init_guard();
+	init_registry$2();
+	init_register();
+	init_processor();
+	init_closure();
+	init_consumer();
+	init_registration();
+	init_context$1();
+	init_membership();
+}));
 //#endregion
 //#region files/actions/model.ts
 /** Shared action data admission; context/recipe semantics remain in their domains. */
@@ -15977,11 +29629,36 @@ function domainStep(value) {
 		"profileSelector",
 		"mode",
 		"manifest",
-		"producer"
+		"producer",
+		"selection",
+		"descriptor"
 	], "domain step");
 	const id = named(raw.id, "operation ID");
-	const context = named(raw.context, "operation context");
 	const envelope = binPath(raw.envelope);
+	if (raw.domain === "keybindings" && raw.operation === "install-offer") {
+		knownKeys(raw, [
+			"kind",
+			"id",
+			"domain",
+			"operation",
+			"envelope",
+			"manifest",
+			"producer",
+			"selection"
+		], "registry producer operation");
+		if (typeof raw.manifest !== "string" || !raw.manifest || raw.selection !== void 0 && (typeof raw.selection !== "string" || !raw.selection)) fail$1("invalid registry producer locators");
+		return {
+			kind: "domain",
+			id,
+			domain: "keybindings",
+			operation: "install-offer",
+			envelope,
+			manifest: raw.manifest,
+			producer: named(raw.producer, "producer"),
+			...raw.selection === void 0 ? {} : { selection: raw.selection }
+		};
+	}
+	const context = named(raw.context, "operation context");
 	if (raw.domain !== "config" && raw.domain !== "keybindings") fail$1("unsupported action domain");
 	if (!(raw.domain === "config" ? [
 		"install",
@@ -15995,7 +29672,8 @@ function domainStep(value) {
 		"spec",
 		"profile",
 		"manifest",
-		"producer"
+		"producer",
+		"descriptor"
 	]) if (raw[key] !== void 0 && (typeof raw[key] !== "string" || !raw[key])) fail$1(`invalid domain ${key}`);
 	if (raw.mode !== void 0 && (raw.mode !== "assemble" || raw.operation !== "host")) fail$1("only host assembly can assert mode assemble");
 	if (raw.profile !== void 0 && raw.profileSelector !== void 0) fail$1("choose profile or profile selector");
@@ -16178,7 +29856,35 @@ async function runExecutable(path, argv, cwd, env) {
 //#endregion
 //#region files/actions/operations.ts
 /** Domain-local admission/execution is reused; this module only binds a plan invocation. */
+init_context$1();
+init_runtime();
+init_invocation();
 async function prepareOperation(step, audience, argv, deploymentDir, runtimePath) {
+	if (step.operation === "install-offer") {
+		if (argv.includes("--help") || argv.includes("-h")) return {
+			domain: "help",
+			message: "install-offer [--target RECEIVER ...] [--force-enable] [--profile-selector JSON] [--context ID]"
+		};
+		return {
+			domain: "keybindings-batch",
+			admitted: await admitKeybindingBatch({
+				args: argv,
+				manifest: step.manifest,
+				selection: step.selection,
+				producer: step.producer,
+				audience,
+				defaults: {
+					runner: resolve(deploymentDir, "bin/config/run.sh"),
+					validatorCommand: [
+						process.execPath,
+						runtimePath,
+						"keybindings",
+						"validate"
+					]
+				}
+			})
+		};
+	}
 	if (step.domain === "config") {
 		const invokedAs = `config-${step.operation}.sh`;
 		const args = [
@@ -16204,6 +29910,7 @@ async function prepareOperation(step, audience, argv, deploymentDir, runtimePath
 	if (step.profile) args.push("--profile", step.profile);
 	if (step.profileSelector) args.push("--profile-selector", JSON.stringify(step.profileSelector));
 	if (step.manifest) args.push("--manifest", step.manifest);
+	if (step.descriptor) args.push("--descriptor", step.descriptor);
 	return {
 		domain: "keybindings",
 		admitted: await admitKeybindingCommand(step.operation, [...args, ...argv], {
@@ -16229,6 +29936,16 @@ function verifyPreparedOperation(value, step, audience) {
 		if (typeof value.message !== "string") fail$1("invalid prepared help");
 		return;
 	}
+	if (step.operation === "install-offer") {
+		if (value.domain !== "keybindings-batch" || value.admitted.kind !== "keybinding-batch" || value.admitted.version !== 1 || value.admitted.audience !== audience || typeof value.admitted.forceEnable !== "boolean" || !Array.isArray(value.admitted.members) || value.admitted.members.length > 128) fail$1("invalid admitted receiver batch");
+		if (value.admitted.publication?.plan.id !== step.producer) fail$1("prepared prospective producer mismatch");
+		const ids = /* @__PURE__ */ new Set();
+		for (const member of value.admitted.members) {
+			if (ids.has(member.id) || member.admitted.command !== "install" || member.admitted.options.scope !== audience || member.admitted.options.profile.contexts[member.admitted.options.context]?.scope !== audience || member.admitted.manifest?.producer !== step.producer || !member.admitted.bound.request.root.path || !["active", "disabled"].includes(member.originalState) || member.forced !== (member.originalState === "disabled" && value.admitted.forceEnable) || member.originalState === "disabled" && !value.admitted.forceEnable) fail$1("prepared receiver member mismatch");
+			ids.add(member.id);
+		}
+		return;
+	}
 	if (value.domain !== step.domain) fail$1("prepared operation domain mismatch");
 	if (value.domain === "config") {
 		const context = getConfigContext(value.admitted.spec, value.admitted.contextName);
@@ -16245,6 +29962,7 @@ async function applyOperation(prepared) {
 		console.log(prepared.message);
 		return 0;
 	}
+	if (prepared.domain === "keybindings-batch") return runAdmittedKeybindingBatch(prepared.admitted);
 	return prepared.domain === "config" ? runAdmittedConfigCommand(prepared.admitted) : runAdmittedKeybindingCommand(prepared.admitted);
 }
 //#endregion
@@ -16640,7 +30358,7 @@ async function runAction(argv, invokedPath, entryUrl) {
 	}
 	if (argv[0] === "--help" || argv[0] === "-h") {
 		console.log(`Usage: ${basename(invokedPath)} [DOMAIN OPTIONS... | CHILD ARGS...]\n\nAudience: ${selection.audience}\nRuns in order:`);
-		for (const step of selection.family.plans[selection.audience]) console.log(`  ${step.kind === "domain" ? `${step.domain} ${step.operation} context=${step.context}` : step.kind === "action" ? `${step.action}-${selection.audience}.mjs` : step.path}`);
+		for (const step of selection.family.plans[selection.audience]) console.log(`  ${step.kind === "domain" ? `${step.domain} ${step.operation} ${"context" in step ? `context=${step.context}` : "registry selection"}` : step.kind === "action" ? `${step.action}-${selection.audience}.mjs` : step.path}`);
 		return { code: 0 };
 	}
 	await preflight(loaded, selection);
@@ -16698,7 +30416,7 @@ async function runAction(argv, invokedPath, entryUrl) {
 	}
 }
 /** Private bridge admission and single child runner; no public operation/context wrappers. */
-async function main$1(argv, deploymentDir, runtimePath) {
+async function main$2(argv, deploymentDir, runtimePath) {
 	const [command, ...args] = argv;
 	if (command === "capture-env" && args.length === 1) return { code: await captureEnvironment(args[0]) };
 	if (command === "admit" && args.length === 1) return { code: await admitRequest(args[0], deploymentDir, runtimePath) };
@@ -16749,11 +30467,1510 @@ function actionEntry(argv, invokedPath, entryUrl) {
 	});
 }
 //#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/maybe.js
+function Just(value) {
+	if (typeof value === "undefined") return { exists: true };
+	else return {
+		exists: true,
+		value
+	};
+}
+function Nothing() {
+	return nothing$2;
+}
+var nothing$2;
+var init_maybe = __esmMin((() => {
+	nothing$2 = { exists: false };
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/decode.js
+function multiple$1(decoder) {
+	return (input) => {
+		let decodings = input.map(decoder);
+		let result = [];
+		for (let i = 0; i < decodings.length; i++) {
+			let decoding = decodings[i];
+			for (let j = 0; j < decoding.length; j++) {
+				let row = result[j];
+				if (!row) row = result[j] = Just([]);
+				if (row.exists) {
+					let candidate = decoding[j];
+					if (candidate.exists) row.value[i] = candidate.value;
+					else result[j] = Nothing();
+				}
+			}
+		}
+		return result;
+	};
+}
+var number, scalar, boolean, numeric;
+var init_decode = __esmMin((() => {
+	init_maybe();
+	number = (value) => {
+		if (!numeric.test(value)) return [Nothing()];
+		let decoded = Number(value);
+		return Number.isFinite(decoded) ? [Just(decoded)] : [Nothing()];
+	};
+	scalar = (value) => {
+		return [...number(value), Just(value)];
+	};
+	boolean = (value) => {
+		if (value === "true") return [Just(true)];
+		if (value === "false") return [Just(false)];
+		return [Nothing()];
+	};
+	numeric = /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/pipeline.js
+function mark(element) {
+	return element;
+}
+function brand(element) {
+	return element;
+}
+var init_pipeline = __esmMin((() => {}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/param.js
+function param(start, ...elements) {
+	let zero = {
+		...start,
+		schema: unknown,
+		cardinality: "one",
+		cli: { read(tokens) {
+			return {
+				result: {
+					ok: true,
+					value: { exists: false },
+					issues: []
+				},
+				claim: tokens.claimAll(() => false)
+			};
+		} },
+		decode: scalar
+	};
+	return elements.reduce((value, element) => element(value), zero);
+}
+function schema(schema) {
+	return mark((param) => ({
+		...param,
+		schema
+	}));
+}
+var unknown;
+var init_param = __esmMin((() => {
+	init_decode();
+	init_pipeline();
+	unknown = { "~standard": {
+		version: 1,
+		vendor: "@bomb.sh/router",
+		validate: (value) => ({ value })
+	} };
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/argument.js
+function argument(named, ...elements) {
+	const added = elements.reduce((value, element) => element(value), param(named, positional));
+	return brand((route) => {
+		let phases = [...route.phases];
+		let phase = phases.pop();
+		phases.push({
+			...phase,
+			model: {
+				params: {
+					...phase.model.params,
+					[added.name]: added
+				},
+				steps: phase.model.steps.concat((current, bindings) => ({
+					ok: true,
+					value: {
+						...current,
+						[added.name]: bindings[added.name]
+					}
+				}))
+			}
+		});
+		return {
+			...route,
+			phases
+		};
+	});
+}
+function positional(param) {
+	return {
+		...param,
+		cli: {
+			read,
+			syntax: {
+				type: "argument",
+				label: `<${param.name.toUpperCase()}>`
+			}
+		}
+	};
+}
+function nothing$1(tokens) {
+	return {
+		claim: tokens.claimAll(() => false),
+		result: {
+			ok: true,
+			value: { exists: false },
+			issues: []
+		}
+	};
+}
+var read;
+var init_argument = __esmMin((() => {
+	init_param();
+	init_pipeline();
+	read = (tokens) => {
+		let claim = tokens.claimOne((token) => token.type === "word");
+		let [word] = claim.tokens;
+		return word ? {
+			claim,
+			result: {
+				ok: true,
+				value: {
+					exists: true,
+					value: word.text
+				},
+				issues: []
+			}
+		} : nothing$1(tokens);
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/command.js
+function command(start, ...elements) {
+	let zero = {
+		...start,
+		methods: ["help", "execute"],
+		phases: [{
+			model: {
+				params: {},
+				steps: []
+			},
+			routes: [],
+			values: [],
+			envs: []
+		}]
+	};
+	return elements.reduce((value, element) => element(value), zero);
+}
+var init_command = __esmMin((() => {}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/values.js
+function routeId$1(address) {
+	return `/${address.join("/")}`;
+}
+function claimId$1(address) {
+	return JSON.stringify(address);
+}
+function find(value, path) {
+	let current = value;
+	for (let key of path) {
+		if (current === null || typeof current !== "object" && typeof current !== "function" || !Object.hasOwn(current, key)) return { exists: false };
+		current = current[key];
+	}
+	return {
+		exists: true,
+		value: current
+	};
+}
+var Values;
+var init_values = __esmMin((() => {
+	Values = class Values {
+		mounts;
+		claims;
+		constructor(mounts = /* @__PURE__ */ new Map(), claims = /* @__PURE__ */ new Set()) {
+			this.mounts = mounts;
+			this.claims = claims;
+		}
+		mount(path, sources) {
+			if (sources.length === 0) return this;
+			const id = routeId$1(path);
+			return new Values(new Map([...this.mounts.entries(), [id, (this.mounts.get(id) ?? []).concat(sources)]]), this.claims);
+		}
+		claim({ route, address }) {
+			let id = claimId$1([...route, ...address]);
+			const nope = {
+				result: { exists: false },
+				rest: this
+			};
+			if (this.claims.has(id)) return nope;
+			for (let end = route.length; end >= 0; end--) {
+				let mountId = routeId$1(route.slice(0, end));
+				let sources = this.mounts.get(mountId) ?? [];
+				for (let { name, value } of sources) {
+					let result = find(value, [...route.slice(end), ...address]);
+					if (result.exists) {
+						let rest = new Values(this.mounts, /* @__PURE__ */ new Set([...this.claims, id]));
+						return {
+							result: {
+								exists: true,
+								value: {
+									source: name,
+									address,
+									value: result.value
+								}
+							},
+							rest
+						};
+					}
+				}
+			}
+			return nope;
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/definition.js
+function name(name) {
+	return { name };
+}
+var init_definition = __esmMin((() => {}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/env.js
+function routeId(path) {
+	return `/${path.join("/")}`;
+}
+function claimId(address) {
+	return JSON.stringify(address);
+}
+function envKey(address) {
+	return address.map(normalize$1).filter(Boolean).join("_");
+}
+function normalize$1(value) {
+	return value.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").replace(/[^A-Za-z\d]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
+}
+var Envs;
+var init_env = __esmMin((() => {
+	Envs = class Envs {
+		mounts;
+		claims;
+		constructor(mounts = /* @__PURE__ */ new Map(), claims = /* @__PURE__ */ new Set()) {
+			this.mounts = mounts;
+			this.claims = claims;
+		}
+		mount(path, sources) {
+			if (sources.length === 0) return this;
+			let id = routeId(path);
+			return new Envs(new Map([...this.mounts.entries(), [id, (this.mounts.get(id) ?? []).concat(sources)]]), this.claims);
+		}
+		claim({ route, address, key = envKey([...route, ...address]) }) {
+			let id = claimId([...route, ...address]);
+			let nope = {
+				result: { exists: false },
+				rest: this
+			};
+			if (this.claims.has(id)) return nope;
+			for (let end = route.length; end >= 0; end--) {
+				let mount = routeId(route.slice(0, end));
+				let sources = this.mounts.get(mount) ?? [];
+				for (let { name, value } of sources) {
+					if (!Object.hasOwn(value, key) || typeof value[key] === "undefined") continue;
+					let rest = new Envs(this.mounts, /* @__PURE__ */ new Set([...this.claims, id]));
+					return {
+						result: {
+							exists: true,
+							value: {
+								source: name,
+								address,
+								key,
+								value: value[key]
+							}
+						},
+						rest
+					};
+				}
+			}
+			return nope;
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/dasherize.js
+function dasherize(name) {
+	return name.replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2").replace(/([a-z\d])([A-Z])/g, "$1-$2").replace(/[\s_]+/g, "-").toLowerCase();
+}
+var init_dasherize = __esmMin((() => {}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/read.js
+function cli(names, options = {}) {
+	const read = (tokens) => {
+		if (options.switch) {
+			let s = tokens.claimOne((t) => {
+				return t.type === "flag" && names.includes(t.text);
+			});
+			let [flag] = s.tokens;
+			return flag ? {
+				result: {
+					ok: true,
+					value: {
+						exists: true,
+						value: true
+					},
+					issues: []
+				},
+				claim: s
+			} : nothing(tokens);
+		}
+		let setter = tokens.claimOne((token) => {
+			return token.type === "setter" && names.includes(`--${token.nameText}`);
+		});
+		let [token] = setter.tokens;
+		if (token) return {
+			claim: setter,
+			result: {
+				ok: true,
+				value: {
+					exists: true,
+					value: token.valueText
+				},
+				issues: []
+			}
+		};
+		let pair = tokens.claimPair((name, value) => {
+			return name.type === "flag" && names.includes(name.text) && value.type === "word";
+		});
+		let [, value] = pair.tokens;
+		if (value) return {
+			claim: pair,
+			result: {
+				ok: true,
+				value: {
+					exists: true,
+					value: value.text
+				},
+				issues: []
+			}
+		};
+		let bare = tokens.claimOne((t) => {
+			return t.type === "flag" && names.includes(t.text);
+		});
+		let [incomplete] = bare.tokens;
+		if (incomplete) return {
+			claim: bare,
+			result: {
+				ok: false,
+				issues: [{ message: `${incomplete.text} requires a value` }]
+			}
+		};
+		return nothing(tokens);
+	};
+	return brand((param) => ({
+		...param,
+		cli: {
+			read,
+			syntax: {
+				type: "option",
+				label: options.switch ? names.join(", ") : `${names.join(", ")} <VALUE>`
+			}
+		}
+	}));
+}
+function nothing(tokenizer) {
+	return {
+		claim: tokenizer.claimAll(() => false),
+		result: {
+			ok: true,
+			value: { exists: false },
+			issues: []
+		}
+	};
+}
+var init_read = __esmMin((() => {
+	init_pipeline();
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/option.js
+function option(named, ...elements) {
+	const added = elements.reduce((value, element) => element(value), param(named, cli([`--${dasherize(named.name)}`])));
+	return brand((route) => {
+		let phases = [...route.phases];
+		let phase = phases.pop();
+		phases.push({
+			...phase,
+			model: {
+				params: {
+					...phase.model.params,
+					[added.name]: added
+				},
+				steps: phase.model.steps.concat((current, bindings) => ({
+					ok: true,
+					value: {
+						...current,
+						[added.name]: bindings[added.name]
+					}
+				}))
+			}
+		});
+		return {
+			...route,
+			phases
+		};
+	});
+}
+var init_option = __esmMin((() => {
+	init_param();
+	init_dasherize();
+	init_pipeline();
+	init_read();
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/multiple.js
+function multiple() {
+	return mark((param) => ({
+		...param,
+		cardinality: "many",
+		decode: multiple$1(param.decode)
+	}));
+}
+var init_multiple = __esmMin((() => {
+	init_decode();
+	init_pipeline();
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/bind.js
+function fromValues(options) {
+	let { param, route, rest } = options;
+	let claim = rest.values.claim({
+		route,
+		address: [param.name]
+	});
+	if (!claim.result.exists) return { exists: false };
+	return {
+		exists: true,
+		value: {
+			rest: {
+				...rest,
+				values: claim.rest
+			},
+			result: validate(param, claim.result.value.value, [param.name])
+		}
+	};
+}
+function fromEnv(options) {
+	let { param, route, rest } = options;
+	let claim = rest.envs.claim({
+		route,
+		address: [param.name],
+		key: param.env
+	});
+	if (!claim.result.exists) return { exists: false };
+	let value = claim.result.value.value;
+	let candidates = param.cardinality === "one" ? param.decode(value) : param.decode([value]);
+	return {
+		exists: true,
+		value: {
+			rest: {
+				...rest,
+				envs: claim.rest
+			},
+			result: decode(param, value, candidates, [param.name])
+		}
+	};
+}
+function bindPhase(options) {
+	let { phase, segment } = options;
+	let rest = options.rest;
+	let params = Object.values(phase.model.params);
+	let pending = new Map(params.map((param) => [param.name, param]));
+	let results = /* @__PURE__ */ new Map();
+	function settle(param, binding) {
+		rest = binding.rest;
+		results.set(param.name, binding.result);
+		pending.delete(param.name);
+	}
+	function accept(param, attempt) {
+		if (!attempt.exists) return;
+		settle(param, attempt.value);
+	}
+	let captures = /* @__PURE__ */ new Map();
+	while (true) {
+		let horizon = first(rest.tokens, segment.range);
+		let offer;
+		for (let param of pending.values()) {
+			let view = rest.tokens.view({
+				range: segment.range,
+				through: horizon?.index
+			});
+			let read = param.cli.read(view);
+			if (read.result.ok && !read.result.value.exists) continue;
+			let index = earliest(read.claim.tokens);
+			if (!offer || index < offer.index) offer = {
+				param,
+				read,
+				index
+			};
+		}
+		if (!offer) break;
+		if (offer.param.cardinality === "many") {
+			rest = {
+				...rest,
+				tokens: offer.read.claim.rest
+			};
+			let current = captures.get(offer.param.name) ?? {
+				param: offer.param,
+				values: [],
+				issues: [],
+				failed: false
+			};
+			current.issues.push(...offer.read.result.issues ?? []);
+			if (offer.read.result.ok && offer.read.result.value.exists) current.values.push(offer.read.result.value.value);
+			else current.failed = true;
+			captures.set(offer.param.name, current);
+			continue;
+		}
+		accept(offer.param, fromRead(offer.param, offer.read, rest));
+	}
+	for (let capture of captures.values()) if (capture.failed) settle(capture.param, {
+		rest,
+		result: {
+			ok: false,
+			issues: capture.issues
+		}
+	});
+	else {
+		let values = capture.values;
+		let candidates = values.every((value) => typeof value === "string") ? capture.param.decode(values) : [Just(values)];
+		let result = merge(decode(capture.param, values, candidates, [capture.param.name]), capture.issues);
+		settle(capture.param, {
+			result,
+			rest
+		});
+	}
+	for (let source of [fromEnv, fromValues]) for (let param of pending.values()) accept(param, source({
+		param,
+		route: segment.path,
+		rest
+	}));
+	for (let param of pending.values()) results.set(param.name, validate(param, void 0, [param.name]));
+	let bindings = {};
+	let issues = [];
+	let valid = true;
+	for (let param of params) {
+		let result = results.get(param.name);
+		issues.push(...result.issues ?? []);
+		if (result.ok) bindings[param.name] = result.value;
+		else valid = false;
+	}
+	let model = {};
+	for (let step of phase.model.steps) {
+		let result = step(model, bindings);
+		if (!result.ok) {
+			valid = false;
+			issues.push(...result.issues);
+			break;
+		} else model = result.value;
+	}
+	return {
+		rest,
+		model,
+		issues,
+		valid
+	};
+}
+function fromRead(param, read, rest) {
+	let path = [param.name];
+	if (!read.result.ok) return {
+		exists: true,
+		value: {
+			rest: {
+				...rest,
+				tokens: read.claim.rest
+			},
+			result: read.result
+		}
+	};
+	if (!read.result.value.exists) return { exists: false };
+	let value = read.result.value.value;
+	let result = merge(decode(param, value, typeof value === "string" ? param.decode(value) : [Just(value)], path), read.result.issues);
+	return {
+		exists: true,
+		value: {
+			rest: {
+				...rest,
+				tokens: read.claim.rest
+			},
+			result
+		}
+	};
+}
+function decode(param, value, candidates, path) {
+	if (candidates.length === 0) return {
+		ok: false,
+		issues: [{
+			message: `unable to decode ${JSON.stringify(value)}`,
+			path
+		}]
+	};
+	let issues;
+	let values = candidates.flatMap((candidate) => candidate.exists ? [candidate.value] : []);
+	for (let candidate of values) {
+		let result = validate(param, candidate, path);
+		if (result.ok) return result;
+		issues = issues ?? result.issues;
+	}
+	return {
+		ok: false,
+		issues: issues ?? []
+	};
+}
+function validate(param, value, path) {
+	let validated = param.schema["~standard"].validate(value);
+	if (validated instanceof Promise) return {
+		ok: false,
+		issues: [{
+			message: `async schemas are not allowed`,
+			path
+		}]
+	};
+	if (validated.issues) return {
+		ok: false,
+		issues: validated.issues.map((issue) => ({
+			...issue,
+			message: issue.message,
+			path
+		}))
+	};
+	return {
+		ok: true,
+		issues: [],
+		value: validated.value
+	};
+}
+function merge(result, issues) {
+	if (!issues || issues.length === 0) return result;
+	return {
+		...result,
+		issues: [...issues, ...result.issues ?? []]
+	};
+}
+function first(tokens, range) {
+	for (let token of tokens.view({ range })) if (token.type === "word") return token;
+}
+function earliest(tokens) {
+	let first = Infinity;
+	for (let token of tokens) first = Math.min(first, token.index);
+	return first;
+}
+var init_bind = __esmMin((() => {
+	init_maybe();
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/tokenize.js
+function tokenize(argv) {
+	let quote = false;
+	let tokens = [];
+	for (let i = 0; i < argv.length; i++) {
+		let index = i;
+		let text = argv[i];
+		if (quote) {
+			tokens.push({
+				type: "literal",
+				index,
+				text
+			});
+			continue;
+		}
+		if (text === "--") {
+			tokens.push({
+				type: "separator",
+				index,
+				text
+			});
+			quote = true;
+			continue;
+		}
+		let matchSetter = setterMatch.exec(text);
+		if (matchSetter?.groups) {
+			let { nameText, valueText } = matchSetter.groups;
+			tokens.push({
+				type: "setter",
+				index,
+				text,
+				nameText,
+				valueText
+			});
+			continue;
+		}
+		let matchFlag = flagMatch.exec(text);
+		if (matchFlag?.groups) {
+			let { prefix, flagText } = matchFlag.groups;
+			tokens.push({
+				type: "flag",
+				index,
+				text,
+				flagText,
+				flagType: prefix === "-" ? "short" : "long"
+			});
+			continue;
+		}
+		tokens.push({
+			type: "word",
+			index,
+			text
+		});
+	}
+	return tokens;
+}
+var flagMatch, setterMatch;
+var init_tokenize = __esmMin((() => {
+	flagMatch = /^(?<prefix>--?)(?<flagText>[^-=\s][^=\s]*)$/;
+	setterMatch = /^--(?<nameText>[^-=\s][^=\s]*)=(?<valueText>[\s\S]*)$/;
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/tokenizer.js
+function remainder(source, claimed) {
+	return new Tokenizer(source.tokens, /* @__PURE__ */ new Set([...source.claimed, ...claimed]));
+}
+var Tokenizer, View;
+var init_tokenizer = __esmMin((() => {
+	Tokenizer = class {
+		tokens;
+		claimed;
+		constructor(tokens, claimed = /* @__PURE__ */ new Set()) {
+			this.tokens = tokens;
+			this.claimed = new Set(claimed);
+		}
+		claimNext() {
+			return this.claimOne(() => true);
+		}
+		claimOne(match) {
+			for (let token of this) if (match(token)) return {
+				tokens: [token],
+				rest: remainder(this, [token.index])
+			};
+			return {
+				tokens: [],
+				rest: this
+			};
+		}
+		claimPair(match) {
+			let previous;
+			for (let token of this) {
+				if (!previous) {
+					previous = token;
+					continue;
+				}
+				if (token.index === previous.index + 1 && match(previous, token)) return {
+					tokens: [previous, token],
+					rest: remainder(this, [previous.index, token.index])
+				};
+				previous = token;
+			}
+			return {
+				tokens: [],
+				rest: this
+			};
+		}
+		claimAll(match) {
+			let tokens = [];
+			let claimed = /* @__PURE__ */ new Set();
+			for (let token of this) if (match(token)) {
+				claimed.add(token.index);
+				tokens.push(token);
+			}
+			return {
+				tokens,
+				rest: tokens.length > 0 ? remainder(this, claimed) : this
+			};
+		}
+		view(options) {
+			return new View(this, options);
+		}
+		*[Symbol.iterator]() {
+			for (let token of this.tokens) if (!this.claimed.has(token.index)) yield token;
+		}
+	};
+	View = class {
+		source;
+		options;
+		constructor(source, options) {
+			this.source = source;
+			this.options = options;
+		}
+		claimNext() {
+			return this.claimOne(() => true);
+		}
+		claimOne(match) {
+			for (let token of this) if (match(token)) return {
+				tokens: [token],
+				rest: remainder(this.source, [token.index])
+			};
+			return {
+				tokens: [],
+				rest: this.source
+			};
+		}
+		claimPair(match) {
+			let previous;
+			for (let token of this) {
+				if (!previous) {
+					previous = token;
+					continue;
+				}
+				if (token.index === previous.index + 1 && match(previous, token)) return {
+					tokens: [previous, token],
+					rest: remainder(this.source, [previous.index, token.index])
+				};
+				previous = token;
+			}
+			return {
+				tokens: [],
+				rest: this.source
+			};
+		}
+		claimAll(match) {
+			let tokens = [];
+			let claimed = /* @__PURE__ */ new Set();
+			for (let token of this) if (match(token)) {
+				claimed.add(token.index);
+				tokens.push(token);
+			}
+			return {
+				tokens,
+				rest: tokens.length > 0 ? remainder(this.source, claimed) : this.source
+			};
+		}
+		*[Symbol.iterator]() {
+			let { start, end } = this.options.range;
+			let { through } = this.options;
+			for (let token of this.source) if (token.index > start && (end === void 0 || token.index < end) && (through === void 0 || token.index <= through)) yield token;
+		}
+	};
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/parse.js
+function parse(route, input) {
+	let help = new Tokenizer(tokenize(input.argv)).claimAll(flags("-h", "--help"));
+	let version = help.rest.claimAll(flags("-v", "--version"));
+	let literals = version.rest.claimAll((t) => t.type === "separator").rest.claimAll((t) => t.type === "literal");
+	let method = "execute";
+	if (help.tokens.length > 0) method = "help";
+	else if (version.tokens.length > 0) method = "version";
+	let rest = {
+		tokens: literals.rest,
+		values: new Values().mount([], input.values ?? []),
+		envs: new Envs().mount([], input.envs ?? [])
+	};
+	return advance({
+		segments: [{
+			id: "/",
+			route,
+			phases: route.phases,
+			tokens: Array.from(rest.tokens),
+			path: [],
+			start: -1,
+			model: {},
+			issues: [],
+			history: []
+		}],
+		active: 0,
+		rest,
+		models: {},
+		method,
+		literals: literals.tokens
+	});
+}
+function advance(state) {
+	while (true) {
+		state = search(state);
+		let index = state.active;
+		let segment = state.segments[index];
+		let [phase] = segment.phases;
+		state = {
+			...state,
+			rest: {
+				...state.rest,
+				values: state.rest.values.mount(segment.path, phase.values),
+				envs: state.rest.envs.mount(segment.path, phase.envs)
+			}
+		};
+		if (state.method !== "execute" && !phase.resolver) {
+			let models = {
+				...state.models,
+				[segment.id]: segment.model
+			};
+			if (index + 1 < state.segments.length) {
+				state = {
+					...state,
+					active: index + 1,
+					models
+				};
+				continue;
+			}
+			return resolve$1({
+				...state,
+				models
+			}, segment);
+		}
+		let binding = bindPhase({
+			phase,
+			segment: {
+				range: {
+					start: segment.start,
+					end: segment.end
+				},
+				path: segment.path
+			},
+			rest: state.rest
+		});
+		segment = {
+			...segment,
+			model: {
+				...segment.model,
+				...binding.model
+			},
+			issues: [...segment.issues, ...binding.issues]
+		};
+		state = {
+			...state,
+			rest: binding.rest,
+			segments: replace(state.segments, index, segment)
+		};
+		if (!binding.valid) {
+			let issues = phase.resolver ? binding.issues : [...unexpected(state, segment), ...binding.issues];
+			return unprocessableContent(state.segments[state.segments.length - 1], issues);
+		}
+		if (phase.resolver) {
+			let suspended = state;
+			return {
+				ok: true,
+				route: segment.id,
+				model: binding.model,
+				resume(result) {
+					if (!result.ok) return unprocessableContent(segment, result.issues);
+					let resolver = phase.resolver;
+					let continuation = resolver(result.value)(seed(segment.route));
+					let phases = stitch(continuation.phases, segment.phases.slice(1));
+					let history = [...segment.history, phase];
+					let next = {
+						...segment,
+						route: {
+							...continuation,
+							phases: [...history, ...phases]
+						},
+						phases,
+						history,
+						issues: [...segment.issues, ...result.issues ?? []]
+					};
+					return advance({
+						...suspended,
+						segments: replace(suspended.segments, index, next)
+					});
+				}
+			};
+		}
+		let issues = unexpected(state, segment);
+		if (issues.length > 0) return unprocessableContent(state.segments[state.segments.length - 1], issues);
+		let id = `/${segment.path.join("/")}`;
+		let models = {
+			...state.models,
+			[id]: segment.model
+		};
+		if (index + 1 < state.segments.length) {
+			state = {
+				...state,
+				active: index + 1,
+				models
+			};
+			continue;
+		}
+		return resolve$1({
+			...state,
+			models
+		}, segment);
+	}
+}
+function search(state) {
+	let segments = [...state.segments];
+	let rest = state.rest;
+	while (true) {
+		let index = segments.length - 1;
+		let segment = segments[index];
+		let [phase] = segment.phases;
+		let remaining = new Set(Array.from(rest.tokens, (token) => token.index));
+		let selector = segment.tokens.find((token) => {
+			return remaining.has(token.index) && token.type === "word" && phase.routes.some((route) => route.name === token.text);
+		});
+		if (!selector) return {
+			...state,
+			segments,
+			rest
+		};
+		let child = phase.routes.find((route) => route.name === selector.text);
+		let path = [...segment.path, child.name];
+		let before = segment.tokens.filter((token) => token.index < selector.index);
+		let after = segment.tokens.filter((token) => token.index > selector.index);
+		segments[index] = {
+			...segment,
+			tokens: before,
+			end: selector.index
+		};
+		segments.push({
+			id: `/${path.join("/")}`,
+			route: child,
+			path,
+			phases: child.phases,
+			tokens: after,
+			start: selector.index,
+			model: {},
+			issues: [],
+			history: []
+		});
+		rest = {
+			...rest,
+			tokens: rest.tokens.claimOne((token) => token.index === selector.index).rest
+		};
+	}
+}
+function flags(...texts) {
+	return (token) => token.type === "flag" && texts.includes(token.text);
+}
+function stitch(before, after) {
+	if (after.length === 0) return before;
+	let phases = [...before];
+	let phase = phases.pop();
+	let [next, ...rest] = after;
+	phases.push({
+		...phase,
+		...next,
+		model: {
+			params: {
+				...phase.model.params,
+				...next.model.params
+			},
+			steps: [...phase.model.steps, ...next.model.steps]
+		},
+		routes: [...phase.routes, ...next.routes],
+		values: [...phase.values, ...next.values],
+		envs: [...phase.envs, ...next.envs]
+	});
+	phases.push(...rest);
+	return phases;
+}
+function resolve$1(state, segment) {
+	let route = `/${segment.path.join("/")}`;
+	let definition = segment.route;
+	if (!definition.methods.includes(state.method)) return {
+		ok: false,
+		code: "method-not-allowed",
+		route,
+		definition,
+		path: segment.path,
+		method: state.method,
+		allowed: definition.methods
+	};
+	let intent = {
+		ok: true,
+		route,
+		definition,
+		path: segment.path,
+		literals: state.literals
+	};
+	switch (state.method) {
+		case "help": return {
+			...intent,
+			method: "help"
+		};
+		case "version": return {
+			...intent,
+			method: "version"
+		};
+		case "execute": return {
+			...intent,
+			method: "execute",
+			model: state.models[route],
+			models: state.models,
+			issues: state.segments.flatMap((segment) => segment.issues)
+		};
+	}
+}
+function seed(route) {
+	return {
+		...route,
+		phases: [{
+			model: {
+				params: {},
+				steps: []
+			},
+			routes: [],
+			values: [],
+			envs: []
+		}]
+	};
+}
+function replace(items, index, value) {
+	let result = [...items];
+	result[index] = value;
+	return result;
+}
+function unprocessableContent(segment, issues) {
+	return {
+		ok: false,
+		code: "unprocessable-content",
+		route: segment.id,
+		definition: segment.route,
+		path: segment.path,
+		issues: [...issues]
+	};
+}
+function unexpected(state, segment) {
+	let members = new Set(segment.tokens.map((token) => token.index));
+	return Array.from(state.rest.tokens).filter((token) => members.has(token.index)).map((token) => ({ message: `unexpected ${JSON.stringify(token.text)}` }));
+}
+var init_parse = __esmMin((() => {
+	init_bind();
+	init_env();
+	init_tokenize();
+	init_tokenizer();
+	init_values();
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/route.js
+function route(start, ...elements) {
+	let zero = {
+		...start,
+		methods: ["help"],
+		phases: [{
+			model: {
+				params: {},
+				steps: []
+			},
+			routes: [],
+			values: [],
+			envs: []
+		}]
+	};
+	return elements.reduce((value, element) => element(value), zero);
+}
+function routes(...children) {
+	return brand((route) => {
+		let phases = [...route.phases];
+		let phase = phases.pop();
+		phases.push({
+			...phase,
+			routes: [...phase.routes, ...children]
+		});
+		return {
+			...route,
+			phases
+		};
+	});
+}
+var init_route = __esmMin((() => {
+	init_pipeline();
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/lib/toggle.js
+function toggle(named, ...elements) {
+	const added = elements.reduce((value, element) => element(value), {
+		...param(named, binding(named.name), schema(bool)),
+		decode: boolean
+	});
+	return brand((route) => {
+		let phases = [...route.phases];
+		let phase = phases.pop();
+		phases.push({
+			...phase,
+			model: {
+				params: {
+					...phase.model.params,
+					[added.name]: added
+				},
+				steps: phase.model.steps.concat((current, bindings) => ({
+					ok: true,
+					value: {
+						...current,
+						[added.name]: bindings[added.name]
+					}
+				}))
+			}
+		});
+		return {
+			...route,
+			phases
+		};
+	});
+}
+function binding(name) {
+	const stem = dasherize(name);
+	const yes = `--${stem}`;
+	const no = `--no-${stem}`;
+	return (param) => ({
+		...param,
+		cli: {
+			read: reader(name),
+			syntax: {
+				type: "option",
+				label: `${yes}, ${no}`
+			}
+		}
+	});
+}
+function reader(name) {
+	const stem = dasherize(name);
+	const yes = `--${stem}`;
+	const no = `--no-${stem}`;
+	return (tokens) => {
+		let claim = tokens.claimOne((token) => {
+			return token.type === "flag" && (token.text === yes || token.text === no);
+		});
+		let [flag] = claim.tokens;
+		return flag ? {
+			claim,
+			result: {
+				ok: true,
+				value: {
+					exists: true,
+					value: flag.text === yes
+				},
+				issues: []
+			}
+		} : {
+			claim,
+			result: {
+				ok: true,
+				value: { exists: false },
+				issues: []
+			}
+		};
+	};
+}
+var bool;
+var init_toggle = __esmMin((() => {
+	init_decode();
+	init_dasherize();
+	init_param();
+	init_pipeline();
+	bool = { "~standard": {
+		version: 1,
+		vendor: "@bomb.sh/router",
+		validate(value) {
+			return typeof value === "undefined" ? { value: false } : typeof value === "boolean" ? { value } : { issues: [{ message: "expected boolean" }] };
+		}
+	} };
+}));
+//#endregion
+//#region node_modules/.pnpm/@bomb.sh+router@0.7.1/node_modules/@bomb.sh/router/esm/mod.js
+var init_esm = __esmMin((() => {
+	init_argument();
+	init_command();
+	init_values();
+	init_definition();
+	init_env();
+	init_option();
+	init_multiple();
+	init_param();
+	init_parse();
+	init_read();
+	init_route();
+	init_toggle();
+}));
+//#endregion
+//#region runtime/zim/registry.ts
+/** Exact channel offers; this registry does not choose hosts or activate Zim. */
+var OfferSchema, zimProviders;
+var init_registry$1 = __esmMin((() => {
+	init_dist$2();
+	OfferSchema = Struct({
+		version: Literal(1),
+		id: String$1,
+		enabled: optional(Boolean$1),
+		fragments: ArraySchema(Struct({
+			channel: Literals(["zimrc", "zimenv"]),
+			name: String$1,
+			path: String$1,
+			enabled: optional(Boolean$1)
+		}))
+	});
+	zimProviders = {
+		collection: "zim/providers.d",
+		decode(value) {
+			const offer = decodeUnknownSync(OfferSchema)(value);
+			const seen = /* @__PURE__ */ new Set();
+			for (const fragment of offer.fragments) {
+				const key = `${fragment.channel}/${fragment.name}`;
+				if (!isAbsolute(fragment.path) || !/^[A-Za-z0-9][A-Za-z0-9_.-]*\.conf$/.test(fragment.name) || seen.has(key)) throw new Error("Zim offer requires absolute exact paths and unique channel/fragment names");
+				seen.add(key);
+			}
+			return offer;
+		},
+		identity: (value) => value.id,
+		enabled: (value) => value.enabled !== false,
+		scope: () => void 0
+	};
+}));
+//#endregion
+//#region runtime/cli/registry.ts
+/** Runnable Router inspection/owner-registration frontend. Domain execution remains downstream. */
+var registry_exports = /* @__PURE__ */ __exportAll({
+	REGISTRY_USAGE: () => REGISTRY_USAGE,
+	main: () => main$1
+});
+async function main$1(argv, env = { ...process.env }) {
+	if (argv[0] === "complete" && argv[1] === "--") {
+		const words = argv.slice(2);
+		const options = [
+			"--collection",
+			"keybinding-consumers",
+			"--scope",
+			"user"
+		];
+		for (let i = 0; i < words.length; i++) {
+			const key = words[i];
+			const value = words[i + 1];
+			if ([
+				"--collection",
+				"--scope",
+				"--root",
+				"--write-root"
+			].includes(key) && value && !value.startsWith("--")) {
+				if (key === "--collection" && !definitions.some((entry) => entry.name === value)) continue;
+				if (key === "--scope" && value !== "user" && value !== "system") continue;
+				options.push(key, value);
+				i++;
+			}
+		}
+		return main$1([
+			"complete",
+			...options,
+			...words.map((word) => `--word=${word}`)
+		], env);
+	}
+	if (argv[0] === "complete" && [
+		"bash",
+		"zsh",
+		"fish",
+		"powershell"
+	].includes(argv[1] ?? "")) {
+		new l().setup("compfuzor-registry", `${shellQuote(process.execPath)} ${shellQuote(process.argv[1])}`, argv[1]);
+		return 0;
+	}
+	const parsed = parse(registryRoute, { argv });
+	if (!parsed.ok) {
+		console.error(JSON.stringify(parsed));
+		return 2;
+	}
+	if (parsed.method !== "execute") {
+		console.log(REGISTRY_USAGE);
+		return 0;
+	}
+	const model = parsed.model;
+	const domain = definitions.find((entry) => entry.name === model.collection).domain;
+	const audience = model.scope;
+	if (!model.root?.length && model["write-root"] !== void 0) throw new Error("--write-root requires explicit --root values");
+	const policy = model.root?.length ? explicitPolicy(audience, model.root, model["write-root"] ?? model.root[0]) : registryPolicy(domain.collection, audience, env);
+	if (parsed.route === "/register" || parsed.route === "/status") {
+		const request = {
+			domain,
+			policy,
+			source: parsed.model.source
+		};
+		const plan = parsed.route === "/register" ? await register(request) : await planRegistration(request);
+		console.log(model.json ? JSON.stringify(plan, null, 2) : `${plan.id}\t${plan.disposition}\tlocal:${plan.participation}\teffective:${plan.effective.state}\t${plan.destination}\n${plan.reason}`);
+		return plan.disposition === "blocked" ? 1 : parsed.route === "/status" && plan.disposition === "create" ? 1 : 0;
+	}
+	const snapshot = await inspectRegistry(domain, policy);
+	if (parsed.route === "/complete") {
+		if (!snapshot.complete) throw new Error("completion unavailable: registry root acquisition failed");
+		const tab = new l();
+		for (const verb of verbs) {
+			const entry = tab.command(verb, `${verb} registry`);
+			entry.option("collection", "Rendezvous", (complete) => {
+				for (const definition of definitions) complete(definition.name, definition.domain.collection);
+			});
+			entry.option("scope", "Audience", (complete) => {
+				complete("user", "invocation XDG");
+				complete("system", "system roots only");
+			});
+			if (verb === "explain") entry.argument("id", (complete) => {
+				for (const record of snapshot.records) complete(record.id, record.state);
+			});
+		}
+		tab.parse([...parsed.model.word ?? []]);
+		return 0;
+	}
+	const result = parsed.route === "/explain" ? lookup$1(snapshot, parsed.model.id) : snapshot;
+	if (model.json) console.log(JSON.stringify(result, null, 2));
+	else {
+		for (const root of snapshot.roots.filter((entry) => entry.status !== "ok")) console.log(`root\t${root.status}\t${root.root}\t${root.error?.message ?? root.detail ?? ""}`);
+		const records = parsed.route === "/explain" ? [lookup$1(snapshot, parsed.model.id)] : snapshot.records;
+		for (const record of records) {
+			console.log(`${record.id}\t${record.state}\t${record.source.winner.path}${record.error ? `\t${record.error}` : ""}`);
+			if (parsed.route === "/explain") for (const observed of record.source.observations) console.log(`  ${observed.path}\t${observed.mask ? "mask" : observed.disabled ? "disabled slot" : observed.kind}`);
+		}
+	}
+	return snapshot.complete ? 0 : 2;
+}
+var definitions, text, strings, optionalText, scope, collection, common, verbs, registryRoute, REGISTRY_USAGE, argvPath$1;
+var init_registry = __esmMin((() => {
+	init_esm();
+	init_dist();
+	init_dist$2();
+	init_registry$2();
+	init_registry$1();
+	init_policy();
+	init_read$1();
+	init_register();
+	init_render();
+	definitions = [
+		{
+			name: "keybinding-providers",
+			domain: keybindingProviders
+		},
+		{
+			name: "keybinding-consumers",
+			domain: keybindingConsumers
+		},
+		{
+			name: "zim-providers",
+			domain: zimProviders
+		}
+	];
+	text = toStandardSchemaV1(String$1);
+	strings = toStandardSchemaV1(UndefinedOr(ArraySchema(String$1)));
+	optionalText = toStandardSchemaV1(UndefinedOr(String$1));
+	scope = toStandardSchemaV1(Literals(["user", "system"]));
+	collection = toStandardSchemaV1(Literals(definitions.map((entry) => entry.name)));
+	common = () => [
+		option(name("collection"), schema(collection)),
+		option(name("scope"), schema(scope)),
+		option(name("root"), multiple(), schema(strings)),
+		option(name("write-root"), schema(optionalText)),
+		toggle(name("json"))
+	];
+	verbs = [
+		"list",
+		"explain",
+		"register",
+		"status",
+		"complete"
+	];
+	registryRoute = route(name("registry"), routes(command(name("list"), ...common()), command(name("explain"), argument(name("id"), schema(text)), ...common()), command(name("register"), option(name("source"), schema(text)), ...common()), command(name("status"), option(name("source"), schema(text)), ...common()), command(name("complete"), option(name("word"), multiple(), schema(strings)), ...common())));
+	REGISTRY_USAGE = `Registry inspection and owner registration (no native installation)
+node runtime/cli/registry.ts <list|explain ID|register|status|complete> \\
+  --collection <keybinding-providers|keybinding-consumers|zim-providers> --scope <user|system>
+  [--root /absolute/low --root /absolute/high --write-root /absolute/low] [--json]
+register/status require --source /absolute/owner/descriptor.json
+Explicit roots replace XDG lookup; write-root must be one of those roots.
+complete <bash|zsh|fish|powershell> prints shell setup; complete -- WORDS handles tab's protocol.
+Repeated --word values remain available for isolated completion probes.`;
+	argvPath$1 = process.argv[1];
+	if (argvPath$1) Promise.all([realpath(argvPath$1), realpath(fileURLToPath(import.meta.url))]).then(([invoked, module]) => {
+		if (invoked === module) return main$1(process.argv.slice(2)).then((code) => {
+			process.exitCode = code;
+		});
+	});
+}));
+//#endregion
 //#region files/runtime/compfuzor-runtime.ts
 /** Minimal multicall entry for Compfuzor's domain-grouped JavaScript runtimes. */
+init_runtime();
 const RUNTIME_NAME = "compfuzor-runtime.mjs";
 const RUNTIME_SOURCE_NAME = "compfuzor-runtime.ts";
-const USAGE = `Usage: compfuzor-runtime.mjs <catalog|config|config-remote|flow|links|zim|keybindings|actions> ...
+const USAGE = `Usage: compfuzor-runtime.mjs <registry|catalog|config|config-remote|flow|links|zim|keybindings|actions> ...
 
 Ordinary deployments invoke this multicall runtime through stable domain
 aliases such as config/command.mjs, config-remote.mjs, links.mjs, and
@@ -16804,7 +32021,7 @@ async function selectedDomain(argvPath, argv) {
 	}
 	if (basename(argvPath) !== RUNTIME_NAME && basename(argvPath) !== RUNTIME_SOURCE_NAME) fail(`unknown Compfuzor runtime alias: ${basename(argvPath)}\n${USAGE}`);
 	const [domain, ...domainArgv] = argv;
-	if (domain !== "catalog" && domain !== "config" && domain !== "config-remote" && domain !== "flow" && domain !== "links" && domain !== "zim" && domain !== "keybindings" && domain !== "actions") fail(USAGE);
+	if (domain !== "catalog" && domain !== "registry" && domain !== "config" && domain !== "config-remote" && domain !== "flow" && domain !== "links" && domain !== "zim" && domain !== "keybindings" && domain !== "actions") fail(USAGE);
 	return {
 		domain,
 		argv: domainArgv,
@@ -16820,17 +32037,21 @@ async function runDomain(domain, argv, invokedAs, deploymentDir) {
 			return await applyPrepared(session, id, domain, deploymentDir, invokedAs);
 		}
 		if (domain !== "actions") clearProcessMarkers();
-		if (domain === "catalog") return await main$6(argv, deploymentDir);
-		if (domain === "flow") return await main$5(argv, deploymentDir);
+		if (domain === "registry") {
+			const { main: runRegistry } = await Promise.resolve().then(() => (init_registry(), registry_exports));
+			return await runRegistry(argv);
+		}
+		if (domain === "catalog") return await main$7(argv, deploymentDir);
+		if (domain === "flow") return await main$6(argv, deploymentDir);
 		if (domain === "actions") {
-			const outcome = await main$1(argv, deploymentDir, fileURLToPath(import.meta.url));
+			const outcome = await main$2(argv, deploymentDir, fileURLToPath(import.meta.url));
 			if (outcome.signal) process.kill(process.pid, outcome.signal);
 			return outcome.code;
 		}
-		if (domain === "config") return await main$8(argv, deploymentDir, invokedAs);
-		if (domain === "links") return await main$4(argv, deploymentDir);
-		if (domain === "zim") return await main$3(argv, deploymentDir);
-		if (domain === "keybindings") return await main$2(argv, {
+		if (domain === "config") return await main$9(argv, deploymentDir, invokedAs);
+		if (domain === "links") return await main$5(argv, deploymentDir);
+		if (domain === "zim") return await main$4(argv, deploymentDir);
+		if (domain === "keybindings") return await main$3(argv, {
 			runner: resolve(deploymentDir, "bin/config/run.sh"),
 			validatorCommand: [
 				process.execPath,
@@ -16839,7 +32060,7 @@ async function runDomain(domain, argv, invokedAs, deploymentDir) {
 				"validate"
 			]
 		});
-		await main$7(argv, deploymentDir);
+		await main$8(argv, deploymentDir);
 		return 0;
 	} catch (error) {
 		if (domain === "config-remote") {

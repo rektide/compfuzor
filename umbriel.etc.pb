@@ -106,6 +106,9 @@
     # baseline/personal bootstrap policy is declared here).
     KEYBINDING_CONSUMERS:
       umbriel:
+        profile_selector:
+          env: COMPFUZOR_UMBRIEL_PROFILE
+          default: "{{ETC}}/keybinding-umbriel.json"
         contexts:
           user: {scope: user, root: config, subpath: umbriel}
         template_file: "{{ETC}}/config.toml"

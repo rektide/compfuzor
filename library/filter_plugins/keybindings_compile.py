@@ -12,6 +12,7 @@ from config_context_compile import _root as context_root
 from config_compile import config_runtime_bins, config_runtime_packages
 from runtime_bundles import compfuzor_runtime_bins, runtime_alias_bin
 from action_contexts import bind_action_contexts, participating_audiences
+from registry_compile import registration_bins
 
 ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 TARGETS = ("niri", "umbriel")
@@ -129,15 +130,33 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             resources.append({"path": posixpath.join(etc, path)})
             own_sources.append({"path": {"path": posixpath.join(etc, path)}, "whenPresent": bool(value.get("patch", False))})
     profiles = {}
+    advertisements = {}
     for target, value in consumers.items():
-        if target not in TARGETS:
-            fail("consumer target must be niri/umbriel")
-        profiles[target] = profile(target, value, own_sources if targets is None else [])
+        identifier(target, "receiver id")
+        value = mapping(value, "consumer")
+        adapter = value.get("adapter", target)
+        if adapter not in TARGETS:
+            fail("consumer adapter must be niri/umbriel; arbitrary receiver ids require adapter")
+        profile_settings = {key: item for key, item in value.items() if key not in ("adapter", "enabled", "profile_selector")}
+        profiles[target] = profile(adapter, profile_settings, own_sources if targets is None else [])
         files.append({"name": "keybinding-" + target + ".json", "json": profiles[target]})
+        for audience in ("user", "system"):
+            contexts = [name for name, spec in profiles[target]["contexts"].items() if spec["scope"] == audience]
+            if not contexts:
+                continue
+            owned = posixpath.join(etc, "keybinding-" + target + ".json")
+            advertised = {"version": 1, "id": target, "adapter": adapter, "audience": audience,
+                "profile": selector(value.get("profile_selector", owned), "owned profile selector"),
+                "contexts": contexts, "defaultContext": value.get("action_contexts", {}).get(audience, contexts[0]), "enabled": value.get("enabled", True)}
+            if advertised["defaultContext"] not in contexts:
+                fail("advertised default context does not belong to audience")
+            name = "keybindings/consumers/" + audience + "/" + target + ".json"
+            files.append({"name": name, "json": advertised})
+            advertisements[(target, audience)] = posixpath.join(etc, name)
+            bins.extend(registration_bins("keybindings-consumer-" + target + "-" + audience, "keybinding-consumers", posixpath.join(etc, name), audience))
     target_map = {} if targets is None and consumers else {target: {} for target in TARGETS} if targets is None else {target: {} for target in targets} if isinstance(targets, list) else mapping(targets, "KEYBINDING_TARGETS")
     for target, value in target_map.items():
-        if target not in TARGETS:
-            fail("installer target must be niri/umbriel")
+        identifier(target, "installer receiver")
         value = mapping(value, "target binding")
         if set(value) - {"consumer", "context", "scope", "action_contexts"}:
             fail("unknown target binding")
@@ -146,7 +165,29 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
     # implicit consumer-only host omits the producer manifest.
     producer_role = targets is not None or not consumers
     if producer_role:
-        files.append({"name": "keybinding-producer.json", "json": {"version": 1, "producer": producer, "order": order, "resources": resources, "targets": list(target_map)}})
+        files.append({"name": "keybinding-producer.json", "json": {"version": 1, "producer": producer, "order": order, "resources": resources, "targets": list(TARGETS) if target_map else []}})
+        bins.extend(registration_bins("keybindings-provider", "keybinding-providers", posixpath.join(etc, "keybinding-producer.json"), scope))
+        receivers = None if targets is None else []
+        if receivers is not None:
+            for receiver, settings in target_map.items():
+                settings = mapping(settings, "receiver settings")
+                item = {"id": receiver, **{key: settings[key] for key in ("context", "scope") if key in settings}}
+                if settings.get("consumer"):
+                    consumer = settings["consumer"]
+                    if isinstance(consumer, str) and not consumer.endswith(".json"):
+                        consumer = posixpath.join(consumer, "etc/keybinding-" + receiver + ".json")
+                    item["profile"] = selector(consumer, "receiver override")
+                receivers.append(item)
+        selection_path = posixpath.join(etc, "keybindings/selection.json")
+        files.append({"name": "keybindings/selection.json", "json": {"version": 1, "receivers": receivers}})
+        generic = {"name": "install-keybindings.sh", "action": "install", "scope": [scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False,
+            "content": 'exec "$DIR/bin/keybindings.mjs" install-offer --manifest ' + shlex.quote(posixpath.join(etc, "keybinding-producer.json")) + ' --selection ' + shlex.quote(selection_path) + ' --scope ' + scope + ' "$@"'}
+        if audience_policy is not None:
+            generic["compose"] = False
+            delivery_scopes = {mapping(value, "target binding").get("scope", scope) for value in target_map.values()} or {scope}
+            eligible = participating_audiences(audience_policy, ["install"]) & delivery_scopes
+            generic["action_operations"] = [{"action": "install", "subsystem": "keybindings", "audiences": {audience: {"kind": "domain", "domain": "keybindings", "operation": "install-offer", "envelope": "bin/install-keybindings.sh", "manifest": posixpath.join(etc, "keybinding-producer.json"), "producer": producer, "selection": selection_path} for audience in eligible}}]
+        bins.append(generic)
     # A domain host reuses STOCK CONFIG worker artifacts, without fabricating an
     # empty output recipe or auto-running installers during Ansible rendering.
     if not has_configs:
@@ -155,8 +196,8 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
         dirs.extend(posixpath.join(bins_dir, path) for path in ("config", "config/processors", "internal/config"))
     else:
         bins.append(runtime_alias_bin("keybindings.mjs"))
-    for target in sorted(set(target_map) | set(profiles)):
-        value = target_map.get(target, {})
+    for target in sorted(profiles):
+        value = {}
         selected_context = value.get("context", context)
         identifier(selected_context, "target context")
         selected_scope = value.get("scope", scope)
@@ -180,15 +221,12 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             selected_scope = profiles[target]["contexts"][selected_context]["scope"]
         if selected_scope not in ("user", "system"):
             fail("target scope must be user/system")
-        installing = target in target_map
-        args = ["install" if installing else "host", "--target", target, "--context", selected_context, "--scope", selected_scope]
+        installing = False
+        adapter = profiles[target]["target"]
+        args = ["host", "--target", adapter, "--context", selected_context, "--scope", selected_scope]
+        args.extend(["--descriptor", advertisements[(target, selected_scope)]])
         if installing:
             args.extend(["--manifest", posixpath.join(etc, "keybinding-producer.json")])
-        if profile_path:
-            args.extend(["--profile", profile_path])
-        if profile_selector:
-            import json
-            args.extend(["--profile-selector", json.dumps(profile_selector)])
         descriptor = {"name": "install-keybindings-" + target + ".sh", "action": "install", "scope": [selected_scope], "basedir": False, "deployment_rooted": True, "bypass": "KEYBINDINGS", "run": False, "content": 'exec "$DIR/bin/keybindings.mjs" ' + " ".join(shlex.quote(arg) for arg in args) + ' "$@"'}
         if audience_policy is not None:
             descriptor["compose"] = False
@@ -211,19 +249,14 @@ def compile_keybindings(actions, bindings, consumers, targets, producer, etc, bi
             for public_action in public_actions:
                 operation = "install" if installing and public_action == "install" else "host"
                 selected_bindings = audience_contexts
-                common = {"kind": "domain", "domain": "keybindings", "operation": operation, "target": target,
+                common = {"kind": "domain", "domain": "keybindings", "operation": operation, "target": adapter,
                     "envelope": "bin/" + descriptor["name"], **({"mode": "assemble"} if public_action == "assemble" else {})}
                 if operation == "install":
                     common.update({"manifest": posixpath.join(etc, "keybinding-producer.json"), "producer": producer})
                 if public_action == "assemble":
-                    common["profile"] = posixpath.join(etc, "keybinding-" + target + ".json")
                     selected_bindings = bind_action_contexts(profiles[target]["contexts"], owned_mapping, "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)
-                elif profile_path:
-                    common["profile"] = profile_path
-                elif profile_selector:
-                    common["profileSelector"] = profile_selector
                 descriptor["action_operations"].append({"action": public_action, "subsystem": "keybindings-" + target,
-                    "audiences": {audience: {**common, "context": name} for audience, name in selected_bindings.items()}})
+                    "audiences": {audience: {**common, "context": name, "descriptor": advertisements[(target, audience)]} for audience, name in selected_bindings.items()}})
             if installing and target in profiles:
                 owned_path = posixpath.join(etc, "keybinding-" + target + ".json")
                 host_bindings = bind_action_contexts(profiles[target]["contexts"], owned_mapping, "KEYBINDING_CONSUMERS." + target + ".action_contexts", eligible)

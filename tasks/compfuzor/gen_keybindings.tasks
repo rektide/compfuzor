@@ -15,11 +15,7 @@
     # A consumer's own resources are its local layer, not a producer install.
     # Explicit targets still win, including empty maps/lists and combined roles.
     _keybinding_targets: >-
-      {{ KEYBINDING_TARGETS | default(
-           KEYBINDING_TARGET_DEFAULTS
-           if (KEYBINDING_ACTIONS is defined or KEYBINDINGS is defined)
-              and not (KEYBINDING_CONSUMERS | default({}))
-           else None) }}
+      {{ KEYBINDING_TARGETS | default(None) }}
 - name: "Compfuzor: synthesize keybinding artifacts"
   set_fact:
     ETC_FILES: "{{ ETC_FILES | merge_list(_keybindings_compiled.files, preset='append') }}"
