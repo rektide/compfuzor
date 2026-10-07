@@ -8668,22 +8668,6 @@ function loadYaml() {
 }
 var _toml, _yaml;
 var init_lazy_codecs = __esmMin((() => {}));
-//#endregion
-//#region ../figments/src/providers/data.ts
-function createFormatProvider(format) {
-	return {
-		file(path) {
-			return Data.file(format, path);
-		},
-		string(source) {
-			return Data.string(format, source);
-		},
-		profile(path, name) {
-			const profileName = name ?? normalizeProfile(basename(path, extname(path)));
-			return Data.file(format, path).profile(profileName);
-		}
-	};
-}
 function createFileSource(path) {
 	return {
 		type: "file",
@@ -8739,7 +8723,7 @@ function toConfigValue(value, path = []) {
 	const error = FigmentError.unsupported(value);
 	throw path.length > 0 ? error.withPath(path.join(".")) : error;
 }
-var Data, JsonFormat, TomlFormat, YamlFormat, Json;
+var Data, JsonFormat, TomlFormat, YamlFormat;
 var init_data = __esmMin((() => {
 	init_fs();
 	init_error$2();
@@ -8824,7 +8808,6 @@ var init_data = __esmMin((() => {
 			return parseYAML(source);
 		}
 	};
-	Json = createFormatProvider(JsonFormat);
 }));
 //#endregion
 //#region ../figments/src/discovery/capture.ts
@@ -9373,11 +9356,6 @@ async function load(entry) {
 	const source = captureDropIns([entry]);
 	return Figment.new().derive(dropIns({ source })).build();
 }
-/** Required exact owner descriptor, without optional-file fallback or ancestor search. */
-async function loadOwner(path) {
-	if (!(await stat(path)).isFile()) throw new Error(`owner descriptor must refer to a regular file: ${path}`);
-	return Figment.from(Json.file(path).required(true).search(false)).build();
-}
 var init_figments = __esmMin((() => {
 	init_figment();
 	init_entries();
@@ -9387,6 +9365,13 @@ var init_figments = __esmMin((() => {
 	init_data();
 	init_xdg();
 }));
+//#endregion
+//#region runtime/registry/model.ts
+/** IDs are literal filename stems; dots/numeric IDs never become key paths. */
+function assertId(id) {
+	if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(id) || id.endsWith(".disabled")) throw new Error(`unsafe registry identity: ${id}`);
+}
+var init_model$2 = __esmMin((() => {}));
 //#endregion
 //#region runtime/registry/policy.ts
 /** Data registrations below root-major config policy; system audience is a separate namespace. */
@@ -9418,16 +9403,9 @@ function explicitPolicy(scope, roots, writeRoot) {
 		writeRoot: writable
 	};
 }
-var init_policy = __esmMin((() => {
+var init_policy$1 = __esmMin((() => {
 	init_figments();
 }));
-//#endregion
-//#region runtime/registry/model.ts
-/** IDs are literal filename stems; dots/numeric IDs never become key paths. */
-function assertId(id) {
-	if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(id) || id.endsWith(".disabled")) throw new Error(`unsafe registry identity: ${id}`);
-}
-var init_model$2 = __esmMin((() => {}));
 //#endregion
 //#region runtime/registry/read.ts
 /** Read-only whole-definition registry projection, not accepted native membership. */
@@ -9474,7 +9452,7 @@ function lookup$1(snapshot, id) {
 var init_read$1 = __esmMin((() => {
 	init_figments();
 	init_model$2();
-	init_policy();
+	init_policy$1();
 }));
 //#endregion
 //#region runtime/registry/guard.ts
@@ -9486,14 +9464,34 @@ function registryGuard(policy, entry) {
 	};
 }
 async function assertRegistryGuards(guards) {
-	for (const guard of guards) {
-		const view = await observe(guard.roots);
-		if (view.roots.some((root) => root.status === "failed")) throw new Error(`registry root failure while verifying ${guard.id}`);
-		if ((JSON.stringify(view.entries.find((entry) => entry.identity === guard.id)) ?? "missing") !== guard.expected) throw new Error(`selected registration changed: ${guard.id}`);
+	for (const guard of guards) await verifyRegistryGuard(guard);
+}
+/** Accept the captured pre-state or only its exact admitted publication transition. */
+async function verifyRegistryGuard(guard) {
+	await assertFileGuards(guard.files ?? []);
+	const view = await observe(guard.roots);
+	if (view.roots.some((root) => root.status === "failed")) throw new Error(`registry root failure while verifying ${guard.id}`);
+	const current = view.entries.find((entry) => entry.identity === guard.id);
+	const publication = guard.publication;
+	const slots = publication ? await Promise.all(publication.slots.map(async (slot) => ({
+		...slot,
+		current: await inspectDeliveryEntry(slot.path)
+	}))) : [];
+	if ((JSON.stringify(current) ?? "missing") === guard.expected && slots.every((slot) => JSON.stringify(slot.current) === JSON.stringify(slot.before))) return "before";
+	if (publication && current) {
+		const intended = current.observations.find((entry) => entry.path === publication.destination);
+		const before = guard.expected === "missing" ? void 0 : JSON.parse(guard.expected);
+		const unchanged = (entries) => entries.filter((entry) => entry.path !== publication.destination);
+		const exactLink = intended?.kind === "symlink" && intended.linkTarget === publication.source && intended.referentPath === publication.source && intended.referent === "file" && !intended.mask && !intended.error && intended.matched && intended.stem === guard.id;
+		const unchangedSlots = slots.every((slot) => slot.path === publication.destination ? slot.current.kind === "symlink" && slot.current.target === publication.source : JSON.stringify(slot.current) === JSON.stringify(slot.before));
+		if (exactLink && unchangedSlots && JSON.stringify(unchanged(current.observations)) === JSON.stringify(unchanged(before?.observations ?? []))) return "published";
 	}
+	throw new Error(`selected registration changed: ${guard.id}`);
 }
 var init_guard = __esmMin((() => {
 	init_figments();
+	init_delivery();
+	init_capture$1();
 }));
 //#endregion
 //#region node_modules/.pnpm/effect@4.0.0-rc.118/node_modules/effect/dist/Pipeable.js
@@ -15824,7 +15822,10 @@ async function planRegistration(request) {
 	if (!isAbsolute(request.source)) throw new Error("registration requires an absolute owner descriptor path");
 	const source = resolve(request.source);
 	const policy = explicitPolicy(request.policy.scope, request.policy.roots, request.policy.writeRoot);
-	const payload = request.domain.decode(await loadOwner(source));
+	const owned = await captureFile(source);
+	const text = fileText(owned);
+	if (text === void 0) throw new Error(`missing owner descriptor: ${source}`);
+	const payload = request.domain.decode(JSON.parse(text));
 	const id = request.domain.identity(payload);
 	assertId(id);
 	const scope = request.domain.scope(payload);
@@ -15856,6 +15857,12 @@ async function planRegistration(request) {
 			active,
 			disabled
 		}),
+		expectation: {
+			roots: [...policy.roots],
+			id,
+			expected: JSON.stringify(effective?.source) ?? "missing",
+			files: [owned.guard]
+		},
 		effective: {
 			state: effective?.state ?? "missing",
 			winner: effective?.source.winner.path
@@ -15871,6 +15878,25 @@ async function planRegistration(request) {
 		}
 	});
 	if (slot.kind !== "missing" && !linkMatches(slot, source)) return blocked(`local slot is not this owner's reference: ${destination}`);
+	for (const observation of effective?.source.observations ?? []) if (!observation.mask && (observation.kind === "file" || observation.referent === "file")) base.expectation.files.push((await captureFile(observation.path)).guard);
+	base.expectation.publication = {
+		source,
+		destination,
+		slots: [
+			{
+				path: activePath,
+				before: active
+			},
+			{
+				path: disabledPath,
+				before: disabled
+			},
+			...destination !== activePath && destination !== disabledPath ? [{
+				path: destination,
+				before: slot
+			}] : []
+		]
+	};
 	const disposition = slot.kind === "missing" ? "create" : "current";
 	return {
 		...base,
@@ -15891,20 +15917,66 @@ async function planRegistration(request) {
 }
 /** Recheck policy/slots immediately before delivery. Concurrent writers are not locked. */
 async function applyRegistration(request, plan) {
-	const current = await planRegistration(request);
-	if (JSON.stringify(current) !== JSON.stringify(plan)) throw new Error("registration changed since planning; inspect and plan again");
-	if (current.disposition === "create") await replaceWithLink(current.source, current.destination);
-	return current;
-}
-async function register(request) {
-	return applyRegistration(request, await planRegistration(request));
+	if (resolve(request.source) !== plan.source || request.policy.scope !== plan.material.links[0]?.scope && plan.disposition !== "blocked" || dirname(plan.destination) !== resolve(request.policy.writeRoot) || JSON.stringify(explicitPolicy(request.policy.scope, request.policy.roots, request.policy.writeRoot).roots) !== JSON.stringify(plan.expectation.roots)) throw new Error("registration request disagrees with admitted publication");
+	if (plan.disposition === "blocked") return plan;
+	const phase = await verifyRegistryGuard(plan.expectation);
+	if (phase === "before" && plan.disposition === "create") await replaceWithLink(plan.source, plan.destination);
+	await verifyRegistryGuard(plan.expectation);
+	return {
+		...plan,
+		disposition: phase === "published" ? "current" : plan.disposition
+	};
 }
 var init_register = __esmMin((() => {
-	init_figments();
+	init_capture$1();
+	init_guard();
 	init_delivery();
 	init_read$1();
-	init_policy();
+	init_policy$1();
 	init_model$2();
+}));
+//#endregion
+//#region runtime/keybindings/policy.ts
+/** One public versioned policy document binds BOTH registries for the selected audience. */
+async function bindRegistryPolicies(audience, locator, supplied) {
+	if (locator && supplied) throw new Error("choose registry policy document or concrete pair");
+	if (supplied) {
+		if (!supplied.providers || !supplied.consumers) throw new Error("registry policy pair requires both providers and consumers");
+		if (supplied.providers.scope !== audience || supplied.consumers.scope !== audience) throw new Error("registry policy pair audience mismatch");
+		return {
+			providers: explicitPolicy(audience, supplied.providers.roots, supplied.providers.writeRoot),
+			consumers: explicitPolicy(audience, supplied.consumers.roots, supplied.consumers.writeRoot),
+			guards: []
+		};
+	}
+	if (!locator) return {
+		providers: registryPolicy("keybindings/providers.d", audience),
+		consumers: registryPolicy("keybindings/consumers.d", audience),
+		guards: []
+	};
+	const path = resolve(locator), file = await captureFile(path), text = fileText(file);
+	if (text === void 0) throw new Error("missing registry policy document");
+	const value = JSON.parse(text);
+	if (!value || typeof value !== "object" || !("version" in value) || value.version !== 1 || !("audiences" in value) || !value.audiences || typeof value.audiences !== "object") throw new Error("invalid registry policy document");
+	const pair = value.audiences[audience];
+	if (!pair || typeof pair !== "object") throw new Error(`registry policy has no ${audience} pair; refusing default fallback`);
+	const base = dirname(await realpath(path));
+	const bind = (role) => {
+		const raw = pair[role];
+		if (!raw || typeof raw !== "object" || !("roots" in raw) || !Array.isArray(raw.roots) || !("writeRoot" in raw)) throw new Error(`registry policy requires ${audience}.${role} roots/writeRoot; refusing fallback`);
+		return explicitPolicy(audience, raw.roots.map((selector) => resolvePathSelector(validatePathSelector(selector, `${role} root`), base, `${role} root`)), resolvePathSelector(validatePathSelector(raw.writeRoot, `${role} write root`), base, `${role} write root`));
+	};
+	return {
+		providers: bind("providers"),
+		consumers: bind("consumers"),
+		guards: [file.guard],
+		locator: path
+	};
+}
+var init_policy = __esmMin((() => {
+	init_capture$1();
+	init_context$1();
+	init_policy$1();
 }));
 //#endregion
 //#region node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/nodes/identity.js
@@ -29092,7 +29164,7 @@ var init_completion = __esmMin((() => {
 	init_dist();
 	init_render();
 	init_registry$2();
-	init_policy();
+	init_policy$1();
 	init_read$1();
 }));
 //#endregion
@@ -29104,9 +29176,18 @@ var invocation_exports = /* @__PURE__ */ __exportAll({
 });
 function selection(value) {
 	if (typeof value !== "object" || value === null || !("version" in value) || value.version !== 1 || !("receivers" in value)) throw new Error("invalid receiver selection policy");
+	const prospectiveConsumers = {};
+	if ("prospectiveConsumers" in value && value.prospectiveConsumers !== void 0) {
+		if (!value.prospectiveConsumers || typeof value.prospectiveConsumers !== "object" || Array.isArray(value.prospectiveConsumers)) throw new Error("invalid prospective consumer references");
+		for (const [audience, refs] of Object.entries(value.prospectiveConsumers)) {
+			if (!["user", "system"].includes(audience) || !Array.isArray(refs)) throw new Error("prospective consumers must be audience-scoped lists");
+			prospectiveConsumers[audience] = refs.map((ref) => validatePathSelector(ref, "prospective consumer"));
+		}
+	}
 	if (value.receivers === null) return {
 		version: 1,
-		receivers: null
+		receivers: null,
+		prospectiveConsumers
 	};
 	if (!Array.isArray(value.receivers)) throw new Error("selection receivers must be null or a list");
 	const seen = /* @__PURE__ */ new Set();
@@ -29125,7 +29206,8 @@ function selection(value) {
 				actionContexts: raw.actionContexts,
 				...raw.profile === void 0 ? {} : { profile: validatePathSelector(raw.profile, "receiver profile override") }
 			};
-		})
+		}),
+		prospectiveConsumers
 	};
 }
 async function admitKeybindingBatch(request) {
@@ -29152,7 +29234,8 @@ async function admitKeybindingBatch(request) {
 				default: false
 			},
 			mode: { type: "string" },
-			runner: { type: "string" }
+			runner: { type: "string" },
+			"registry-policy": { type: "string" }
 		}
 	});
 	if (values.scope !== "user" && values.scope !== "system") throw new Error("invalid keybinding scope");
@@ -29164,7 +29247,8 @@ async function admitKeybindingBatch(request) {
 	if (manifestText === void 0) throw new Error("missing producer manifest");
 	const manifest = keybindingProviders.decode(JSON.parse(manifestText));
 	if (request.producer && manifest.producer !== request.producer) throw new Error("producer identity disagrees with declared operation");
-	const providerPolicy = registryPolicy(keybindingProviders.collection, values.scope);
+	const policies = await bindRegistryPolicies(values.scope, values["registry-policy"] ?? request.registryPolicy, request.registries ?? request.defaults.registries);
+	const providerPolicy = policies.providers;
 	const publicationRequest = {
 		domain: keybindingProviders,
 		policy: providerPolicy,
@@ -29175,26 +29259,79 @@ async function admitKeybindingBatch(request) {
 	if (publicationPlan.effective.state === "masked") throw new Error("producer registration is masked");
 	if (publicationPlan.effective.state === "invalid" || publicationPlan.effective.state === "conflict") throw new Error(`producer registration is ${publicationPlan.effective.state}`);
 	if (publicationPlan.effective.state === "disabled" && !values["force-enable"]) throw new Error("producer registration is disabled; use --force-enable");
-	const guards = [manifestFile.guard];
+	const guards = [
+		manifestFile.guard,
+		...policies.guards,
+		...publicationPlan.expectation.files ?? []
+	];
+	const providerView = await inspectRegistry(keybindingProviders, providerPolicy);
+	if (!providerView.complete) throw new Error("incomplete provider registry during admission");
+	const effectiveProvider = providerView.records.find((entry) => entry.id === manifest.producer);
+	if (effectiveProvider) {
+		if (!effectiveProvider.payload || !["active", "disabled"].includes(effectiveProvider.state)) throw new Error(`producer registration is ${effectiveProvider.state}`);
+		const { enabled: _ownedEnabled, ...ownedOffer } = manifest;
+		const { enabled: _effectiveEnabled, ...effectiveOffer } = effectiveProvider.payload;
+		if (JSON.stringify(ownedOffer) !== JSON.stringify(effectiveOffer)) throw new Error("effective producer declaration redirects the owned operative offer");
+		if (effectiveProvider.state === "disabled" && !values["force-enable"]) throw new Error("producer registration is disabled; use --force-enable");
+	}
 	if (publicationPlan.effective.winner) guards.push((await captureFile(publicationPlan.effective.winner)).guard);
 	if (manifest.enabled === false && !values["force-enable"]) throw new Error("producer offer is disabled; use --force-enable for invocation-only selection");
 	const resourceFiles = await Promise.all(manifest.resources.map((resource) => captureFile(resource.path)));
 	guards.push(...resourceFiles.map((file) => file.guard));
 	const policyPath = values.selection ?? request.selection;
-	const declared = policyPath ? selection(JSON.parse(await readFile(policyPath, "utf8"))) : {
+	const selectionFile = policyPath ? await captureFile(resolve(policyPath)) : void 0;
+	const selectionText = selectionFile ? fileText(selectionFile) : void 0;
+	if (selectionFile && selectionText === void 0) throw new Error("missing owner-held selection policy");
+	const declared = selectionText ? selection(JSON.parse(selectionText)) : {
 		version: 1,
 		receivers: null
 	};
-	if (policyPath) guards.push((await captureFile(resolve(policyPath))).guard);
-	const policy = request.policy ?? registryPolicy(keybindingConsumers.collection, values.scope);
+	if (selectionFile) guards.push(selectionFile.guard);
+	const policy = policies.consumers;
 	if (policy.scope !== values.scope) throw new Error("registry scope mismatch");
 	const snapshot = await inspectRegistry(keybindingConsumers, policy);
 	if (!snapshot.complete) throw new Error("cannot admit receivers from an incomplete registry");
 	const requested = values.target;
 	if (requested && new Set(requested).size !== requested.length) throw new Error("duplicate receiver selection");
+	const eligibleRequests = declared.receivers?.filter((entry) => entry.actionContexts ? !!entry.actionContexts[values.scope] : !entry.scope || entry.scope === values.scope);
+	if (requested && declared.receivers && requested.some((id) => declared.receivers.some((entry) => entry.id === id) && !eligibleRequests.some((entry) => entry.id === id))) throw new Error("explicit receiver is outside invocation audience");
 	if (requested && declared.receivers && requested.some((id) => !declared.receivers.some((entry) => entry.id === id))) throw new Error("requested receiver is outside declared selection");
-	const explicit = requested ?? declared.receivers?.map((entry) => entry.id);
-	const candidates = explicit ? explicit.map((id) => lookup$1(snapshot, id)) : snapshot.records;
+	const available = new Map(snapshot.records.map((record) => [record.id, {
+		...record,
+		descriptor: record.source.winner.path
+	}]));
+	const prospectiveIds = /* @__PURE__ */ new Set();
+	for (const selector of declared.prospectiveConsumers?.[values.scope] ?? []) {
+		if (!policyPath) throw new Error("prospective references require an owner-held selection document");
+		const source = await resolveConsumerProfile(selector, resolve(policyPath), "prospective consumer descriptor");
+		const file = await captureFile(source), text = fileText(file);
+		if (text === void 0) throw new Error("missing prospective consumer descriptor");
+		const payload = keybindingConsumers.decode(JSON.parse(text));
+		if (payload.audience !== values.scope || prospectiveIds.has(payload.id)) throw new Error("invalid/duplicate prospective consumer audience/identity");
+		prospectiveIds.add(payload.id);
+		guards.push(file.guard);
+		if (!available.has(payload.id)) {
+			const planned = await planRegistration({
+				domain: keybindingConsumers,
+				policy,
+				source
+			});
+			if (planned.disposition === "blocked") throw new Error(`prospective consumer publication blocked: ${planned.reason}`);
+			available.set(payload.id, {
+				id: payload.id,
+				state: payload.enabled === false ? "disabled" : "active",
+				payload,
+				descriptor: source,
+				expectation: planned.expectation
+			});
+		}
+	}
+	const explicit = requested ?? eligibleRequests?.map((entry) => entry.id);
+	const candidates = explicit ? explicit.map((id) => {
+		const candidate = available.get(id);
+		if (!candidate) lookup$1(snapshot, id);
+		return candidate;
+	}) : [...available.values()].sort((a, b) => a.id.localeCompare(b.id));
 	if ((values.profile || values["profile-selector"] || values.context) && candidates.length !== 1) throw new Error("profile/context override requires exactly one receiver");
 	const members = [];
 	for (const record of candidates) {
@@ -29207,7 +29344,7 @@ async function admitKeybindingBatch(request) {
 			continue;
 		}
 		if (!record.payload || record.state === "invalid" || record.state === "conflict") throw new Error(`receiver ${record.id} is ${record.state}: ${record.error ?? "unusable registration"}`);
-		const descriptor = await captureFile(record.source.winner.path);
+		const descriptor = await captureFile(record.descriptor);
 		const descriptorText = fileText(descriptor);
 		if (descriptorText === void 0 || JSON.stringify(keybindingConsumers.decode(JSON.parse(descriptorText))) !== JSON.stringify(record.payload)) throw new Error(`receiver ${record.id} changed during admission`);
 		const consumer = record.payload;
@@ -29224,7 +29361,7 @@ async function admitKeybindingBatch(request) {
 		if (!override?.actionContexts && override?.scope && override.scope !== values.scope) throw new Error("receiver scope override disagrees with invocation audience");
 		const context = values.context ?? override?.actionContexts?.[values.scope] ?? override?.context ?? consumer.defaultContext;
 		if (!consumer.contexts.includes(context)) throw new Error(`receiver ${record.id} does not advertise context ${context}`);
-		const profile = (values.profile ? resolve(values.profile) : void 0) ?? await resolveConsumerProfile(values["profile-selector"] ? JSON.parse(values["profile-selector"]) : override?.profile ?? consumer.profile, record.source.winner.path, `receiver ${record.id} profile`);
+		const profile = (values.profile ? resolve(values.profile) : void 0) ?? await resolveConsumerProfile(values["profile-selector"] ? JSON.parse(values["profile-selector"]) : override?.profile ?? consumer.profile, record.descriptor, `receiver ${record.id} profile`);
 		const args = [
 			"--manifest",
 			resolve(manifestPath),
@@ -29253,10 +29390,10 @@ async function admitKeybindingBatch(request) {
 			resources: manifest.resources.map((entry) => ({ ...entry })),
 			targets: [...manifest.targets]
 		};
-		const registration = registryGuard(snapshot.policy, record.source);
+		const registration = record.expectation ?? registryGuard(snapshot.policy, record.source);
 		const descriptorGuard = descriptor.guard;
 		admitted.options.inputGuards = [...guards, descriptorGuard];
-		admitted.options.registryGuards = [registration];
+		admitted.options.registryGuards = [registration, publicationPlan.expectation];
 		members.push({
 			id: record.id,
 			originalState: record.state,
@@ -29304,10 +29441,8 @@ async function runAdmittedKeybindingBatch(batch) {
 		policy: batch.publication.policy,
 		source: batch.publication.source
 	}, batch.publication.plan);
-	const provider = lookup$1(await inspectRegistry(keybindingProviders, batch.publication.policy), batch.publication.plan.id);
-	const providerGuard = registryGuard(batch.publication.policy, provider.source);
+	await assertRegistryGuards([batch.publication.plan.expectation]);
 	for (const member of batch.members) {
-		member.admitted.options.registryGuards = [...member.admitted.options.registryGuards ?? [], providerGuard];
 		console.log(`receiver ${member.id}: ${member.originalState}${member.forced ? " (forced for this invocation)" : ""}`);
 		const code = await runAdmittedKeybindingCommand(member.admitted);
 		if (code !== 0) return code;
@@ -29320,11 +29455,11 @@ var init_invocation = __esmMin((() => {
 	init_runtime();
 	init_delivery();
 	init_registry$2();
-	init_policy();
 	init_read$1();
 	init_guard();
 	init_decode$1();
 	init_register();
+	init_policy();
 }));
 //#endregion
 //#region files/config/keybindings/runtime.ts
@@ -29370,7 +29505,8 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 			"force-enable": {
 				type: "boolean",
 				default: false
-			}
+			},
+			"registry-policy": { type: "string" }
 		}
 	});
 	let receiver;
@@ -29385,7 +29521,9 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 		if (text === void 0) throw new Error("missing owned consumer descriptor");
 		const own = keybindingConsumers.decode(JSON.parse(text));
 		if (own.audience !== values.scope) throw new Error("owned consumer audience mismatch");
-		const policy = registryPolicy(keybindingConsumers.collection, own.audience);
+		const policies = await bindRegistryPolicies(own.audience, values["registry-policy"], defaults.registries);
+		const policy = policies.consumers;
+		registrationFiles.push(...policies.guards);
 		const publicationPlan = await planRegistration({
 			domain: keybindingConsumers,
 			policy,
@@ -29418,13 +29556,9 @@ async function admitKeybindingCommand(command, args, defaults, binding) {
 		if (values.target !== own.adapter) throw new Error("host native adapter mismatch");
 		registrationFiles.push(file.guard);
 		if (record) {
-			registrationGuards.push(registryGuard(policy, record.source));
+			registrationGuards.push(publicationPlan.expectation);
 			registrationFiles.push(registered.guard);
-		} else registrationGuards.push({
-			roots: [...policy.roots],
-			id: own.id,
-			expected: "missing"
-		});
+		} else registrationGuards.push(publicationPlan.expectation);
 		receiver = {
 			id: own.id,
 			originalState: state,
@@ -29617,11 +29751,11 @@ async function main$3(argv, defaults) {
 }
 var init_runtime = __esmMin((() => {
 	init_capture$1();
-	init_policy();
 	init_read$1();
 	init_guard();
 	init_registry$2();
 	init_register();
+	init_policy();
 	init_processor();
 	init_closure();
 	init_consumer();
@@ -29670,7 +29804,8 @@ function domainStep(value) {
 		"manifest",
 		"producer",
 		"selection",
-		"descriptor"
+		"descriptor",
+		"registryPolicy"
 	], "domain step");
 	const id = named(raw.id, "operation ID");
 	const envelope = binPath(raw.envelope);
@@ -29683,9 +29818,10 @@ function domainStep(value) {
 			"envelope",
 			"manifest",
 			"producer",
-			"selection"
+			"selection",
+			"registryPolicy"
 		], "registry producer operation");
-		if (typeof raw.manifest !== "string" || !raw.manifest || raw.selection !== void 0 && (typeof raw.selection !== "string" || !raw.selection)) fail$1("invalid registry producer locators");
+		if (typeof raw.manifest !== "string" || !raw.manifest || raw.registryPolicy !== void 0 && (typeof raw.registryPolicy !== "string" || !raw.registryPolicy) || raw.selection !== void 0 && (typeof raw.selection !== "string" || !raw.selection)) fail$1("invalid registry producer locators");
 		return {
 			kind: "domain",
 			id,
@@ -29694,7 +29830,8 @@ function domainStep(value) {
 			envelope,
 			manifest: raw.manifest,
 			producer: named(raw.producer, "producer"),
-			...raw.selection === void 0 ? {} : { selection: raw.selection }
+			...raw.selection === void 0 ? {} : { selection: raw.selection },
+			...raw.registryPolicy === void 0 ? {} : { registryPolicy: raw.registryPolicy }
 		};
 	}
 	const context = named(raw.context, "operation context");
@@ -29712,7 +29849,8 @@ function domainStep(value) {
 		"profile",
 		"manifest",
 		"producer",
-		"descriptor"
+		"descriptor",
+		"registryPolicy"
 	]) if (raw[key] !== void 0 && (typeof raw[key] !== "string" || !raw[key])) fail$1(`invalid domain ${key}`);
 	if (raw.mode !== void 0 && (raw.mode !== "assemble" || raw.operation !== "host")) fail$1("only host assembly can assert mode assemble");
 	if (raw.profile !== void 0 && raw.profileSelector !== void 0) fail$1("choose profile or profile selector");
@@ -29911,6 +30049,7 @@ async function prepareOperation(step, audience, argv, deploymentDir, runtimePath
 				manifest: step.manifest,
 				selection: step.selection,
 				producer: step.producer,
+				registryPolicy: step.registryPolicy,
 				audience,
 				defaults: {
 					runner: resolve(deploymentDir, "bin/config/run.sh"),
@@ -29950,9 +30089,11 @@ async function prepareOperation(step, audience, argv, deploymentDir, runtimePath
 	if (step.profileSelector) args.push("--profile-selector", JSON.stringify(step.profileSelector));
 	if (step.manifest) args.push("--manifest", step.manifest);
 	if (step.descriptor) args.push("--descriptor", step.descriptor);
+	if (step.registryPolicy) args.push("--registry-policy", step.registryPolicy);
+	const executionArgs = step.descriptor ? argv.filter((arg, index) => arg !== "--target" && !arg.startsWith("--target=") && argv[index - 1] !== "--target") : argv;
 	return {
 		domain: "keybindings",
-		admitted: await admitKeybindingCommand(step.operation, [...args, ...argv], {
+		admitted: await admitKeybindingCommand(step.operation, [...args, ...executionArgs], {
 			runner: resolve(deploymentDir, "bin/config/run.sh"),
 			validatorCommand: [
 				process.execPath,
@@ -31910,14 +32051,19 @@ async function main$1(argv, env = { ...process.env }) {
 	const domain = definitions.find((entry) => entry.name === model.collection).domain;
 	const audience = model.scope;
 	if (!model.root?.length && model["write-root"] !== void 0) throw new Error("--write-root requires explicit --root values");
-	const policy = model.root?.length ? explicitPolicy(audience, model.root, model["write-root"] ?? model.root[0]) : registryPolicy(domain.collection, audience, env);
+	if (model["registry-policy"] && model.root?.length) throw new Error("choose explicit roots or registry policy pair");
+	const pair = model["registry-policy"] ? await bindRegistryPolicies(audience, model["registry-policy"]) : void 0;
+	if (pair && model.collection === "zim-providers") throw new Error("keybinding policy pairs do not select Zim roots");
+	const policy = pair ? model.collection === "keybinding-providers" ? pair.providers : pair.consumers : model.root?.length ? explicitPolicy(audience, model.root, model["write-root"] ?? model.root[0]) : registryPolicy(domain.collection, audience, env);
 	if (parsed.route === "/register" || parsed.route === "/status") {
 		const request = {
 			domain,
 			policy,
 			source: parsed.model.source
 		};
-		const plan = parsed.route === "/register" ? await register(request) : await planRegistration(request);
+		const planned = await planRegistration(request);
+		if (pair) planned.expectation.files = [...planned.expectation.files ?? [], ...pair.guards];
+		const plan = parsed.route === "/register" ? await applyRegistration(request, planned) : planned;
 		console.log(model.json ? JSON.stringify(plan, null, 2) : `${plan.id}\t${plan.disposition}\tlocal:${plan.participation}\teffective:${plan.effective.state}\t${plan.destination}\n${plan.reason}`);
 		return plan.disposition === "blocked" ? 1 : parsed.route === "/status" && plan.disposition === "create" ? 1 : 0;
 	}
@@ -31960,10 +32106,11 @@ var init_registry = __esmMin((() => {
 	init_dist$2();
 	init_registry$2();
 	init_registry$1();
-	init_policy();
+	init_policy$1();
 	init_read$1();
 	init_register();
 	init_render();
+	init_policy();
 	definitions = [
 		{
 			name: "keybinding-providers",
@@ -31988,6 +32135,7 @@ var init_registry = __esmMin((() => {
 		option(name("scope"), schema(scope)),
 		option(name("root"), multiple(), schema(strings)),
 		option(name("write-root"), schema(optionalText)),
+		option(name("registry-policy"), schema(optionalText)),
 		toggle(name("json"))
 	];
 	verbs = [

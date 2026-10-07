@@ -14,6 +14,8 @@ import { verifyPreparedOperation } from "../../files/actions/operations.ts";
 import type { KeybindingBatchStep } from "../../files/actions/model.ts";
 import * as registration from "../../runtime/registry/register.ts";
 import * as capture from "../../files/config/capture.ts";
+import * as discovery from "../../runtime/discovery/figments.ts";
+import { bindRegistryPolicies } from "../../runtime/keybindings/policy.ts";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -117,6 +119,87 @@ it("selection decoding and its guard refer to the same captured bytes across an 
   const batch = await admitKeybindingBatch({ args: [], manifest: f.provider, selection, defaults });
   expect(batch.members.map((entry) => entry.id)).toEqual(["deck-main"]);
   await expect(runAdmittedKeybindingBatch(batch)).rejects.toThrow("source changed");
+});
+
+it("public supplied SYSTEM pair never observes default system or ambient HOME registries", async () => {
+  const f = await setup(),
+    policyFile = join(f.owner, "system-policy.json"),
+    descriptor = join(f.owner, "system-niri.json"),
+    profile = join(f.owner, "system-profile.json"),
+    selection = join(f.owner, "system-selection.json");
+  const side = (role: string) => ({
+    roots: [{ relative: `isolated-system/${role}` }],
+    writeRoot: { relative: `isolated-system/${role}` },
+  });
+  await writeFile(
+    policyFile,
+    JSON.stringify({
+      version: 1,
+      audiences: { system: { providers: side("providers"), consumers: side("consumers") } },
+    }),
+  );
+  await writeFile(
+    profile,
+    JSON.stringify({
+      version: 1,
+      target: "niri",
+      contexts: { host: { scope: "system", root: { path: join(f.root, "system-native") } } },
+    }),
+  );
+  await writeFile(
+    descriptor,
+    JSON.stringify({
+      version: 1,
+      id: "system-niri",
+      adapter: "niri",
+      audience: "system",
+      profile: { path: profile },
+      contexts: ["host"],
+      defaultContext: "host",
+    }),
+  );
+  const policies = await bindRegistryPolicies("system", policyFile);
+  await register({ domain: keybindingConsumers, policy: policies.consumers, source: descriptor });
+  await writeFile(
+    selection,
+    JSON.stringify({
+      version: 1,
+      receivers: [
+        { id: "not-system", scope: "user" },
+        { id: "system-niri", scope: "system" },
+      ],
+    }),
+  );
+  vi.stubEnv("HOME", "unusable-ambient-home");
+  const observed = vi.spyOn(discovery, "observe");
+  const batch = await admitKeybindingBatch({
+    args: ["--scope", "system", "--registry-policy", policyFile],
+    manifest: f.provider,
+    selection,
+    defaults,
+  });
+  expect(batch.members.map((entry) => entry.id)).toEqual(["system-niri"]);
+  expect(
+    observed.mock.calls.flatMap(([roots]) => roots).every((root) => root.startsWith(f.owner)),
+  ).toBe(true);
+  const host = await admitKeybindingCommand(
+    "host",
+    [
+      "--descriptor",
+      descriptor,
+      "--context",
+      "host",
+      "--scope",
+      "system",
+      "--registry-policy",
+      policyFile,
+    ],
+    defaults,
+  );
+  expect(host.publication?.policy.writeRoot).toBe(policies.consumers.writeRoot);
+  expect(
+    observed.mock.calls.flatMap(([roots]) => roots).every((root) => root.startsWith(f.owner)),
+  ).toBe(true);
 });
 async function setup() {
   const f = await fixtures();
