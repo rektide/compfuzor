@@ -145,3 +145,9 @@ F13–F20 appear in the bundled `f` context; F21/F22 are earmarked by the declar
 The user clarifies that a Debian build choice is not a blocker: run [`kanata.src.pb`](/kanata.src.pb) and replace the Debian package to obtain upstream capabilities. The [source-migration intent](/design/kanata-source/brief0.gpt61s.md) captures the authorized handoff and service/config preservation checkpoints. The earlier missing TCP feature and service sandbox are adjustable deployment prerequisites, not grounds to dismiss sideways state. Merely having the feature compiled still does not define a publisher or protocol semantics.
 
 The user also establishes the configuration boundary: dial action/tier/step policy belongs in media-keys and/or Surface Dial, not Umbriel. Generated Umbriel binding artifacts are acceptable as target output; no dial-specific state store or substantial compositor-authored policy is being proposed. A source-built Kanata publisher and daemon-side state/action ownership should be assessed within that boundary.
+
+# Addendum: source capability is live (2026-10-07)
+
+The [authorized cutover](/design/kanata-source/cutover0.glm53.md) is complete: main and BlueTurn run source Kanata `1.12.1-prerelease-1` at `/usr/local/bin/kanata`, with `--port` compiled in. Debian was removed without purging; keymaps and account IDs were preserved, and Kanata now owns its unit, sysusers declaration, and uinput rule. The [maintained deployment guide](/doc/input/kanata.md) records the operational boundary.
+
+The earlier Debian binary limitation no longer applies to the active deployment. No TCP listener or new dial tier was introduced; service transport/access policy and publisher semantics remain deliberate next work. Dial policy remains producer/daemon-owned rather than compositor-authored.
