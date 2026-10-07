@@ -107,7 +107,7 @@ Do not adopt a global submap solely to model a dial-local boolean. Do not demand
 
 # Addendum: deployed Kanata is not TCP-ready
 
-A subsequent read-only capability check narrows the upstream message-push option. `/usr/bin/kanata --help` listed no `-p` or `--port` argument. The [v1.9.0 CLI source](https://github.com/jtroo/kanata/blob/v1.9.0/src/main_lib/args.rs) exposes that argument only with the `tcp_server` feature. This is evidence that the installed binary lacks that facility, rather than merely having no configured listener.
+A subsequent read-only capability check narrows the upstream message-push option. `/usr/bin/kanata --help` listed no `-p` or `--port` argument. The [v1.9.0 CLI source](https://github.com/jtroo/kanata/blob/v1.9.0/src/main.rs#L45-L54) exposes that argument only with the `tcp_server` feature. This is evidence that the installed binary lacks that facility, rather than merely having no configured listener.
 
 The installed `/usr/lib/systemd/system/kanata.service` also has:
 
