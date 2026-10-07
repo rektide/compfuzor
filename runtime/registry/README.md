@@ -91,7 +91,7 @@ existing native/CONFIG closure; no receiver-side sibling checkout or node_module
 is required. Source development still uses `.ts` entries.
 
 See the [library predecessor](/design/registry-discovery/implementation0.gpt61s.md)
-and [generated/native checkpoint](/design/registry-discovery/implementation1.gpt61s.md)
+and [combined/policy checkpoint](/design/registry-discovery/implementation2.gpt61s.md)
 for domain schemas, evidence and remaining integration decisions.
 
 ## Advertised keybinding execution
@@ -124,3 +124,52 @@ executes the frozen receiver batch. Ordinary owned-host install can bind its pac
 description prospectively and publishes its reference after successful native work;
 assemble/check does not advertise. Separate generated registration endpoints support
 passive publication while native work is disabled, masked or not yet installed.
+
+## Combined first install and custom policy pairs
+
+Owner-held selection may add scoped exact references, without pretending they are
+observed registrations:
+
+```json
+{"version":1,"receivers":null,"prospectiveConsumers":{"user":[{"relative":"consumers/user/niri.json"}]}}
+```
+
+Existing effective registrations/controls take precedence. Combined generated
+actions admit these inputs before authored bodies, then bootstrap/publish owned
+hosts before running the producer's fixed batch. Repeated `--target` on a combined
+action narrows producer delivery; it does not replace an owned host's native format.
+
+`RegistrationPlan.expectation` accepts its exact captured pre-state or only the
+intended owner-reference publication, preserving all other observations and slots.
+It carries byte/physical-parent guards. Multiple operations can recognize that
+specific benign publication idempotently; foreign refs, masks, conflicts, descriptor
+edits and alternate-slot changes fail. Native work never trusts a freshly observed
+post-publication provider as a new admission. A higher effective producer declaration
+must agree on the owned operative manifest (identity/order/resources/native targets);
+participation controls may differ but cannot redirect workloads silently.
+
+Both public native and passive keybinding entries accept `--registry-policy PATH`.
+Generated `KEYBINDING_REGISTRY_POLICY` emits that owner-held document and locator:
+
+```json
+{
+  "version": 1,
+  "audiences": {
+    "system": {
+      "providers": {"roots":[{"relative":"isolated/providers.d"}],"writeRoot":{"relative":"isolated/providers.d"}},
+      "consumers": {"roots":[{"relative":"isolated/consumers.d"}],"writeRoot":{"relative":"isolated/consumers.d"}}
+    }
+  }
+}
+```
+
+Roots reuse PathSelector, bind at invocation, and resolve relative to the policy
+document's physical directory. The selected audience requires **both** sides; a
+missing side/audience never falls back to live defaults. No supplied document means
+the normal XDG/system policy. The bound pair and document guards survive typed
+transport/body environment changes. See [policy binder](/runtime/keybindings/policy.ts)
+and [SYSTEM/combined proof](/tests/integration/registry_combined_generated.test.py).
+
+Not supplied yet: persistent registry admin operations, Zim registered-offer
+consumption, consumer-driven provider collection, or alternate runtime-source
+selection. Host assembly still reads closed accepted membership only.
