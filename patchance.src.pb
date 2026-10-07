@@ -4,6 +4,8 @@
     TYPE: patchance
     INSTANCE: git
     REPO: https://github.com/Houston4444/Patchance.git
+    # The jj archive runner does not support submodule deployment yet.
+    ARCHIVE_DOWNLOAD: false
     GIT_SUBMODULES: true
     PKGS:
       - make
