@@ -314,7 +314,7 @@ SUBSYSTEM:
             if [ -f package-lock.json ] && [ ! -f pnpm-lock.yaml ]; then
               pnpm import
             fi
-            pnpm i --frozen-lockfile
+            pnpm i --frozen-lockfile{{ _nodejs_allow_build_flags }}
             IFS=',' read -ra _cf_build_scripts <<< "${NODEJS_BUILD_SCRIPTS:-build}"
             for _cf_script in "${_cf_build_scripts[@]}"; do
               if jq -e ".scripts.${_cf_script}" package.json > /dev/null 2>&1; then
@@ -335,13 +335,16 @@ SUBSYSTEM:
           basedir: repo
           generated: |
             {{ NODEJS_COMMENT_INSTALL | join2(prefix='# ') }}
+            # pnpm >= 10 dropped `pnpm link -g`; `pnpm add -g .` is the live-link
+            # replacement (records the package as a `link:` dep of the global
+            # project, so bins resolve back into this checkout).
             if [ -n "{{ NODEJS_LINK_DIR | default('') }}" ]; then
               IFS=',' read -ra _cf_link_dirs <<< "{{ NODEJS_LINK_DIR | default('.') }}"
               for _cf_dir in "${_cf_link_dirs[@]}"; do
-                (cd "$_cf_dir" && pnpm link -g)
+                (cd "$_cf_dir" && pnpm add -g .)
               done
             else
-              pnpm link -g
+              pnpm add -g .
             fi
             if [ -n "${NODEJS_PRUNE_SCRIPTS:-}" ]; then
               IFS=',' read -ra _cf_prune_scripts <<< "${NODEJS_PRUNE_SCRIPTS:-}"
@@ -1107,6 +1110,10 @@ _nodejs_build_scripts: "{{ (NODEJS_BUILD_SCRIPTS | default(NODEJS_BUILD_SCRIPT))
 _nodejs_build_commands: "{{ (NODEJS_BUILD_COMMANDS | default(NODEJS_BUILD_COMMAND)) | normalize(to='list') }}"
 _nodejs_prune_scripts: "{{ (NODEJS_PRUNE_SCRIPTS | default(NODEJS_PRUNE_SCRIPT)) | normalize(to='list') }}"
 _nodejs_prune_commands: "{{ (NODEJS_PRUNE_COMMANDS | default(NODEJS_PRUNE_COMMAND)) | normalize(to='list') }}"
+# pnpm 12 fails installs whose dependency build scripts were gated; approve
+# named deps with --allow-build flags on the nodejs build's `pnpm i` line.
+_nodejs_allow_builds: "{{ (NODEJS_ALLOW_BUILDS | default(NODEJS_ALLOW_BUILD)) | normalize(to='list') }}"
+_nodejs_allow_build_flags: "{{ (' --allow-build=' ~ (_nodejs_allow_builds | join(' --allow-build='))) if _nodejs_allow_builds | length > 0 else '' }}"
 
 _npm_src_bins:
   - name: build-npm.sh
