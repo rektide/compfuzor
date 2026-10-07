@@ -145,10 +145,14 @@ keyboards via `[[input.device]] name = "kanata"`). Applies session-wide — and
 per the companion investigation, a repeat_info change **is re-sent live to all
 clients** (`wlr_keyboard_set_repeat_info` → seat listener →
 `wl_keyboard_send_repeat_info` per client resource,
-[wlr_seat_keyboard.c:379-397](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/types/seat/wlr_seat_keyboard.c#L379));
-the open question is only whether *repeating clients* re-read it mid-hold.
-Reload mechanics are the companion
-[live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) lane.
+[wlr_seat_keyboard.c:379-397](https://gitlab.freedesktop.org/wlroots/wlroots/-/blob/0.20.2/types/seat/wlr_seat_keyboard.c#L379)).
+Reload is fully solved: inotify hot-reload (150 ms debounce, watches the whole
+include chain), a `config-reload` keybind, and `umbriel msg config-reload`
+IPC over `$XDG_RUNTIME_DIR/umbriel-$WAYLAND_DISPLAY.sock` — socket verified
+live ([umbriel-live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md)).
+Reload is diff-driven and preserves focus/windows; the one cost is an
+unconditional xkb keymap rebuild per reload. The open question is only
+whether *repeating clients* re-read repeat_info mid-hold — see Next slices.
 This satisfies "increase the key repeat rate somehow" but not the per-key ramp.
 
 # Option 1 — kanata-hosted ramp daemon (recommended build)
@@ -299,8 +303,14 @@ release or tap", and Press on an already-pressed vkey is an idempotent no-op):
   re-reads the new rate without restarting its delay timer — decidable by
   the zero-code experiment in
   [umbriel-repeat](/design/key-repeat/umbriel-repeat.glm53.md) (edit rate +
-  reload while holding a key in kitty). Note the companion also ranks an
-  **umbriel-native alternative** (~60–100 LOC patch, option A″ there: an
+  reload while holding a key in kitty). For the mutation path itself,
+  [live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) ranks:
+  **(fx-A)** a new `input-repeat-rate:<hz>` IPC msg action (~60–90 LoC, no
+  keymap rebuild, no file churn — the clean daemon/observer target), vs
+  **(fx-B)** zero-patch TOML-rewrite + inotify auto-reload — works today but
+  ~150–250 ms latency and a full keymap rebuild per bump (prototype-grade).
+  It also ranks an **umbriel-native alternative** (~60–100 LOC patch, option
+  A″ in [umbriel-repeat](/design/key-repeat/umbriel-repeat.glm53.md): an
   in-compositor ramp timer re-sending repeat_info) which delivers C without
   any daemon or TCP — the kanata-edge version matters only if we refuse to
   patch umbriel.
@@ -363,14 +373,25 @@ request), vs kanata's already-deployed, already-proven TCP surface.
 
 # Next slices (ranked)
 
-1. Option 0 config bump if wanted immediately (check live-reload doc for how).
-2. `KANATA_TCP_ENABLED` generalization in [`kanata.srv.pb`](/kanata.srv.pb)
+1. **The kitty experiment** (zero code, decides the cheap families): set
+   `repeat_rate = 5`, reload, hold a key in kitty, flip to 40, reload again —
+   does the ongoing repeat accelerate? Script staged at
+   `.test-agent/key-repeat/repeat-experiment.sh`. Outcomes: accelerates →
+   live-rate lanes (Cruise C / fx-A / g-A″) are real; next-press-only → tap
+   synthesis (Option 1 / g-B) is the only accelerator; repeat *dies* on
+   reload mid-hold → also rules out fx-B stepping (keymap rebuild
+   disruption).
+2. Option 0 config bump if wanted immediately (`umbriel msg config-reload`
+   or just edit-and-wait for inotify).
+3. `KANATA_TCP_ENABLED` generalization in [`kanata.srv.pb`](/kanata.srv.pb)
    (small, self-contained, useful to dial work too).
-3. `kramp` daemon + config change behind a new playbook; validate with
+4. `kramp` daemon + config change behind a new playbook; validate with
    `kanata --check` and the sim harness
    ([init0 test seams](/design/kanata-devices/init0.glm53.md)).
-4. Decide kanata-patch vs umbriel-patch graduation path after the companion
-   docs land.
+5. Post-experiment decision between the end-states: fx-A `input-repeat-rate`
+   IPC + kanata edge observer vs g-A″ in-compositor ramp vs plain kramp —
+   all three docs now cross-reference the same `Server::setKeyboardRepeat`
+   seam.
 
 # Cross-references
 
@@ -388,6 +409,10 @@ request), vs kanata's already-deployed, already-proven TCP surface.
   repeats; live repeat_info re-send wired), per-key patch options A′/A″/B/C
   with the kitty hold-reload experiment gating them.
   [umbriel-live-reload.glm53fx.md](/design/key-repeat/umbriel-live-reload.glm53fx.md)
-  — companion live-reload investigation (fx agent).
+  — landed: three reload triggers (inotify hot-reload, `config-reload`
+  keybind, `umbriel msg config-reload` IPC — socket verified live),
+  diff-driven input reapply, and the ranked live-mutation options (fx-A
+  `input-repeat-rate` IPC recommended, fx-B zero-patch TOML rewrite
+  prototype-grade, keybind observation a documented dead end).
 - [config.adoc allow-hardware-repeat](https://github.com/jtroo/kanata/blob/2f84d17/docs/config.adoc#L5021-L5039)
   — upstream's own Wayland guidance this design adopts.
