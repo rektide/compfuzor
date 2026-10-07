@@ -41,13 +41,16 @@
     # actions) can't touch kanata's lmet output. Trade-off: hk5/hk6 do
     # nothing wherever kanata isn't running (BIOS, other machines).
     #
-    # Reuses the packaged kanata package's static _kanata user (input
-    # group) -- same shape as kanata-blueturn.srv.pb and
-    # /usr/lib/systemd/system/kanata.service. SYSTEMD_ALIAS: false is
-    # load-bearing: the -kinata name would otherwise alias to
-    # kanata.service and fight the packaged unit.
-    PKGS:
-      - kanata
+    # Consumes the _kanata identity kanata.srv.pb declares (sysusers
+    # fragment; User=/Group=/SupplementaryGroups here, no declaration of
+    # its own) and the kanata.src.pb binary at /usr/local/bin/kanata --
+    # no PKGS: nothing here reinstalls the Debian package. Same sandbox
+    # shape as kanata-blueturn.srv.pb and the main unit; NOT deployed
+    # yet (main's authored config already excludes the Edge keyboard
+    # node, but the live config does not -- see design/kanata-source/).
+    # SYSTEMD_ALIAS: false stays load-bearing: the -kinata name would
+    # otherwise alias to kanata.service and fight the canonical unit
+    # main owns.
     ETC_PROP:
       mode: "0755"
     SYSTEMD_ALIAS: false
@@ -61,7 +64,7 @@
       User: _kanata
       Group: _kanata
       SupplementaryGroups: input
-      ExecStart: /usr/bin/kanata --cfg /etc/kanata/kinata.kbd
+      ExecStart: /usr/local/bin/kanata --cfg /etc/kanata/kinata.kbd
       Restart: no
       DeviceAllow:
         - /dev/uinput rw

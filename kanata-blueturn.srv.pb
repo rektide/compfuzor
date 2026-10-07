@@ -24,14 +24,15 @@
     # udev-hid-bpf) restores pre-7.0 semantics on affected kernels.
     # Full story: design/blueturn/kernel-uhid-shortreport.general.md
     #
-    # Reuses the packaged kanata package's static _kanata user (input
-    # group) -- same shape as /usr/lib/systemd/system/kanata.service,
-    # ExecStart pointed at our staged config (linked into
-    # /etc/kanata/, which the sandbox binds read-only). SYSTEMD_ALIAS:
-    # false is load-bearing: the -blueturn name would otherwise alias
-    # to kanata.service and fight the packaged unit.
-    PKGS:
-      - kanata
+    # Consumes the _kanata identity kanata.srv.pb declares (sysusers
+    # fragment; User=/Group=/SupplementaryGroups here, no declaration of
+    # its own) and the kanata.src.pb binary at /usr/local/bin/kanata --
+    # no PKGS: nothing here reinstalls the Debian package. Same sandbox
+    # shape as the main unit, ExecStart pointed at our staged config
+    # (linked into /etc/kanata/, which the sandbox binds read-only).
+    # SYSTEMD_ALIAS: false stays load-bearing: the -blueturn name would
+    # otherwise alias to kanata.service and fight the canonical unit
+    # main owns.
     ETC_PROP:
       mode: "0755"
     SYSTEMD_ALIAS: false
@@ -45,7 +46,7 @@
       User: _kanata
       Group: _kanata
       SupplementaryGroups: input
-      ExecStart: /usr/bin/kanata --cfg /etc/kanata/blueturn.kbd
+      ExecStart: /usr/local/bin/kanata --cfg /etc/kanata/blueturn.kbd
       Restart: no
       DeviceAllow:
         - /dev/uinput rw

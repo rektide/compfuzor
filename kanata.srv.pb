@@ -9,14 +9,102 @@
     # workhorse 2026-09-30, displacing interception-tools-main.service
     # (whose trixie packages ride the debian-stable pin-100 backstop).
     #
-    # Uses the PACKAGED kanata.service (the kanata package auto-enables it
-    # on install, so a second own unit just fights it): config is staged
-    # in ETC and linked over /etc/kanata/config.kbd -- the keyd pattern.
-    PKGS:
-      - kanata
-    # the packaged kanata.service runs as its own (dynamic) user: the ETC
-    # dir and config must be world-traversable/readable (0770/0660 default
-    # DIRMODE/FILEMODE block it -- same lesson as apt-cacher-rs)
+    # Source lane (design/kanata-source/): kanata.src.pb builds the
+    # binary (RUST_COPY real file at /usr/local/bin/kanata -- tcp_server
+    # is in its feature set, unlike Debian 1.9.0+ds-1), so no PKGS here:
+    # this playbook plus its two helpers own the whole deployment once
+    # the package leaves.
+    #
+    # THE canonical unit: SYSTEMD_SERVICE: kanata renders kanata.service
+    # -- the packaged unit's name, deliberately, so the source lane
+    # replaces it in place instead of fielding a kanata-main.service
+    # next to it. SYSTEMD_ALIAS: false is the same load-bearing opt-out
+    # the helpers carry: nothing of ours may alias onto kanata.service
+    # from a second name. (A pre-migration kanata-main.service artifact
+    # sits in ETC from an earlier experiment; it is unlinked and inert,
+    # and gets cleaned up at cutover rather than here.)
+    SYSTEMD_SERVICE: kanata
+    SYSTEMD_ALIAS: false
+    # Single declarer of the shared _kanata identity. The Debian package
+    # provisioned it dynamically (useradd --system in its postinst: uid/
+    # gid landed at 990/985 here, plus input membership); SYSUSERS pins
+    # both ids in sysusers.d(5)'s uid:gid form so this host's account
+    # survives the package verbatim -- systemd-sysusers never modifies
+    # existing names, so against the live account this is a no-op, and
+    # fresh hosts converge on the same ids. (No separate g spec: the
+    # renderer declares one line per name, and u already implies the
+    # same-name primary group.) kanata-blueturn.srv.pb and kinata.srv.pb
+    # consume the identity (User=/Group=/SupplementaryGroups: input)
+    # without declaring it. home/shell stay at the sysusers defaults
+    # (/nonexistent, nologin): the live account's /home/_kanata + zsh
+    # predate this declaration and are not touched.
+    SYSTEMD_SYSUSER: True
+    SYSUSERS:
+      - {name: _kanata, id: "990:985", comment: Kanata daemon}
+      - {name: _kanata, member: input}
+    # mirrors the retired /usr/lib/systemd/system/kanata.service
+    # (same hardening schema as the helpers), with the static user/
+    # group + input access spelled out and ExecStart swapped to the
+    # source binary. Restart: no renders empty (falsy) -- systemd's
+    # default -- matching the packaged Restart=no policy.
+    SYSTEMD_UNITS:
+      Description: Kanata keyboard remapper
+      Documentation: https://github.com/jtroo/kanata
+      Wants: modprobe@uinput.service
+      After: modprobe@uinput.service
+    SYSTEMD_SERVICES:
+      Type: simple
+      User: _kanata
+      Group: _kanata
+      SupplementaryGroups: input
+      ExecStart: /usr/local/bin/kanata --cfg /etc/kanata/config.kbd
+      Restart: no
+      DeviceAllow:
+        - /dev/uinput rw
+        - char-input
+        - /dev/stdin
+      DevicePolicy: strict
+      PrivateDevices: true
+      BindPaths: /dev/uinput
+      BindReadOnlyPaths:
+        - /dev/stdin
+        - /dev/input/
+        - /etc/kanata/
+      InaccessiblePaths: /dev/shm
+      LockPersonality: true
+      NoNewPrivileges: true
+      PrivateTmp: true
+      PrivateNetwork: true
+      PrivateUsers: true
+      ProtectHome: true
+      ProtectHostname: true
+      ProtectKernelTunables: true
+      ProtectKernelModules: true
+      ProtectKernelLogs: true
+      ProtectSystem: strict
+      ProtectControlGroups: true
+      RestrictAddressFamilies:
+        - AF_AX25
+        - ~AF_AX25
+      RestrictNamespaces: true
+      SystemCallArchitectures: native
+      SystemCallErrorNumber: EPERM
+      SystemCallFilter:
+        - "@system-service"
+        - "~@privileged"
+        - "~@resources"
+      RemoveIPC: true
+      IPAddressDeny: any
+      RestrictSUIDSGID: true
+      RestrictRealtime: true
+      MemoryDenyWriteExecute: true
+      UMask: "0077"
+    SYSTEMD_INSTALLS:
+      WantedBy: default.target
+    # the unit's _kanata user must traverse ETC and read the config
+    # (0770/0660 default DIRMODE/FILEMODE block it -- same lesson as
+    # apt-cacher-rs); config is staged in ETC and linked over
+    # /etc/kanata/config.kbd -- the keyd pattern, unchanged
     ETC_PROP:
       mode: "0755"
     LINKS:
