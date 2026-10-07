@@ -6,13 +6,14 @@ import {
   type RegistryRecord,
   type RegistrySnapshot,
 } from "./model.ts";
+import { explicitPolicy } from "./policy.ts";
 
 /** Read-only whole-definition registry projection, not accepted native membership. */
 export async function inspectRegistry<T>(
   domain: Domain<T>,
   policy: RegistryPolicy,
 ): Promise<RegistrySnapshot<T>> {
-  const bound = { ...policy, roots: [...policy.roots] };
+  const bound = explicitPolicy(policy.scope, policy.roots, policy.writeRoot);
   const view = await observe(bound.roots);
   const records = await Promise.all(
     view.entries.map(async (source): Promise<RegistryRecord<T>> => {

@@ -3,6 +3,7 @@ import { resolve, join, isAbsolute } from "node:path";
 import { loadOwner } from "../discovery/figments.ts";
 import { inspectDeliveryEntry, linkMatches, replaceWithLink } from "../../files/links/delivery.ts";
 import { inspectRegistry } from "./read.ts";
+import { explicitPolicy } from "./policy.ts";
 import { assertId, type Domain, type RegistryPolicy } from "./model.ts";
 
 export type RegistrationRequest<T> = {
@@ -40,17 +41,22 @@ export async function planRegistration<T>(
   if (!isAbsolute(request.source))
     throw new Error("registration requires an absolute owner descriptor path");
   const source = resolve(request.source);
+  const policy = explicitPolicy(
+    request.policy.scope,
+    request.policy.roots,
+    request.policy.writeRoot,
+  );
   const payload = request.domain.decode(await loadOwner(source));
   const id = request.domain.identity(payload);
   assertId(id);
   const scope = request.domain.scope(payload);
-  if (scope !== undefined && scope !== request.policy.scope)
+  if (scope !== undefined && scope !== policy.scope)
     throw new Error("owner descriptor audience disagrees with registration scope");
-  const snapshot = await inspectRegistry(request.domain, request.policy);
+  const snapshot = await inspectRegistry(request.domain, policy);
   if (!snapshot.complete)
     throw new Error("cannot register into an incompletely observed registry; inspect root errors");
   const effective = snapshot.records.find((record) => record.id === id);
-  const activePath = join(request.policy.writeRoot, `${id}.json`);
+  const activePath = join(policy.writeRoot, `${id}.json`);
   const disabledPath = `${activePath}.disabled`;
   const [active, disabled] = await Promise.all([
     inspectDeliveryEntry(activePath),
@@ -58,17 +64,25 @@ export async function planRegistration<T>(
   ]);
   const activePresent = active.kind !== "missing";
   const disabledPresent = disabled.kind !== "missing";
-  if (activePresent && disabledPresent)
+  const local =
+    effective?.source.participating.filter((entry) => entry.root === policy.writeRoot) ?? [];
+  if ((activePresent && disabledPresent) || local.length > 1)
     throw new Error(`conflicting local registration slots for ${id}`);
+  const existing = local[0];
   const disabledSlot =
-    disabledPresent ||
-    (!activePresent && (effective?.state === "disabled" || !request.domain.enabled(payload)));
+    existing?.disabled ??
+    (disabledPresent ||
+      (!activePresent && (effective?.state === "disabled" || !request.domain.enabled(payload))));
   const participation: RegistrationPlan["participation"] =
     disabledSlot || effective?.state === "disabled" || !request.domain.enabled(payload)
       ? "disabled"
       : "active";
-  const destination = disabledSlot ? disabledPath : activePath;
-  const slot = disabledSlot ? disabled : active;
+  const destination = existing?.path ?? (disabledSlot ? disabledPath : activePath);
+  const slot = existing
+    ? await inspectDeliveryEntry(existing.path)
+    : disabledSlot
+      ? disabled
+      : active;
   const guard = JSON.stringify({
     roots: snapshot.roots,
     source: effective?.source,
@@ -105,7 +119,7 @@ export async function planRegistration<T>(
       links: [
         {
           id: `registry-${id}`,
-          scope: request.policy.scope,
+          scope: policy.scope,
           src: source,
           dest: destination,
           policy: "replace",

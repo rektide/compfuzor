@@ -44,6 +44,8 @@ export function explicitPolicy(
   roots: readonly string[],
   writeRoot: string,
 ): RegistryPolicy {
+  if (scope !== "user" && scope !== "system")
+    throw new Error("registry policy requires user or system scope");
   if (roots.length === 0 || ![...roots, writeRoot].every(isAbsolute)) {
     throw new Error("registry policy requires absolute roots and a writable root");
   }

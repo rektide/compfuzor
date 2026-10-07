@@ -9,6 +9,7 @@ import { inspectRegistry, lookup } from "../../runtime/registry/read.ts";
 import { applyRegistration, planRegistration, register } from "../../runtime/registry/register.ts";
 import { explicitPolicy, registryPolicy } from "../../runtime/registry/policy.ts";
 import { load, observe } from "../../runtime/discovery/figments.ts";
+import { loadManifest } from "../../files/links/manifest.ts";
 
 const roots: string[] = [];
 async function setup() {
@@ -40,6 +41,58 @@ async function cli(args: string[], entry = "runtime/cli/registry.ts") {
 }
 
 describe("shared registry rendezvous", () => {
+  it("retains literal dotted/numeric IDs and observed slot spelling", async () => {
+    const f = await setup();
+    const payload = JSON.parse(await readFile(f.consumer, "utf8"));
+    for (const id of ["desk.alt", "007"]) {
+      payload.id = id;
+      const source = join(f.owner, `${id}.json`);
+      await writeFile(source, JSON.stringify(payload));
+      const destination = join(f.writable, `${id}.JSON.DISABLED`);
+      await symlink(source, destination);
+      const request = { domain: keybindingConsumers, policy: f.policy, source };
+      expect(await register(request)).toMatchObject({
+        id,
+        destination,
+        disposition: "current",
+        participation: "disabled",
+      });
+      expect(lookup(await inspectRegistry(keybindingConsumers, f.policy), id).payload?.id).toBe(id);
+    }
+  });
+
+  it("rejects special owner referents and malformed/unbound root policy", async () => {
+    const f = await setup();
+    const source = join(f.owner, "null.json");
+    await symlink("/dev/null", source);
+    await expect(
+      register({ domain: keybindingProviders, policy: f.policy, source }),
+    ).rejects.toThrow("regular file");
+    await expect(
+      inspectRegistry(keybindingConsumers, {
+        scope: "user",
+        roots: ["relative"],
+        writeRoot: "relative",
+      }),
+    ).rejects.toThrow("absolute roots");
+  });
+
+  it("reports enabled:false from payload independently of active filename storage", async () => {
+    const f = await setup();
+    const request = { domain: keybindingConsumers, policy: f.policy, source: f.consumer };
+    const first = await register(request);
+    const value = JSON.parse(await readFile(f.consumer, "utf8"));
+    value.enabled = false;
+    await writeFile(f.consumer, JSON.stringify(value));
+    expect(await register(request)).toMatchObject({
+      destination: first.destination,
+      participation: "disabled",
+      disposition: "current",
+    });
+    const record = lookup(await inspectRegistry(keybindingConsumers, f.policy), "deck-main");
+    expect(record.state).toBe("disabled");
+    expect(record.source.state).toBe("active");
+  });
   it("registers exact producer/consumer/Zim descriptors without centralizing payloads", async () => {
     const f = await setup();
     for (const [domain, source, id] of [
@@ -65,6 +118,9 @@ describe("shared registry rendezvous", () => {
       const plan = await register<unknown>(request);
       expect(plan.disposition).toBe("create");
       expect(await readlink(plan.destination)).toBe(source);
+      const material = join(f.root, "registration-material.json");
+      await writeFile(material, JSON.stringify(plan.material));
+      expect((await loadManifest(material)).manifest.links[0]?.src).toBe(source);
       const record = lookup(await inspectRegistry<unknown>(domain, policy), id);
       expect(record.state).toBe("active");
       expect(record.source.winner.referentPath).toBe(source);

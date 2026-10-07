@@ -1,5 +1,6 @@
 /** The only Figments integration seam. Source-mode linking is deliberate; see the checkpoint. */
 import { Figment } from "figmen-ts/src/figment.ts";
+import { stat } from "node:fs/promises";
 import { discoverDropIns, type RootReport } from "figmen-ts/src/discovery/entries.ts";
 import {
   resolveDropIns,
@@ -34,5 +35,7 @@ export async function load(entry: ResolvedEntry): Promise<unknown> {
 
 /** Required exact owner descriptor, without optional-file fallback or ancestor search. */
 export async function loadOwner(path: string): Promise<unknown> {
+  if (!(await stat(path)).isFile())
+    throw new Error(`owner descriptor must refer to a regular file: ${path}`);
   return Figment.from(Json.file(path).required(true).search(false)).build();
 }
