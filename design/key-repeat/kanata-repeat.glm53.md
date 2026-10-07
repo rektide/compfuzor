@@ -1,0 +1,304 @@
+---
+type: DesignInquiry
+title: Key repeat rate on this host — kanata-side options and the per-key ramp design
+description: Where repeat actually happens across kanata/uinput/umbriel/clients today, what kanata.srv.pb and siblings can tweak, and a concrete no-fork design for accelerating per-key pgup/pgdn repeat using layer-edge TCP notifications plus ActOnFakeKey taps.
+resource: /design/key-repeat/kanata-repeat.glm53.md
+status: draft
+generated: { by: model:glm-5.3, at: 2026-10-07 }
+stale_after: 2027-01-07
+sources:
+  - resource: https://github.com/jtroo/kanata/tree/2f84d17
+    title: Inspected kanata revision (deployed /usr/local/bin/kanata, see design/kanata-source/cutover0.glm53.md)
+  - resource: /usr/local/share/umbriel/config.toml
+    title: Live umbriel default config ([input.keyboard] repeat_rate/repeat_delay)
+  - resource: /design/kanata-devices/init0.glm53.md
+    title: Prior deep source map of deployed kanata revision
+  - resource: /files/kanata-dial/relay.ts
+    title: The dial TCP relay this design borrows guards from
+  - resource: /design/key-repeat/umbriel-repeat.glm53.md
+    title: Companion umbriel-side investigation (g agent, in flight at write time)
+  - resource: /design/key-repeat/umbriel-live-reload.glm53fx.md
+    title: Companion live-reload investigation (fx agent, in flight at write time)
+---
+
+# Stage
+
+The user wants a faster key repeat rate, and specifically wants **single-key rate
+control**: holding `pgup` should synthesize page-ups at a rate that *increases
+the longer the key is held*, reverting on keyup. They asked what
+[`kanata.srv.pb`](/kanata.srv.pb) and the sibling kanata playbooks can do, mused
+about a helper program that listens for kanata key changes and synthesizes at
+its own pace ("ideally there's guards in the tcp proto communication to keep
+from sending a new keydown"), then correctly suspected that "this isn't the
+kanata layer at all" and that umbriel is the real lever. Companion
+investigations cover the umbriel side; this doc covers the whole stack from the
+kanata lane and proposes the concrete build there.
+
+Topology today (see [cutover0](/design/kanata-source/cutover0.glm53.md) and
+[kanata-devices](/design/kanata-devices/init0.glm53.md)): all real keyboards are
+grabbed by the main kanata instance ([`kanata.srv.pb`](/kanata.srv.pb), binary
+from [`kanata.src.pb`](/kanata.src.pb), upstream `2f84d17`, `tcp_server`
+feature compiled in), which re-emits onto a uinput keyboard named `kanata`; the
+BlueTurn pedal has a second instance ([`kanata-blueturn.srv.pb`](/kanata-blueturn.srv.pb))
+whose pgup/pgdn are also momentary; umbriel (wlroots 0.20, [`umbriel.src.pb`](/umbriel.src.pb))
+is the compositor. The dial TCP relay
+([`kanata-dial.etc.pb`](/kanata-dial.etc.pb), [`relay.ts`](/files/kanata-dial/relay.ts))
+already demonstrates every protocol technique this design needs.
+
+# Verdict up front
+
+1. **Repeat is not one thing on this host — it is three races.** A held
+   physical key today produces: (a) hardware/kernel EV_REP repeats, which
+   kanata **passes through by default** (`allow-hardware-repeat` defaults true,
+   [defcfg.rs](https://github.com/jtroo/kanata/blob/2f84d17/parser/src/cfg/defcfg.rs));
+   (b) whatever the compositor/wlroots repeat machinery does; and (c)
+   **client-side repeat in Wayland clients** (kitty et al.), driven by the
+   `wl_keyboard.repeat_info` umbriel publishes — currently
+   `repeat_rate = 25, repeat_delay = 600` from
+   [`/usr/local/share/umbriel/config.toml`](/usr/local/share/umbriel/config.toml#L219-L225).
+   Effective repeat ≈ whichever of these wins; none of them is per-key, none
+   accelerates.
+2. **The immediate, zero-code win is umbriel's config**, not kanata's: raise
+   `repeat_rate` / lower `repeat_delay` (valid ranges 0-1000 Hz / 0-10000 ms).
+   That is flat and global — exactly what the user asked to move beyond.
+3. **Kanata config alone cannot express an accelerating repeat** — macros are
+   finite fixed-delay sequences and there is no loop construct. But kanata
+   **can host the feature with no fork**: map pgup/pgdn to an instant tap plus
+   `layer-while-held`, let kanata's TCP server push the layer edges to a tiny
+   daemon, and have that daemon emit `ActOnFakeKey` **Taps** on a
+   `defvirtualkeys` pgup-tap macro at a ramping cadence. This is the dial
+   relay's pattern, *simplified* — Tap-only emission eliminates the dial
+   relay's hardest problem (the fake-key lease).
+4. The trap to respect: if the mapped key outputs a **held** pgup, client-side
+   repeat fires in parallel with daemon taps (double paging). The initial
+   press must be a completed tap (`(macro pgup)`), and main should set
+   `allow-hardware-repeat no` — kanata's own Wayland recommendation — because
+   hardware repeats replay the **entire outer `multi` action**
+   ([layout.rs repeat comment](https://github.com/jtroo/kanata/blob/2f84d17/keyberon/src/layout.rs#L1984-L1996):
+   "multi will repeat the entire outer multi action"), which would re-run the
+   macro and re-enter the layer at the hardware's fixed rate.
+
+# The repeat stack, traced
+
+```mermaid
+flowchart LR
+    K["physical key held<br/>(keyboard fw repeat ~ configurable)"] --> KR["kernel EV_REP<br/>REP_DELAY/REP_PERIOD events"]
+    KR --> KA["kanata main (2f84d17)<br/>allow-hardware-repeat default TRUE<br/>Repeat → replays saved rpt_action"]
+    KA --> UI["uinput 'kanata'<br/>keydown … value=2 repeats … keyup"]
+    UI --> UM["umbriel (wlroots 0.20)<br/>[input.keyboard] repeat_rate=25 delay=600"]
+    UM --> RI["wl_keyboard.repeat_info<br/>→ focused client"]
+    RI --> CL["client-side repeat<br/>(kitty, GTK, Xwayland…)"]
+    UI --> CL
+```
+
+| Layer | Who controls it | Per-key? | Accelerating? | Actionable via |
+|---|---|---|---|---|
+| Keyboard firmware | keyboard itself | no | no | rarely |
+| Kernel EV_REP | udev/hwdb per device | per-device | no | mostly moot (kanata consumes) |
+| kanata passthrough | `allow-hardware-repeat` (default **true**, [defcfg.rs](https://github.com/jtroo/kanata/blob/2f84d17/parser/src/cfg/defcfg.rs)) | per-key (rpt replays outer action) | no | config today |
+| uinput → compositor | kanata output logic | no | no | — |
+| umbriel repeat info | `[input.keyboard]` (+ per-device sections!) | per-keyboard | no | config today |
+| client repeat | each client | no | no | via repeat_info only |
+| **synthesized tap streams** | any emitter (kanata TCP vkeys, patched kanata, patched umbriel) | **per-key** | **yes** | the design below |
+
+Notable finds along the trace:
+
+- **umbriel per-keyboard config exists**
+  ([config.toml](/usr/local/share/umbriel/config.toml#L273-L279): `[input.keyboard."Acme Split Keyboard"]`
+  with its own `repeat_rate`). Both kanata instances name their uinput output
+  `kanata` (deliberately, see [pedal.srv.pb](/kinesis/kanata/tcp-control/pedal.srv.pb)
+  output-naming note), so a per-device section for `kanata` ≈ global for
+  kanata-processed keys — usable, but still flat.
+- **kanata TCP protocol is richer than the dial use needed**
+  ([tcp_protocol/src/lib.rs](https://github.com/jtroo/kanata/blob/2f84d17/tcp_protocol/src/lib.rs)):
+  server pushes `LayerChange` on *every* layer change
+  ([mod.rs:930](https://github.com/jtroo/kanata/blob/2f84d17/src/kanata/mod.rs#L930))
+  **plus** an initial `LayerChange` snapshot on client connect
+  ([tcp_server.rs:150-163](https://github.com/jtroo/kanata/blob/2f84d17/src/tcp_server.rs#L150-L163));
+  `HoldActivated`/`TapActivated` push on tap-hold transitions; clients can
+  `ActOnFakeKey {Press|Release|Tap|Toggle}` any `defvirtualkeys` key
+  ([config.adoc:5876-5893](https://github.com/jtroo/kanata/blob/2f84d17/docs/config.adoc#L5876-L5893)) —
+  the docs' own example vkey is a macro. There is deliberately **no arbitrary
+  key injection** and **no raw key-event feed** over TCP (confirmed by
+  [init0](/design/kanata-devices/init0.glm53.md) TCP row) — layer edges are the
+  sanctioned observation channel, and they are exactly enough.
+
+# Option 0 — flat bump today (no code, no kanata)
+
+Edit the managed default template behind
+[`umbriel.etc.pb`](/umbriel.etc.pb) / user config include: e.g.
+`repeat_rate = 50`, `repeat_delay = 350`. Applies session-wide. Whether it can
+be applied *live* (reload mechanism, repeat_info propagation) is the companion
+[live-reload](/design/key-repeat/umbriel-live-reload.glm53fx.md) investigation.
+This satisfies "increase the key repeat rate somehow" but not the per-key ramp.
+
+# Option 1 — kanata-hosted ramp daemon (recommended build)
+
+## Config side (kanata.srv.pb content)
+
+```lisp
+(defcfg
+  process-unmapped-keys yes
+  ;; Wayland: clients repeat client-side; also prevents hw repeats from
+  ;; re-firing the outer multi (macro re-run + layer re-entry) mid-hold
+  allow-hardware-repeat no
+  linux-dev-names-exclude ( …unchanged… )
+)
+
+(defsrc
+  caps pgup pgdn            ;; + lsft rsft when KANATA_DIAL_ENABLED
+)
+
+(deflayer base
+  (tap-hold 100 100 esc lctl)
+  (multi (macro pgup) (layer-while-held ramp-pgup))
+  (multi (macro pgdn) (layer-while-held ramp-pgdn))
+)
+
+(deflayer ramp-pgup _ _ _)   ;; transparent: other keys unaffected while held
+(deflayer ramp-pgdn _ _ _)
+
+(defvirtualkeys
+  pgup-tap (macro pgup)
+  pgdn-tap (macro pgdn)
+)
+```
+
+Why each piece:
+
+- **`(macro pgup)` not `pgup`** inside the multi: the initial page-up must be
+  a *completed tap*. A held keydown would combine with client-side repeat
+  (double paging) — this is the "keep from sending a new keydown" guard the
+  user asked for, enforced structurally.
+- **`layer-while-held`** is the press/release edge feed: kanata owns keyup
+  semantics (layer exits on keyup even mid-tap of another key), pushes
+  `LayerChange` to TCP clients instantly, and sends a fresh snapshot to
+  reconnecting clients. No daemon-side keyup inference, ever.
+- **Transparent ramp layers** mean holding pgup changes nothing else: chords,
+  modifiers, typing during the hold all pass through base.
+- **`defvirtualkeys` + Tap** is the emission path: each Tap is an atomic
+  press+release of a kanata macro — discrete, ordered through kanata's single
+  event pipeline, impossible to double-down or strand (nothing is ever held on
+  behalf of the daemon). Contrast the dial relay, which must manage a
+  Press/Release *lease* across disconnects with reset barriers
+  ([relay.ts](/files/kanata-dial/relay.ts)); we inherit its other guards and
+  drop that one entirely.
+
+Deployment notes: adding pgup/pgdn to `defsrc` moves them from passthrough to
+managed (required). The live config was `once:`-preserved at cutover
+(`KANATA_CONFIG_PRESERVE`), so shipping new bytes is a deliberate render or a
+manual `/etc/kanata/config.kbd` edit + kanata restart. Main currently opens its
+TCP port **only under `KANATA_DIAL_ENABLED`** — that gate should generalize to
+e.g. `KANATA_TCP_ENABLED` (port, `RestrictAddressFamilies AF_INET`,
+`IPAddressAllow 127.0.0.1/32`, namespace anchor) so the repeat daemon doesn't
+drag the dial topology in; the sandbox/namespace pattern to copy is all in
+[`kanata.srv.pb`](/kanata.srv.pb) + [`kanata-dial.etc.pb`](/kanata-dial.etc.pb).
+
+## Daemon side ("kramp", one TCP connection to main)
+
+Behavior:
+
+1. Connect to main kanata TCP (127.0.0.1:5828). On connect the server's
+   initial `LayerChange` snapshot reconciles state — a daemon restart mid-hold
+   picks the ramp back up (or cleanly does nothing if the layer is gone).
+2. `RequestFakeKeyNames` once: verify `pgup-tap`/`pgdn-tap` exist; if a config
+   reload dropped them, log and idle (taps would error anyway).
+3. On `LayerChange`: name `ramp-<key>` → start that key's session (any other
+   name stops all sessions). Sessions are keyed by layer name so
+   start-while-running is idempotent — a duplicate start is a no-op, not a
+   second keydown storm.
+4. Session loop: sleep `initial_delay` (~350ms), then emit
+   `{"ActOnFakeKey":{"name":"<key>-tap","action":"Tap"}}` and sleep again, with
+   the interval ramping (e.g. 200ms → 25ms over ~2.5s, exponential decay to a
+   floor; all knobs configurable). Stop on layer exit, poll mismatch, or abort.
+5. Liveness: periodic `RequestCurrentLayerName` poll (the dial relay's 2s
+   cadence) reconciles missed pushes; write-backpressure → destroy + reconnect
+   ([relay.ts write()](/files/kanata-dial/relay.ts) pattern — never buffer
+   unboundedly).
+
+Guards summary (user's ask, mapped):
+
+| Hazard | Guard |
+|---|---|
+| new keydown/repeat while one in flight | Tap-only emission; kanata serializes its own pipeline; no held state exists |
+| daemon crash mid-hold | nothing held; layer exits on real keyup by kanata; snapshot resync on restart |
+| duplicate start (re-press, push+poll race) | sessions idempotent per layer name; poll reconciles |
+| kanata config reload mid-hold | `FakeKeyNames` check + layer-name mismatch stops session |
+| slow/stuck TCP | backpressure destroy, liveness poll, bounded reconnect |
+| runaway rate | floor clamp on interval (e.g. ≥10ms); profile fully configurable |
+
+This daemon is materially *simpler* than the dial relay (one socket, no lease,
+no reset barrier, no two-instance fan-out) and could even live in the same
+`files/kanata-dial/`-style playbook family as a sibling TYPE.
+
+# Option 2 — patch kanata (source lane)
+
+We own the build ([`kanata.src.pb`](/kanata.src.pb)). A native action — e.g.
+`(tap-ramp pgup init-ms min-ms decay)` implemented on keyberon's tick/timer
+machinery near the `rpt_action` handling
+([layout.rs:1984-1996](https://github.com/jtroo/kanata/blob/2f84d17/keyberon/src/layout.rs#L1984-L1996))
+— would need no daemon and no TCP. But it is fork pressure on a fast-moving
+upstream (init0's warning about divergence applies double for *behavioral*
+actions), the config language upstream would want design discussion (there are
+long-standing upstream asks for repeat-rate control worth checking first), and
+Option 1 delivers the same UX with zero kanata code. Defer; keep as the
+graduation path if the daemon proves annoying.
+
+# Option 3 — umbriel side
+
+The compositor sees every key before forwarding and owns `repeat_info`; a
+per-key repeat override or synthesized-repeat patch there is arguably the
+"right" layer (no coordination protocol needed at all). That lane — pipeline
+trace, live mutation, patch surface — is exactly what the companion docs
+cover: [umbriel-repeat.glm53.md](/design/key-repeat/umbriel-repeat.glm53.md)
+and [umbriel-live-reload.glm53fx.md](/design/key-repeat/umbriel-live-reload.glm53fx.md).
+Tradeoff vs Option 1: no helper daemon, but a patch to maintain on a
+third-party compositor (or upstreamable feature request), vs kanata's
+already-deployed, already-proven TCP surface.
+
+# Not pursued (noted for completeness)
+
+- kitty remote-control scrolling daemon (`kitty @ scroll-window` from a
+  keydown-triggered cmd) — kitty-only, bypasses keys entirely.
+- Hardware/kernel repeat tuning — consumed by kanata, moot downstream.
+- `(macro pgup d200 pgup d150 …)` fixed sequences — finite, fixed-rate, no ramp.
+
+# Open questions for the user
+
+- Which physical keys get the ramp — main-keyboard pgup/pgdn only, or the
+  BlueTurn pedal's pgup/pgdn too (pedal instance currently has no `--port`;
+  adding one is the established pattern)?
+- Is a flat global rate bump (Option 0) wanted *in addition*, or does per-key
+  ramp make the global setting moot?
+- Ramp curve preferences: initial delay, start interval, floor interval, ramp
+  time — defaults above are guesses to tune live.
+- Tolerance for a second always-on daemon (Option 1) vs appetite for patching
+  upstream code (Options 2/3)?
+
+# Next slices (ranked)
+
+1. Option 0 config bump if wanted immediately (check live-reload doc for how).
+2. `KANATA_TCP_ENABLED` generalization in [`kanata.srv.pb`](/kanata.srv.pb)
+   (small, self-contained, useful to dial work too).
+3. `kramp` daemon + config change behind a new playbook; validate with
+   `kanata --check` and the sim harness
+   ([init0 test seams](/design/kanata-devices/init0.glm53.md)).
+4. Decide kanata-patch vs umbriel-patch graduation path after the companion
+   docs land.
+
+# Cross-references
+
+- [init0.glm53.md](/design/kanata-devices/init0.glm53.md) — deployed kanata
+  source map (event loop, TCP server, rpt/repeat handling); the repeat row of
+  its edge-case matrix is this doc's starting point.
+- [cutover0.glm53.md](/design/kanata-source/cutover0.glm53.md) — instance
+  topology and binary lineage this doc assumes.
+- [relay.ts](/files/kanata-dial/relay.ts) + [dial.kbd](/files/kanata-dial/dial.kbd)
+  — the producer/consumer TCP pattern (vkey lease guards) this design
+  simplifies; [pedal.srv.pb](/kinesis/kanata/tcp-control/pedal.srv.pb) shows
+  the ChangeLayer consumer side and uinput output-naming constraint.
+- [umbriel-repeat.glm53.md](/design/key-repeat/umbriel-repeat.glm53.md),
+  [umbriel-live-reload.glm53fx.md](/design/key-repeat/umbriel-live-reload.glm53fx.md)
+  — companion investigations (compositor-side lever).
+- [config.adoc allow-hardware-repeat](https://github.com/jtroo/kanata/blob/2f84d17/docs/config.adoc#L5021-L5039)
+  — upstream's own Wayland guidance this design adopts.
