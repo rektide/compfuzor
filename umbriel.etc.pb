@@ -48,7 +48,7 @@
 #   umbriel.etc.pb  -- this entry: root template + personal fragments +
 #                      the Umbriel keybinding consumer host/profile
 #   vicinae.src.pb  -- named keybinding producer; its generated
-#                      install-keybindings-umbriel.sh registers bindings
+#                      install-keybindings.sh selects advertised receivers and accepts bindings
 #                      into this consumer (the old hand-written
 #                      keybinds-vicinae.toml fragment + install-umbriel.sh
 #                      are gone; the hardcoded include was dropped from the
@@ -216,6 +216,8 @@
       - `bin/assemble-user.mjs` + `bin/assemble.mjs` -- existing-placement assembly
       - `bin/install-user.sh` -- internal original-path seed/migration body
       - `bin/install-keybindings-umbriel.sh` / `bin/keybindings.mjs` -- compatible internal endpoints
+      - `keybindings/consumers/user/umbriel.json` -- owned registry description referencing this profile
+      - `bin/register-keybindings-consumer-umbriel-user.sh` / `bin/status-keybindings-consumer-umbriel-user.sh` -- passive reference publication/status, no native activation
 
       Requires node, jq, `block-in-file`, and `umbriel` on PATH at
       invocation time; none are installed by this deployment.

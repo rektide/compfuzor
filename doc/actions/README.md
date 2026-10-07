@@ -94,9 +94,11 @@ CONFIG install contributions when another domain owns installation.
 
 Keybinding hosts attach complete install and host assembly; generic `assemble`
 asserts native placement mode `assemble`, while install retains seed behavior.
-Producer install retains source registration and membership with its existing
-CONFIG commit/rollback boundary. Declaring both roles preserves different owned
-and external receivers without repeating an identical owned producer install.
+Producer install uses a complete typed **`install-offer` batch** with exact manifest,
+owner-held receiver selection and registry policy. It retains source registration
+and membership through each consumer's CONFIG commit/rollback boundary. Declaring
+both roles admits packaged prospective consumers before bodies and bootstraps owned
+hosts before delivering the frozen producer batch; no late registry rescan widens it.
 
 Owned consumer contexts infer uniquely per scope. Use `action_contexts` for
 ambiguity; an external target uses it to **declare**, not discover, audiences:
@@ -119,12 +121,28 @@ KEYBINDING_TARGETS:
     action_contexts: {user: desktop, system: host}
 ```
 
-Without an external mapping, the existing target `context`/`scope` pair declares
-one audience. The controller does not fetch arbitrary external profiles. Actual
-profile target/context/scope assertions happen at invocation before body effects.
+Without an external mapping, the existing receiver `context`/`scope` pair declares
+one audience. Receiver requests are filtered by audience before lookup. The controller
+does not fetch arbitrary external profiles. Actual registry identity/participation,
+profile adapter/context/scope assertions happen at invocation before body effects.
 Consumers' mappings govern their host operations; target mappings govern producer
-delivery. For an owned target without a consumer override, its mapping can also
-resolve an otherwise unspecified host mapping.
+delivery. Host ambiguity still requires its own explicit mapping.
+
+`KEYBINDING_TARGETS` names receiver IDs, not native formats. An external profile
+override does not advertise a missing receiver. Without explicit targets a pure
+producer selects all compatible active advertised consumers; `[]`/`{}` means no
+native delivery. A host per-receiver family remains distinct from the producer's
+single `install-keybindings` offer family. In a combined action repeated `--target`
+narrows producer receiver delivery without changing owned host native formats.
+
+Native and passive keybinding entries accept `--registry-policy PATH`. Generated
+`KEYBINDING_REGISTRY_POLICY` emits an owned version-1 document with an `audiences`
+mapping, each selected audience requiring both provider and consumer roots/writeRoot.
+The bound pair and same captured bytes are reused for selection, owner publication
+and guards; missing sides refuse fallback. Relative selectors use the document's
+physical directory. Use explicit disposable pairs for SYSTEM tests; HOME/native-root
+isolation alone does not isolate default `/var/lib`/`/etc` rendezvous collections.
+See the [registry interface](/runtime/registry/README.md#combined-first-install-and-custom-policy-pairs).
 
 Explicit same-audience contexts or profiles may override a domain default if all
 selected operations accept them. Other-audience overrides, different declared
@@ -133,7 +151,8 @@ clearly. Recipe/strategy/input-command syntax is checked early too.
 
 ## Admission and authored work
 
-Receiver roots, output/input bindings, placement selectors and delivery strategies
+Receiver IDs/profiles, registry roots, force policy, exact provider resources,
+output/input bindings, placement selectors and delivery strategies
 are resolved before authored effects. Later `HOME`, XDG, selector-environment,
 strategy or argv changes cannot redirect those admitted domain operations.
 Operational exports still reach execution and ordinary children. No adopted root,
@@ -204,6 +223,9 @@ This is a sequential action aggregate, not a new cross-domain transaction,
 configuration assembler, privilege escalator or placement mode. CONFIG's
 candidate commit and domain-specific activation remain their own operations.
 Audience selection itself does not choose material placement.
+An offer batch is not a cross-receiver transaction: earlier receiver successes
+remain if a later native validation fails. Producer advertisement can remain after
+native rejection. Registration is not native activation or accepted membership.
 
 ## Adopted playbook defaults: material versus receiver
 
@@ -234,13 +256,15 @@ Shared material is an explicit existing override:
 ```sh
 ansible-playbook -i 'localhost,' -c local niri.etc.pb -e PREFIX_DIR=/etc/opt
 export COMPFUZOR_NIRI_PROFILE=/etc/opt/niri/etc/keybinding-niri.json
+/etc/opt/niri/bin/register-keybindings-consumer-niri-user.sh
 ```
 
-`COMPFUZOR_NIRI_PROFILE` and `COMPFUZOR_UMBRIEL_PROFILE` select consumer JSON
-files for Media Keys and Vicinae. Their defaults use invocation-time XDG data/HOME,
-not the producer's source checkout or the rendering user's literal home. Vicinae
-retains its existing build, source placement and service installers; only receiver
-selectors changed. Shared material alone does not enable a system receiver.
+`COMPFUZOR_NIRI_PROFILE` and `COMPFUZOR_UMBRIEL_PROFILE` are consumer-owned profile
+selectors, not shared Media Keys/Vicinae discovery defaults. Those producers look up
+advertised descriptions. A foreign existing same-ID owner reference requires deliberate
+operator reconciliation or a distinct ID/policy; it is never silently retargeted.
+Vicinae retains its existing build, source placement and service installers. Shared
+material alone does not enable a system receiver.
 
 SteamOS keeps persistent `/opt/steamos-niri-main` material. Its bare `install.mjs`
 means user configuration; `install-system.mjs` selects readonly/package provisioning.

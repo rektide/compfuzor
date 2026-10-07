@@ -76,10 +76,10 @@ material="${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc"
 ```
 
 No system aliases are emitted for these user-only declarations. Explicit real
-system contexts can be declared and bound with `action_contexts`; external target
-availability is asserted against the effective profile before authored effects,
+system contexts can be declared and bound with `action_contexts`; advertised receiver
+availability is asserted against its description/profile before authored effects,
 never fabricated from a shared material directory. `-e PREFIX_DIR=/etc/opt`
-explicitly retains shared material; producer profile selectors are independent.
+explicitly retains shared material; advertisement and receiver roots are independent.
 See the [complete example/migration guide](/doc/config/keybinding-producers.md#home-local-consumer-and-producer-example).
 
 Material placement, audience and native delivery strategy are separate: user/sys
@@ -87,6 +87,42 @@ selects a declared receiver plan, while direct/copy/link and seed/assemble/refre
 govern receiver representation. Context/selector/strategy choices are frozen before
 body effects. Authored adoption can still create a root or input before native
 validation; transaction/publication ownership below is unchanged.
+
+## Owned advertisement, not accepted membership
+
+The generator packages `keybindings/consumers/<audience>/<id>.json` beside each
+owned `keybinding-<id>.json` profile. A description has `version:1`, `id`, `adapter`,
+`audience`, `enabled`, `profile`, `contexts` and `defaultContext`. Receiver IDs are
+independent from native adapters: `deck-main` may use `niri`. Native execution currently
+supports Niri/Umbriel only. Profile selectors reuse the existing portable grammar;
+inspection validates their shape without opening a native profile or requiring env
+values. Selected invocation binds them relative to the descriptor's physical directory.
+
+```sh
+/host/bin/register-keybindings-consumer-deck-main-user.sh
+/host/bin/status-keybindings-consumer-deck-main-user.sh
+/producer/bin/install.mjs --target deck-main
+```
+
+Passive registration exposes the exact owner-held description through a symlink,
+without adoption/native validation. Host install publishes after successful native
+work; assembly/check neither advertises nor collects newly offered providers.
+They reassemble the consumer's **closed accepted membership**, user patches and
+native sources. Provider installation remains the ingress that updates membership.
+
+Effective masks veto native work, including `--force-enable`. Force skips only saved
+registration disables for the invocation, never consumer-owned group/action/binding
+disables or native validation. Lower passive owner publication may coexist with a
+higher mask/override; availability and execution eligibility are separate facts.
+Combined producer/host actions admit packaged prospective descriptions before bodies,
+then bootstrap owned hosts before delivering the producer's frozen receiver batch.
+
+Custom roots use one `--registry-policy PATH` or generated
+`KEYBINDING_REGISTRY_POLICY` document for both provider and consumer collections.
+Selected audience/sides are mandatory under an override; there is no default fallback.
+See [rendezvous policy and publication contracts](/runtime/registry/README.md) for
+schemas, audience separation and exact planned-publication guards. Relocating an
+owner does not authorize automatic retargeting of an existing same-ID reference.
 
 # Explicit request
 

@@ -50,40 +50,41 @@ definitions still fail, while intentional `patch: true` retains the domain's
 field-specific override behavior.
 
 Declaring `KEYBINDING_ACTIONS` or `KEYBINDINGS` without a consumer host in
-`KEYBINDING_CONSUMERS` (an empty map declares no host)
-automatically applies **`KEYBINDING_TARGET_DEFAULTS`** from
-[`vars/common.yaml`](/vars/common.yaml). Its Niri and Umbriel targets bind the
-home-local consumer profiles using invocation-time `${XDG_DATA_HOME}` paths,
-`context: user` and `scope: user`. The existing `COMPFUZOR_NIRI_PROFILE` and
-`COMPFUZOR_UMBRIEL_PROFILE` environment overrides select other profile files.
-Vicinae and media-keys therefore declare resources, not their own copies of this
-wiring. Rendering still does not install bindings or discover targets on PATH.
+`KEYBINDING_CONSUMERS` (an empty map declares no host) packages a producer offer.
+By default its installer selects all compatible active **advertised consumers**
+in the invocation's registry. Media Keys and Vicinae declare resources, not
+hardcoded Niri/Umbriel profile locations. Rendering does not register anything,
+install bindings, inspect the controller's registry or discover compositors on PATH.
 
-`KEYBINDING_TARGETS` remains an optional **override**: a list of targets or a
-mapping of target settings. Explicit empty lists/maps are respected, and empty
-resource declarations still use the common producer defaults for reinstalls.
+`KEYBINDING_TARGETS` is an optional **receiver selection**: a list of registered
+receiver IDs or a mapping of receiver settings. Explicit empty lists/maps mean no
+native delivery (the offer is still advertised); empty resource declarations with
+selected receivers replace that producer's membership with an empty resource set.
 Consumer hosts do not inherit producer targets; their own declarations remain
 their local user layer unless targets are explicitly supplied for a combined role.
-For example, select a different host for just Umbriel:
+For example, narrow to an advertised receiver and override its profile:
 
 ```yaml
 KEYBINDING_TARGETS:
   umbriel: {consumer: /opt/desktop, context: user, scope: user}
 ```
 
-A target list retains the runtime's built-in profile defaults; a `consumer` binds
-an explicit deployment or profile JSON path. A deployment
-resolves to `etc/keybinding-<target>.json`; HOME/XDG-rooted profile paths and existing
+A list names receiver identities, not native formats. An ID such as `deck-main`
+can advertise `adapter: niri`; the profile's native `target` remains `niri`.
+A `consumer` override binds an explicit deployment or profile JSON path. A deployment
+resolves to `etc/keybinding-<receiver-id>.json`; HOME/XDG-rooted profile paths and existing
 env/default selectors resolve at invocation. For example,
 `consumer: "${XDG_CONFIG_HOME}/umbriel/keybinding-umbriel.json"` binds a user host
 without baking the controller's home directory into a system producer. Selector
-mappings select a profile file. No universal consumer registry is added.
+mappings select a profile file. An override does **not** advertise a missing receiver:
+publish the consumer-owned description first. Effective masks and registration
+state still apply even when a different profile is explicitly selected.
 
-The compatible generated commands are `install-keybindings-niri.sh` and
-`install-keybindings-umbriel.sh`. They call the shared installed TypeScript runtime
-with the packaged manifest, target, context and declared scope. Normal bin
-composition creates one subsystem/user aggregate and calls each target exactly
-once. An authored system `install.sh` remains a system builder/installer; an
+The producer has one generated **`install-keybindings.sh`**, calling the shared
+runtime's `install-offer` with its exact manifest and owned selection document.
+Normal composition calls the admitted offer once, then delivers to the fixed receiver
+set. Per-receiver `install-keybindings-<id>.sh` entries belong to **consumer hosts**,
+not producers. An authored system `install.sh` remains a system builder/installer; an
 authored `install-user.sh` retains its own body and gains the scoped children.
 Generated installers have `run: false`: rendering is not deployment or reload.
 With `ACTION_AUDIENCES`, those records contribute complete typed operations behind
@@ -91,6 +92,43 @@ one real `install-user.mjs` plus `install.mjs` (and an available system alias).
 Public subsystem action families remain available without a per-context wrapper
 matrix. Native selection/admission is fixed before authored effects; see
 [general actions](/doc/actions/README.md) for audience/flag/bypass semantics.
+
+## Advertisement, participation and policy
+
+Providers and consumers keep descriptors in their own ETC. Default user rendezvous
+links live under `${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/keybindings/`
+in `providers.d` and `consumers.d`. Consumer descriptions name identity, native
+adapter, audience, profile selector and supported contexts. Config overlays and
+`.mask.d` siblings apply operator policy; SYSTEM registries have a separate namespace.
+See the [registry library guide](/runtime/registry/README.md) for roots and schemas.
+
+`register-keybindings-provider.sh` and scoped
+`register-keybindings-consumer-<id>-<audience>.sh` expose exact owned references
+without native work; corresponding `status-*` entries inspect publication. Host
+install publishes after successful native assembly. Host assemble/check reads closed
+accepted membership and does **not** collect newly advertised providers or advertise.
+
+Ordinary selection skips disabled consumer registrations; an explicitly selected
+disabled identity fails with guidance. `--force-enable` skips registration `.disabled`
+and `enabled:false` controls for **one invocation**, including provider controls.
+It never changes stored state, removes masks, enables consumer-owned groups or
+action/binding flags, or bypasses schema/audience/native validation. Repeated
+`--target <receiver-id>` narrows a declared subset, never widens it.
+
+Combined roles carry explicit scoped prospective consumer descriptions in the owned
+selection document. Admission reads/captures them before authored effects; owned host
+bootstrap precedes producer delivery. Only the exact planned owner publication can
+satisfy the absent-to-published guard. No late rescan widens the admitted set.
+Each receiver has its own CONFIG commit: a later failure does not undo earlier
+receiver success, and provider advertisement may remain after native rejection.
+
+For custom or isolated registries declare `KEYBINDING_REGISTRY_POLICY` or pass
+`--registry-policy /absolute/policy.json` to native/passive keybinding entries.
+The selected audience requires both `providers` and `consumers` roots/writeRoot;
+missing sides never fall back to live defaults. Selectors bind at invocation and
+relative values use the policy document's physical directory. The same bound pair
+and captured policy bytes govern admission, publication and native guards. SYSTEM
+tests must isolate both sides, not only native output paths.
 
 ## Runtime packages and separately provided commands
 
@@ -258,7 +296,7 @@ human-authored request JSON or bespoke domain command:
 ```
 
 Legacy deployments without `ACTION_AUDIENCES` keep `install-user.sh` and the
-compatible target installers. Low-level `keybindings.mjs` remains available for
+generic producer offer/owned-host installers. Low-level `keybindings.mjs` remains available for
 explicit membership control and debugging, not the ordinary audience-mode endpoint.
 
 The host runtime can explicitly control membership:
@@ -272,8 +310,10 @@ The host runtime can explicitly control membership:
   --target niri --context user --scope user --mode assemble --check
 ```
 
-Development uses `node files/config/keybindings/command.ts` with the same commands
-and an explicit `--runner` when outside a deployment. No unrequested compositor
+Development uses `node files/config/keybindings/command.ts` for low-level host/group
+commands; advertised offer delivery uses
+`node files/runtime/compfuzor-runtime.ts keybindings install-offer --manifest /owned/manifest.json`.
+Supply an explicit `--runner` when outside a deployment. No unrequested compositor
 reload is performed. Existing bypass wrappers remain in force.
 
 # Home-local consumer and producer example
@@ -297,8 +337,9 @@ material="${XDG_DATA_HOME:-$HOME/.local/share}/compfuzor/etc"
 ```
 
 Generation does not modify the `.config` receiver roots. Host install performs
-explicit conservative adoption/seed/migration; producer install registers exact
-membership and validates both native targets through CONFIG. Host assembly uses
+explicit conservative adoption/seed/migration and publishes its owned description;
+producer install advertises its offer and accepts exact membership in eligible
+registered receivers through native CONFIG validation. Host assembly uses
 existing placements; `--check` validates without publishing. Delivery link/copy/
 assemble choices are separate from both audience and material location.
 
@@ -309,17 +350,19 @@ actual scoped context/root and (for external producers) `action_contexts`; mere
 shared placement is insufficient. Isolated tests exercise both audiences from
 the same home-local profile without claiming a new compositor system fallback.
 
-For explicitly shared consumers, keep their material location and bind profiles:
+For explicitly shared consumers, generate their material and deliberately advertise
+the owner-held description:
 
 ```sh
 ansible-playbook -i 'localhost,' -c local niri.etc.pb -e PREFIX_DIR=/etc/opt
-export COMPFUZOR_NIRI_PROFILE=/etc/opt/niri/etc/keybinding-niri.json
-export COMPFUZOR_UMBRIEL_PROFILE=/etc/opt/umbriel/etc/keybinding-umbriel.json
-"$material/media-keys/bin/install.mjs"
+/etc/opt/niri/bin/install.mjs
+"$material/media-keys/bin/install.mjs" --target niri
 ```
 
-Unset those environment overrides to use invocation-time home-local defaults.
-Vicinae uses the same selectors but keeps its source build/deployment and existing
+An existing same-ID reference to a different physical owner is not silently retargeted.
+Choose a distinct receiver ID/policy or deliberately reconcile the old reference.
+Profile env overrides such as `COMPFUZOR_NIRI_PROFILE` are consumer-owned selectors,
+not shared producer fallback discovery. Vicinae keeps its source build/deployment and existing
 service audience policy. Its compatible `install-user.sh` still enables a user
 service; do not confuse rendering its declarations with authorization to build,
 install or start Vicinae.
@@ -329,8 +372,9 @@ install or start Vicinae.
 1. Keep old `/etc/opt` material and current receivers intact while generating the
    new material. Inspect the host profile paths, context scopes, templates and
    producer NAME/group identity before installation.
-2. Choose old shared or new local consumers explicitly through the existing
-   profile selectors. Adopt the intended host with its new `install.mjs` only as
+2. Choose old shared or new local consumers explicitly through owned advertisements,
+   IDs and registry policy. Review same-ID owner conflicts before deliberately
+   changing a reference. Adopt the intended host with its new `install.mjs` only as
    the desktop user; existing user edits are not silently overwritten.
 3. Reinstall each producer deliberately to refresh the declared registrations.
    Preserve stable `KEYBINDING_PRODUCER` if changing deployment NAME would otherwise
@@ -353,13 +397,13 @@ Ansible tasks, then runs complete generated user aggregates. It installs two
 producers into isolated XDG consumers with own patch/native inputs, checks copy
 and link behavior, updates commands and smaller membership, rejects invalid
 reinstall without accepting membership, and preserves disabled group/slots.
-It also checks authored install bodies and exactly-once target participation.
+It also checks authored install bodies and exactly-once offer/host participation.
 
-- [Common target defaults proof](/tests/integration/keybindings_target_defaults.test.py):
+- [Advertised selection compiler proof](/tests/integration/keybindings_target_defaults.test.py):
   producer activation, empty reinstalls, consumer-local patches and explicit
-  target/default overrides through the stock generator.
+  default-all/subset/empty selection through the stock generator.
 - [Media-keys producer proof](/tests/integration/keybindings_media_keys.test.py):
-  real producer installation into both consumer hosts using common target selectors,
+  real producer installation into both advertised consumer hosts,
   with no producer-authored target wiring.
 - [Source/domain grammar](/doc/config/keybindings.md): action independence,
   explicit scripts/native implementations and target override/extension rules.
@@ -375,3 +419,7 @@ It also checks authored install bodies and exactly-once target participation.
 - [Generator](/library/filter_plugins/keybindings_compile.py) and
   [membership runtime](/files/config/keybindings/membership.ts): controller glue
   packages data; TypeScript owns capture, identity, ordering and lifecycle.
+- [Registry generated proof](/tests/integration/registry_keybindings_generated.test.py)
+  and [combined/SYSTEM proof](/tests/integration/registry_combined_generated.test.py):
+  owner references, named receivers, force/mask policy, prospective first install,
+  explicit paired roots and native rollback against the deployed bundle.

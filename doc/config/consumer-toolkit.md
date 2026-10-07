@@ -463,7 +463,11 @@ not-applicable behavior and receive caller arguments unchanged.
 
 `ZIM_CONTEXTS` remains a small domain adapter over CONFIG bindings. It adds
 loader, cache, registry, and producer-import paths; those are not CONFIG
-concepts. The host surface remains:
+recipes. The host-locator registry here is distinct from the new
+[`zim/providers.d` rendezvous](/runtime/registry/README.md). Generated Zim offers expose
+exact active/disabled fragments through owned references, but this installer/import
+bridge does not yet collect those registered offers. Explicit deployment import and
+CONFIG channel membership remain authoritative. The host surface remains:
 
 ```text
 install-zim.sh [--context NAME] [--install assemble|copy|link] [--dropins copy|link]

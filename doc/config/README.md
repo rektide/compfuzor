@@ -130,6 +130,15 @@ host registry. Mise does not acquire a CONFIG graph: its Bash blocks remain
 independent block-in-file installations, while its Zsh activation arrives via
 Zim.
 
+Keybinding producer/consumer availability uses the shared
+[rendezvous registry library](/runtime/registry/README.md): owner-held descriptors
+are exposed through separate provider/consumer symlink collections. Native delivery
+admits advertised receivers before effects and updates their existing CONFIG-owned
+membership. See [producers](/doc/config/keybinding-producers.md) and
+[consumers](/doc/config/keybinding-consumers.md). This is distinct from Zim's existing
+host-locator registry: generated Zim offers are registered/inspectable, but Zim host
+import still uses its explicit deployment bridge rather than consuming those offers.
+
 ## What is healthy now
 
 The live Zim and Mise deployments were rendered and activated on 2026-09-13.

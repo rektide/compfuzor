@@ -74,7 +74,7 @@
     # examples/keybindings/vicinae.yaml and
     # design/keybindings/vicinae-proposal0.gpt61sol.md). The generator
     # packages action/<id>.yaml + keybinding/<id>.yaml and synthesizes
-    # user-scoped install-keybindings-{niri,umbriel}.sh installers; the
+    # one user-scoped install-keybindings.sh advertised offer installer; the
     # hand-authored KDL/TOML fragments and bespoke install-niri.sh /
     # install-umbriel.sh bodies they replace are gone.
     # NAME defaults to "vicinae-git" here (TYPE + git instance); the durable
@@ -168,10 +168,10 @@
       - name: install-user.sh
         content: |
           systemctl --user enable vicinae.service
-          # The generated install-keybindings-{niri,umbriel}.sh children are
-          # appended here by gen_bins: they register this producer's named
-          # bindings into the common consumer hosts (niri.etc.pb / umbriel.etc.pb),
-          # unless KEYBINDING_TARGETS overrides them. Run their consumer installers
+          # The generated install-keybindings.sh child is appended here by
+          # gen_bins: it advertises this owned offer and applies its named bindings
+          # to compatible active registered consumers (or KEYBINDING_TARGETS subset).
+          # Run the intended consumer installers
           # (install.mjs) once first for root adoption. This deployment retains
           # its existing compatible install-user.sh/service behavior.
       - name: install-kde.sh

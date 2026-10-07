@@ -9,9 +9,9 @@
 #
 # This deployment hosts the Niri KEYBINDING_CONSUMERS profile ONLY. It
 # declares no KEYBINDING_ACTIONS/KEYBINDINGS of its own and installs no
-# bindings itself: producers (e.g. vicinae.src.pb) bind this deployment as
-# their niri consumer target, and their generated install-keybindings-niri.sh
-# registers bindings into the durable membership this profile owns.
+# bindings itself: it advertises an owned consumer description. Producers
+# (e.g. vicinae.src.pb) select that registry identity through install-keybindings.sh
+# and accept bindings into the durable membership this profile owns.
 #
 # NO FABRICATED BASELINE: unlike Umbriel's installed system default
 # (/usr/local/share/umbriel/config.toml), Niri has no packaged baseline
@@ -124,6 +124,8 @@
       - `bin/assemble-user.mjs` + `bin/assemble.mjs` -- existing-placement assembly
       - `bin/install-user.sh` -- internal original-path adoption body
       - `bin/install-keybindings-niri.sh` / `bin/keybindings.mjs` -- compatible internal endpoints
+      - `keybindings/consumers/user/niri.json` -- owned registry description referencing this profile
+      - `bin/register-keybindings-consumer-niri-user.sh` / `bin/status-keybindings-consumer-niri-user.sh` -- passive reference publication/status, no native activation
 
       Requires node, jq, `block-in-file`, and `niri` on PATH at invocation
       time; none are installed by this deployment.

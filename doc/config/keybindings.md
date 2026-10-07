@@ -194,6 +194,11 @@ This first slice is intentionally **not a live target installer**. In particular
 
 # Verification and cross-references
 
+The outer [advertised-registry admission layer](/runtime/registry/README.md#advertised-keybinding-execution)
+connects playbook-owned offers and consumer descriptions. It does not change this
+pure action/binding grammar or native source interface. Receiver identity differs
+from native target format; host assembly remains closed accepted-membership reassembly.
+
 Run:
 
 ```sh

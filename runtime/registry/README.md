@@ -34,7 +34,7 @@ Collections are safe domain-grouped relative `.d` paths, including `keybindings/
 Registration writes only the user XDG data-home collection. System scope ignores
 HOME/XDG and uses explicit `/compfuzor/system/<collection>` system locations,
 separate from shared user offers in XDG_DATA_DIRS; no automatic sudo is performed.
-This default layout remains a policy proposal for generator cutover.
+Generators bind this default at invocation unless an explicit policy is supplied.
 
 `explicitPolicy(scope, roots, writeRoot)` replaces defaults. Paths must be absolute,
 writeRoot must occur in roots, and repeated roots retain their last occurrence.
@@ -131,7 +131,11 @@ Owner-held selection may add scoped exact references, without pretending they ar
 observed registrations:
 
 ```json
-{"version":1,"receivers":null,"prospectiveConsumers":{"user":[{"relative":"consumers/user/niri.json"}]}}
+{
+  "version": 1,
+  "receivers": null,
+  "prospectiveConsumers": { "user": [{ "relative": "consumers/user/niri.json" }] }
+}
 ```
 
 Existing effective registrations/controls take precedence. Combined generated
@@ -156,8 +160,14 @@ Generated `KEYBINDING_REGISTRY_POLICY` emits that owner-held document and locato
   "version": 1,
   "audiences": {
     "system": {
-      "providers": {"roots":[{"relative":"isolated/providers.d"}],"writeRoot":{"relative":"isolated/providers.d"}},
-      "consumers": {"roots":[{"relative":"isolated/consumers.d"}],"writeRoot":{"relative":"isolated/consumers.d"}}
+      "providers": {
+        "roots": [{ "relative": "isolated/providers.d" }],
+        "writeRoot": { "relative": "isolated/providers.d" }
+      },
+      "consumers": {
+        "roots": [{ "relative": "isolated/consumers.d" }],
+        "writeRoot": { "relative": "isolated/consumers.d" }
+      }
     }
   }
 }

@@ -147,14 +147,16 @@
       ```
 
       `install.mjs` / `install-user.mjs` register the producer into
-      home-local Niri/Umbriel consumer profiles (run their `install.mjs`
+      compatible advertised consumer profiles (run their `install.mjs`
       adoption first) and rebuild each
       compositor's managed insertion area with native validation.
 
-      Consumer selectors resolve HOME/XDG at invocation, not the rendering user's
-      literal home. `COMPFUZOR_NIRI_PROFILE` and `COMPFUZOR_UMBRIEL_PROFILE`
-      explicitly select shared/other profile JSON files. Shared producer material
-      itself is separately selected with `-e PREFIX_DIR=/etc/opt`.
+      Hosts own their descriptions/profiles and advertise exact references in the
+      XDG consumers registry. Default delivery selects compatible active consumers;
+      `--target RECEIVER` narrows delivery. `--force-enable` bypasses registration
+      disables for one invocation, never masks or consumer-owned group disables.
+      `--registry-policy PATH` binds both provider/consumer roots for custom policy.
+      Shared producer material is separately selected with `-e PREFIX_DIR=/etc/opt`.
       Only user targets are declared: no install-system.mjs is emitted. This
       producer does not own a host assembly action; use the hosts' assemble.mjs.
       No old material, registrations or services are automatically cleaned up/reloaded.
@@ -164,7 +166,9 @@
       - `etc/action/*.yaml` + `etc/keybinding/*.yaml` -- packaged declarations
       - `etc/keybinding-producer.json` -- producer manifest
       - `bin/install-user.mjs` + `bin/install.mjs` -- generated user action family
-      - `bin/install-keybindings-{niri,umbriel}.sh` -- generated target installers
+      - `etc/keybindings/selection.json` -- default-all or explicit receiver selection
+      - `bin/install-keybindings.sh` -- generated advertised offer installer
+      - `bin/register-keybindings-provider.sh` / `bin/status-keybindings-provider.sh` -- passive owned-reference publication/status
       - `bin/keybindings.mjs` -- generated shared keybindings runtime
 
       Requires node, jq, `niri` and `umbriel` on PATH at invocation time;
