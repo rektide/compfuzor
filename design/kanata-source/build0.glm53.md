@@ -191,3 +191,126 @@ removal is deferred behind the checkpoint.
 - Scratch command log: `.test-agent/kanata-source/README.md` (gitignored).
 
 [#2186]: https://github.com/jtroo/kanata/pull/2186
+
+# Addendum: lineage proof, runtime-facility audit, full prerequisite inventory (2026-10-06, post-build)
+
+Raised at parent review: distinguish local vs upstream gamepad work, verify
+what the binary initializes for no-gamepad/no-port configs, inventory ALL
+package-owned prerequisites (not just the unit), and make 1.9→1.12 behavior
+deltas explicit. All evidence below is read-only; nothing deployed changed.
+
+## A. Built revision is pure upstream — proven against live GitHub
+
+- [PR #2186] was **merged by jtroo into `jtroo:main` on Sep 28, 2026**,
+  merge commit `a02d65b` — byte-identical to the archive commit. The gamepad
+  work is upstream (author philocalyst, owner-reviewed and approved).
+- Committer audit of all 40 commits `v1.12.1-prerelease-1..2f84d17`:
+  34× `noreply@github.com`, 5× `jtroo@roselily.ca`, 1×
+  `j.andreitabs@gmail.com` — **zero local committers** (a local cherry-pick
+  or re-commit would carry a local committer identity).
+- `origin/main` reflog shows a genuine fetch from origin storing `2f84d17`;
+  `main...origin/main` = 0/0. jj working copy empty at that parent.
+- Conclusion: **no local or unmerged feature work exists in the built tree**;
+  nothing was dropped or reset, and the exact built revision is
+  `2f84d17` (`v1.12.1-prerelease-1-40-g2f84d17`, upstream main).
+
+## B. What the built binary initializes for the deployed configs
+
+| Facility | Init condition ([`src/main.rs`](https://github.com/jtroo/kanata/blob/main/src/main.rs) 203-233) | Status under preserved sandbox |
+|---|---|---|
+| TCP server + notification loop | only `if let Some(args.tcp_server_address)` — no `--port`, nothing starts | dormant; `IPAddressDeny=any` + AF denial hold regardless |
+| Gamepad/gilrs backend | `start_gamepad_handling_if_configured` returns before touching gilrs unless config declares `defgamepad` ([mod.rs:1206](https://github.com/jtroo/kanata/blob/main/src/kanata/mod.rs#L1206): `gamepad_config` else-return) | deployed configs have no gamepad vocabulary → never spawns |
+| `cmd` execution | `#[cfg(feature = "cmd")]` — not compiled | startup log: "compiled to never allow cmd" |
+| Clipboard helpers (child spawn, `clipboard.rs` `run_cmd_get_stdout`; arboard) | action-time only | no clipboard actions in deployed configs |
+| `sd_notify` Ready | called unconditionally; `Ok(false)` when `NOTIFY_SOCKET` unset | inert under Type=simple |
+| Processing loop, inotify `/dev/input` watcher | always | same shape as 1.9, empirically sandbox-compatible (Debian 1.9 runs under the identical unit) |
+
+gilrs is compiled in (hard dep; Linux backend is libudev) but dormant.
+Should `defgamepad` ever be used: gilrs-core 0.6.8's Linux backend uses udev
+**enumeration** + a polling loop (`udev_enumerate_*`; `POLL_TIMEOUT` in
+kanata's `gamepad/source.rs`) — no udev monitor/netlink found, and
+`/dev/input` is already bound read-only with `char-input` allowed, so it
+would likely fit the existing sandbox; verify when actually introduced.
+
+**Verdict: no new runtime facility initializes for the deployed configs —
+no concrete sandbox conflict, no dehardening and no sandbox revision needed
+for cutover. The TCP capability is compile-time present, runtime dormant.**
+
+## C. Complete package-owned prerequisite inventory
+
+`dpkg -L kanata` non-doc paths are exhaustive; dpkg triggers: awaited/interested both empty.
+
+| Package path | Kind | Effect when lost on `remove` | Durable owner after cutover |
+|---|---|---|---|
+| `/usr/bin/kanata` | binary | immediate | `/usr/local/bin/kanata` (this slice) |
+| `/usr/lib/systemd/system/kanata.service` | vendor unit | file gone immediately; `default.target.wants` enable-symlink dangles | compfuzor same-name `/etc` unit (Services G prepares) |
+| `/usr/lib/udev/rules.d/50-kanata-uinput.rules` | udev rule | **next udev reload/reboot**, not immediately (see D) | decision needed: own rule vs documented reliance (D) |
+| `/etc/kanata/config.kbd` | conffile | kept on remove | already compfuzor symlink |
+
+No sysusers.d, tmpfiles.d, modules-load.d, D-Bus, or hwdb entries ship in
+the package — nothing else exists to migrate. The `_kanata` account is
+postinst-created (kept on remove; see main doc).
+
+## D. The real uinput permission/boot chain (and the reboot-lifetime caveat)
+
+Current `/dev/uinput`: `0660 root:input` (stat). Rules granting group-input
+access on this box today:
+
+| Rule | Owner | Grants `_kanata`? |
+|---|---|---|
+| `50-kanata-uinput.rules` | kanata pkg | yes (GROUP=input, MODE=0660) — redundant while installed |
+| `80-uinput.rules` | **ydotool package** | yes (GROUP=input, MODE=0660, static_node) |
+| `60-sunshine.rules` | compfuzor sunshine deployment | yes (GROUP=input, MODE=0660) |
+| `60-steam-input.rules` | steam-devices pkg | no (uaccess seat-ACL only — irrelevant to `_kanata`) |
+| `/etc/udev/rules.d/10-uinput.rules` | compfuzor `surface-dial.src.pb` | no (uaccess/udev-acl only) |
+
+Boot-time module loading: `/etc/modules-load.d/sunshine-git.conf` and
+`apollo-git.conf` (both `uinput`) plus `modprobe@uinput.service`
+Wants/After in every kanata unit (including compfuzor's blueturn/kinata
+templates). Static node: `modules.devname` carries `uinput c10:223`
+(devtmpfs).
+
+**Reboot-lifetime caveat:** on `apt remove`, the in-memory udev ruleset and
+the current node's mode persist until udev reload/reboot — kanata's
+prerm/postrm never reload udev (postrm only runs systemd `daemon-reload`).
+So a passing service check after removal proves nothing about boot
+durability. With today's package set the next boot still yields 0660
+root:input via **ydotool's** rule (and sunshine's) — but those are
+discretionary siblings. The kanata lane should either declare its own udev
+rule or explicitly document reliance on ydotool's before cutover; that
+decision belongs to Services G's offline pb declarations (no sibling pb was
+modified by this slice).
+
+## E. Backend version vs the deployed configs (1.9.0 → 1.12.1-prerelease-1)
+
+- Parse: both configs valid (`--check` exit 0). `linux-dev-names-include`/
+  `exclude` remain exact device-name lists per `docs/config.adoc`; the new
+  `linux-dev` option is additive. `process-unmapped-keys` and
+  `linux-continue-if-no-devs-found` accepted — BlueTurn's no-device startup
+  path is unaffected at parse level.
+- Breaking `fix!` commits since v1.9.0 — switch repeatability (#2004),
+  custom-action queueing (#2003), sequence vkey priority (#1712) — touch
+  features **absent from both deployed configs** (no `switch`, `defseq`, or
+  queued custom-action vocabulary).
+- `zippychord`: compiled in but config-gated — engaged only by config
+  options the deployed configs don't set; no timing change.
+- `tap_hold_tracker` (pulled into keyberon by `tcp_server`): telemetry
+  storage for push messages only ("Only stores data when the feature is
+  enabled", `keyberon/src/layout.rs:144`); no timing decision reads it;
+  inert without TCP clients. **Building with tcp_server does not alter
+  tap-hold behavior.**
+- Device ownership: this slice changed no config — include/exclude sets are
+  identical; the cutover proposal makes no device-ownership change.
+- Honest limit: parse-level and code-reading evidence. Runtime feel is
+  untested until a cutover window's manual checks (caps tap-hold, pedal
+  pgup/pgdn + meta-hold); 33 keyberon `layout.rs` commits since v1.9.0
+  (mostly mouse/mwheel) are the residual uncertainty.
+
+## F. Repo bookkeeping note
+
+jj change `ynzvxrwq` is divergent: `/0` (`b4b278a1`) is the parent
+session's kernel-bins commit, `/1` (`3eb2146d`) is this slice's checkpoint
+commit — a change-ID race between two concurrent sessions. Both contents
+are intact; left for the parent to resolve (duplicate+abandon), not
+rewritten here.
+
