@@ -6,6 +6,8 @@ import {
   type KeybindingActionBinding,
 } from "../../files/config/keybindings/runtime.ts";
 import type { Profile } from "../../files/config/keybindings/membership.ts";
+import { prepareOperation } from "../../files/actions/operations.ts";
+import type { LegacyDomainStep } from "../../files/actions/model.ts";
 
 const roots: string[] = [];
 const defaults = { runner: "/declared/runner", validatorCommand: ["declared-validator"] };
@@ -154,4 +156,58 @@ test("raw CLI still requires target and defaults host delivery to seed; admitted
   expect(JSON.parse(JSON.stringify(prepared)).bound.request.root.path).toBe(
     join(root, "desktop/config.kdl"),
   );
+});
+
+test("standalone owned-host target overrides reject; only a selected offer graph consumes receiver subset flags", async () => {
+  const { path, root } = await fixture();
+  const descriptor = join(root, "owned-consumer.json");
+  const policy = join(root, "registry-policy.json");
+  await writeFile(
+    descriptor,
+    JSON.stringify({
+      version: 1,
+      id: "deck-main",
+      adapter: "niri",
+      audience: "user",
+      profile: { path },
+      contexts: ["desktop"],
+      defaultContext: "desktop",
+    }),
+  );
+  const side = (role: string) => ({
+    roots: [{ path: join(root, role) }],
+    writeRoot: { path: join(root, role) },
+  });
+  await writeFile(
+    policy,
+    JSON.stringify({
+      version: 1,
+      audiences: { user: { providers: side("providers"), consumers: side("consumers") } },
+    }),
+  );
+  const step: LegacyDomainStep = {
+    kind: "domain",
+    id: "host",
+    domain: "keybindings",
+    operation: "host",
+    target: "niri",
+    context: "desktop",
+    descriptor,
+    registryPolicy: policy,
+    envelope: "bin/install-keybindings-deck-main.sh",
+  };
+  await expect(
+    prepareOperation(step, "user", ["--target", "umbriel"], root, "/runtime"),
+  ).rejects.toThrow("adapter mismatch");
+  const prepared = await prepareOperation(
+    step,
+    "user",
+    ["--target", "deck-main"],
+    root,
+    "/runtime",
+    true,
+  );
+  expect(prepared.domain).toBe("keybindings");
+  if (prepared.domain === "keybindings")
+    expect(prepared.admitted.options.profile.target).toBe("niri");
 });

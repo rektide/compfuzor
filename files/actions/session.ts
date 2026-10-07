@@ -65,6 +65,7 @@ type OperationRequest = {
   deploymentDir: string;
   specDigest: string;
   family: string;
+  rootAction: string;
   audience: Audience;
   step: DomainStep;
   argv: string[];
@@ -355,6 +356,7 @@ export async function createSession(
         deploymentDir: selection.deploymentDir,
         specDigest: loaded.digest,
         family: entry.family,
+        rootAction: selection.family.name,
         audience: selection.audience,
         step: entry.step,
         argv,
@@ -412,7 +414,17 @@ export async function admitRequest(
   const raw = object(await readPrivate(path), "operation request");
   knownKeys(
     raw,
-    ["version", "kind", "deploymentDir", "specDigest", "family", "audience", "step", "argv"],
+    [
+      "version",
+      "kind",
+      "deploymentDir",
+      "specDigest",
+      "family",
+      "rootAction",
+      "audience",
+      "step",
+      "argv",
+    ],
     "operation request",
   );
   const loaded = await loadActionSpec(deploymentDir);
@@ -423,19 +435,19 @@ export async function admitRequest(
     raw.specDigest !== loaded.digest ||
     !AUDIENCES.includes(raw.audience as Audience) ||
     typeof raw.family !== "string" ||
+    typeof raw.rootAction !== "string" ||
     !Array.isArray(raw.argv) ||
     raw.argv.some((arg) => typeof arg !== "string")
   )
     fail("stale or foreign operation request");
   const step = domainStep(raw.step);
-  const family = loaded.spec.actions[raw.family];
+  const family = loaded.spec.actions[raw.rootAction];
+  const graph = family?.plans[raw.audience as Audience]
+    ? domainsIn(loaded, { family, audience: raw.audience as Audience, deploymentDir })
+    : undefined;
   if (
     !family?.plans[raw.audience as Audience] ||
-    !domainsIn(loaded, {
-      family,
-      audience: raw.audience as Audience,
-      deploymentDir,
-    }).operations.some(
+    !graph?.operations.some(
       (entry) => entry.family === raw.family && JSON.stringify(entry.step) === JSON.stringify(step),
     )
   )
@@ -447,6 +459,7 @@ export async function admitRequest(
     raw.argv as string[],
     deploymentDir,
     runtimePath,
+    graph.operations.some((entry) => entry.step.operation === "install-offer"),
   );
   await writePrivate(path + ".prepared", prepared);
   return 0;

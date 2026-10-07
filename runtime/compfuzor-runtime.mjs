@@ -30036,7 +30036,7 @@ async function runExecutable(path, argv, cwd, env) {
 init_context$1();
 init_runtime();
 init_invocation();
-async function prepareOperation(step, audience, argv, deploymentDir, runtimePath) {
+async function prepareOperation(step, audience, argv, deploymentDir, runtimePath, receiverSubset = false) {
 	if (step.operation === "install-offer") {
 		if (argv.includes("--help") || argv.includes("-h")) return {
 			domain: "help",
@@ -30090,7 +30090,7 @@ async function prepareOperation(step, audience, argv, deploymentDir, runtimePath
 	if (step.manifest) args.push("--manifest", step.manifest);
 	if (step.descriptor) args.push("--descriptor", step.descriptor);
 	if (step.registryPolicy) args.push("--registry-policy", step.registryPolicy);
-	const executionArgs = step.descriptor ? argv.filter((arg, index) => arg !== "--target" && !arg.startsWith("--target=") && argv[index - 1] !== "--target") : argv;
+	const executionArgs = step.descriptor && receiverSubset ? argv.filter((arg, index) => arg !== "--target" && !arg.startsWith("--target=") && argv[index - 1] !== "--target") : argv;
 	return {
 		domain: "keybindings",
 		admitted: await admitKeybindingCommand(step.operation, [...args, ...executionArgs], {
@@ -30381,6 +30381,7 @@ async function createSession(selection, loaded, argv, runtimePath, interrupted =
 				deploymentDir: selection.deploymentDir,
 				specDigest: loaded.digest,
 				family: entry.family,
+				rootAction: selection.family.name,
 				audience: selection.audience,
 				step: entry.step,
 				argv
@@ -30441,21 +30442,23 @@ async function admitRequest(path, deploymentDir, runtimePath) {
 		"deploymentDir",
 		"specDigest",
 		"family",
+		"rootAction",
 		"audience",
 		"step",
 		"argv"
 	], "operation request");
 	const loaded = await loadActionSpec(deploymentDir);
-	if (raw.version !== 1 || raw.kind !== "operation-request" || raw.deploymentDir !== deploymentDir || raw.specDigest !== loaded.digest || !AUDIENCES.includes(raw.audience) || typeof raw.family !== "string" || !Array.isArray(raw.argv) || raw.argv.some((arg) => typeof arg !== "string")) fail$1("stale or foreign operation request");
+	if (raw.version !== 1 || raw.kind !== "operation-request" || raw.deploymentDir !== deploymentDir || raw.specDigest !== loaded.digest || !AUDIENCES.includes(raw.audience) || typeof raw.family !== "string" || typeof raw.rootAction !== "string" || !Array.isArray(raw.argv) || raw.argv.some((arg) => typeof arg !== "string")) fail$1("stale or foreign operation request");
 	const step = domainStep(raw.step);
-	const family = loaded.spec.actions[raw.family];
-	if (!family?.plans[raw.audience] || !domainsIn(loaded, {
+	const family = loaded.spec.actions[raw.rootAction];
+	const graph = family?.plans[raw.audience] ? domainsIn(loaded, {
 		family,
 		audience: raw.audience,
 		deploymentDir
-	}).operations.some((entry) => entry.family === raw.family && JSON.stringify(entry.step) === JSON.stringify(step))) fail$1("unknown operation request");
+	}) : void 0;
+	if (!family?.plans[raw.audience] || !graph?.operations.some((entry) => entry.family === raw.family && JSON.stringify(entry.step) === JSON.stringify(step))) fail$1("unknown operation request");
 	clearProcessMarkers();
-	const prepared = await prepareOperation(step, raw.audience, raw.argv, deploymentDir, runtimePath);
+	const prepared = await prepareOperation(step, raw.audience, raw.argv, deploymentDir, runtimePath, graph.operations.some((entry) => entry.step.operation === "install-offer"));
 	await writePrivate(path + ".prepared", prepared);
 	return 0;
 }

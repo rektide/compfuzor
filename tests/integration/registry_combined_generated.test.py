@@ -46,6 +46,12 @@ def test_combined():
         assert json.loads(membership.read_text())["groups"]["combined"]["resources"]
         assert "combined" in (area / "native-user/config.kdl").read_text()
         proof.run([str(deployment / "bin/install.mjs"), "--target", "niri"], env)
+        # Only a selected producer batch gives --target receiver-subset meaning.
+        # A focused owned-host assembly must reject a different native adapter.
+        before_root = (area / "native-user/config.kdl").read_bytes()
+        rejected = proof.run([str(deployment / "bin/assemble-keybindings-niri.mjs"), "--target", "umbriel"], env, False)
+        assert rejected.returncode and "adapter mismatch" in rejected.stderr
+        assert (area / "native-user/config.kdl").read_bytes() == before_root
         proof.run([str(deployment / "bin/install-system.mjs"), "--target", "niri"], {**env, "FIRST_INSTALL": "1"})
         assert (area / "home/registries/system/consumers.d/niri.json").is_symlink()
         assert (area / "home/registries/system/providers.d/combined.json").is_symlink()

@@ -31,6 +31,7 @@ export async function prepareOperation(
   argv: string[],
   deploymentDir: string,
   runtimePath: string,
+  receiverSubset = false,
 ): Promise<PreparedOperation> {
   if (step.operation === "install-offer") {
     if (argv.includes("--help") || argv.includes("-h"))
@@ -77,12 +78,13 @@ export async function prepareOperation(
   if (step.registryPolicy) args.push("--registry-policy", step.registryPolicy);
   // In a combined action, --target names the producer's receiver subset, not
   // the owned host's native format. Bootstrap remains an explicit owned step.
-  const executionArgs = step.descriptor
-    ? argv.filter(
-        (arg, index) =>
-          arg !== "--target" && !arg.startsWith("--target=") && argv[index - 1] !== "--target",
-      )
-    : argv;
+  const executionArgs =
+    step.descriptor && receiverSubset
+      ? argv.filter(
+          (arg, index) =>
+            arg !== "--target" && !arg.startsWith("--target=") && argv[index - 1] !== "--target",
+        )
+      : argv;
   return {
     domain: "keybindings",
     admitted: await admitKeybindingCommand(
