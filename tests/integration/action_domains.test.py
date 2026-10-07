@@ -8,6 +8,7 @@ import signal
 import subprocess
 import tempfile
 import yaml
+from keybindings.fixtures import registry_policy, isolate_xdg
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent/action-domains"
@@ -17,7 +18,7 @@ def render(area: Path, declarations: dict) -> Path:
     area.mkdir(parents=True, exist_ok=True)
     (area / "files").symlink_to(ROOT / "files", target_is_directory=True)
     payload = area / "deployment"
-    variables = {"TYPE": "action-domain-fixture", "NAME": "action-domain-fixture", "DIR": str(payload), "ETC": str(payload / "etc"), "BINS_DIR": str(payload / "bin"), "DIRSET": ["etc"], "FILES": [], "ETC_FILES": [], "BINS": [], "DIRS": [], "STATUSES": [], "PKGS": [], "ENV": {}, "BINS_RUN_BYPASS": True, "ACTION_AUDIENCES": {}, **declarations}
+    variables = {"TYPE": "action-domain-fixture", "NAME": "action-domain-fixture", "DIR": str(payload), "ETC": str(payload / "etc"), "BINS_DIR": str(payload / "bin"), "DIRSET": ["etc"], "FILES": [], "ETC_FILES": [], "BINS": [], "DIRS": [], "STATUSES": [], "PKGS": [], "ENV": {}, "BINS_RUN_BYPASS": True, "ACTION_AUDIENCES": {}, "KEYBINDING_REGISTRY_POLICY": registry_policy(), **declarations}
     tasks = [{"set_fact": {"SUBSYSTEM": {}}}]
     tasks.extend({"import_tasks": str(ROOT / f"tasks/compfuzor/{name}.tasks")} for name in ["sub_attribution", "sub_config", "gen_keybindings", "gen_config", "gen_bins", "gen_attribution", "gen_runtime_catalog", "compile_artifacts"])
     tasks += [
@@ -84,6 +85,7 @@ export COMPFUZOR_CONFIG_DROPINS_STRATEGY=link
         "KEYBINDING_CONSUMERS": {target: {"contexts": contexts(target), "baseline": [], **({"placement_directory": {"env": "NIRI_PLACEMENT_ROOT"}, "bindings": {"launch": {"placement": {"strategy": "link", "path": {"env": "NIRI_PLACEMENT_FILE"}}}}} if target == "niri" else {})} for target in ["niri", "umbriel"]},
         "KEYBINDING_ACTIONS": {"launch": {"exec": ["echo", "typed-action"]}},
         "KEYBINDINGS": {"launch": {"action": "launch", "keys": ["Mod+D"], "umbriel": {"keys": ["Mod+Space"]}}},
+        "KEYBINDING_TARGETS": {target: {"action_contexts": {"user": "desktop", "system": "host"}} for target in ["niri", "umbriel"]},
         "BINS": [
             {"name": "install-user.sh", "bypass": "BODY", "content": body},
             {"name": "install.sh", "content": body},
@@ -99,12 +101,17 @@ export COMPFUZOR_CONFIG_DROPINS_STRATEGY=link
     env = {**os.environ, "HOME": str(area / "home"), "XDG_CONFIG_HOME": str(user), "RECEIVER": str(user), "NIRI_PLACEMENT_ROOT": str(user / "niri-placement"), "NIRI_PLACEMENT_FILE": str(user / "niri-placement/launch.binding.kdl"), "WRONG": str(wrong), "TRACE": str(area / "trace"), "ENV_TRACE": str(area / "env-trace"), "VALIDATOR_TRACE": str(area / "validator-trace"), "TMPDIR": str(SCRATCH), "PATH": os.pathsep.join([str(fake), str(Path(node).parent), "/usr/bin", "/bin", "/usr/local/bin"])}
     for name in ["DIR", "COMPFUZOR_CONFIG_CONTEXT", "COMPFUZOR_CONTEXT", "COMPFUZOR_CONFIG_INSTALL_STRATEGY", "COMPFUZOR_CONFIG_DROPINS_STRATEGY", "COMPFUZOR_CONFIG_BYPASS", "COMPFUZOR_KEYBINDINGS_BYPASS", "COMPFUZOR_ACTION_SESSION", "COMPFUZOR_ACTION_OPERATION", "COMPFUZOR_ACTION_OPERATION_MODE"]:
         env.pop(name, None)
+    selected_config = env["XDG_CONFIG_HOME"]
+    isolate_xdg(env, area / "home")
+    env["XDG_CONFIG_HOME"] = selected_config
     return payload, env, user, system, wrong
 
 
 def test_compiled_domains(area: Path):
     payload, env, user, system, wrong = build_fixture(area)
     spec = json.loads((payload / "etc/compfuzor-actions/spec.json").read_text())
+    policy = json.loads((payload / "etc/keybindings/registry-policy.json").read_text())
+    assert set(policy["audiences"]) == {"user", "system"}
     assert set(spec["actions"]["install"]["plans"]) == {"user", "system"}
     assert spec["actions"]["assemble-config"]["plans"]["user"][0]["kind"] == "domain"
     assert spec["actions"]["assemble-keybindings-niri"]["plans"]["system"][0]["context"] == "host"

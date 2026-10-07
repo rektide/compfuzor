@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+from keybindings.fixtures import isolate_xdg
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("generated", ROOT / "tests/integration/keybindings_generated.test.py")
@@ -24,7 +25,9 @@ def test_empty_producer():
         node = subprocess.run(["node", "-p", "process.execPath"], check=True, text=True, capture_output=True).stdout.strip()
         env = {**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"), "TMPDIR": str(scratch), "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg"), "PATH": os.pathsep.join([str(Path(node).parent), "/usr/local/bin", "/usr/bin", "/bin", str(Path.home() / ".local/share/pnpm")])}
         env.pop("DIR", None)
+        isolate_xdg(env, home)
         host = generated.render(area / "host", "empty-host", {"KEYBINDING_CONSUMERS": {target: {"baseline": [], "placement": "link"} for target in ["niri", "umbriel"]}}, env)
+        generated.run([str(host / "bin/install-user.sh")], env)
         targets = {target: {"consumer": str(host)} for target in ["niri", "umbriel"]}
         def declarations(name, chord):
             return {"KEYBINDING_ACTIONS": {name: {"exec": ["echo", name]}}, "KEYBINDINGS": {name: {"action": name, "keys": [chord]}}, "KEYBINDING_TARGETS": targets}

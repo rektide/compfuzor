@@ -24,6 +24,7 @@ import tempfile
 import tomllib
 
 import yaml
+from keybindings.fixtures import registry_policy, isolate_xdg
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent/keybindings-consumer-hosts"
@@ -118,6 +119,7 @@ def render_playbook(playbook: str, name: str, extra: dict | None = None, etc_typ
         "MODULES_BYPASS": True,
         "SYSTEMD_THUNK_BYPASS": True,
         "GET_URLS": [],
+        "KEYBINDING_REGISTRY_POLICY": registry_policy(),
     }
     if playbook == "vicinae.src.pb":
         # Rendering producer declarations must not create /usr/share/vicinae,
@@ -166,8 +168,9 @@ def consumer_env(home: Path) -> dict:
         "SERVICE_TEST_TRACE": str(home / "service-test-trace"),
         "PATH": os.pathsep.join([str(commands), str(Path(node).parent), "/usr/local/bin", "/usr/bin", "/bin", str(Path.home() / ".local/share/pnpm")]),
     }
-    for variable in ["DIR", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "COMPFUZOR_CONFIG_BYPASS", "COMPFUZOR_KEYBINDINGS_BYPASS"]:
+    for variable in ["DIR", "COMPFUZOR_NIRI_PROFILE", "COMPFUZOR_UMBRIEL_PROFILE", "COMPFUZOR_CONFIG_BYPASS", "COMPFUZOR_KEYBINDINGS_BYPASS", "COMPFUZOR_ACTION_SESSION", "COMPFUZOR_ACTION_OPERATION", "COMPFUZOR_ACTION_OPERATION_MODE"]:
         env.pop(variable, None)
+    isolate_xdg(env, home)
     return env
 
 
@@ -187,7 +190,7 @@ def test_niri_consumer_host() -> None:
     assert "templateFile" not in profile and profile["userSources"] == []
     assert not (payload / "keybinding-producer.json").exists()  # Implicit consumer-only host.
     installer = (payload / "bin/install-keybindings-niri.sh").read_text()
-    assert f"--profile {payload}/keybinding-niri.json" in installer and " host " in installer
+    assert f"--descriptor {payload}/keybindings/consumers/user/niri.json" in installer and " host " in installer
     aggregate = (payload / "bin/install-user.sh").read_text()
     assert aggregate.index("--remove vicinae") < aggregate.index("actions children")
     assert aggregate.count("actions children") == 1
@@ -211,6 +214,7 @@ def test_niri_consumer_host() -> None:
         )
         env = consumer_env(home)
         run([str(payload / "bin/install.mjs")], env)
+        assert (home / "registries/user/consumers.d/niri.json").resolve() == (payload / "keybindings/consumers/user/niri.json").resolve()
         root = (config_dir / "config.kdl").read_text()
         assert root.count("// compfuzor-keybindings-begin") == 1 and root.count("// compfuzor-keybindings-end") == 1
         assert root.index("// handy start") < root.index('include "./handy/handy.kdl"') < root.index("// handy end")

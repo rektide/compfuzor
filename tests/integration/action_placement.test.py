@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import yaml
+from keybindings.fixtures import registry_policy
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent/action-placement"
@@ -36,7 +37,7 @@ def render(playbook: str, area: Path, env: dict, extra: dict | None = None) -> t
         {"hosts": "all", "gather_facts": False, "tasks": [{"copy": {"dest": str(report), "content": "{{ {'dir': DIR, 'prefix': PREFIX_DIR, 'etc': _ARTIFACTS.families.ETC_FILES.materialized_root, 'bins': DIR ~ '/bin', 'name': DIR | basename, 'dirs': DIRS, 'artifacts': _ARTIFACTS} | to_nice_json }}"}}]},
     ], sort_keys=False))
     # No DIR/ETC/BINS_DIR/PREFIX_DIR placement override in the default proof.
-    scenario = {"REPO_BYPASS": True, "GIT_BYPASS": True, "PKGS_BYPASS": True, "APT_BYPASS": True, "ARCH_BYPASS": True, "MODULES_BYPASS": True, "BINS_RUN_BYPASS": True, "GLOBAL_BINS_BYPASS": True, "LINKS_BYPASS": True, "SYSTEMD_THUNK_BYPASS": True, "GET_URLS": []}
+    scenario = {"REPO_BYPASS": True, "GIT_BYPASS": True, "PKGS_BYPASS": True, "APT_BYPASS": True, "ARCH_BYPASS": True, "MODULES_BYPASS": True, "BINS_RUN_BYPASS": True, "GLOBAL_BINS_BYPASS": True, "LINKS_BYPASS": True, "SYSTEMD_THUNK_BYPASS": True, "GET_URLS": [], "KEYBINDING_REGISTRY_POLICY": registry_policy()}
     if extra:
         scenario.update(extra)
     scenario_file = area / "scenario.json"
@@ -96,10 +97,11 @@ def test_home_defaults(area: Path):
     assert (receiver / "umbriel/config.toml").is_file() and not (receiver / "umbriel/config.toml").is_symlink()
     assert (receiver / "umbriel/config.toml").resolve() != (umbriel / "config.toml").resolve()
     assert not (umbriel / ".keybindings").exists(), "material root is not the live receiver"
-    for target in ["niri", "umbriel"]:
-        wrapper = (producer / f"bin/install-keybindings-{target}.sh").read_text()
-        assert "--profile-selector" in wrapper and "${XDG_DATA_HOME}" in wrapper
-        assert env["HOME"] not in wrapper and "/etc/opt/" not in wrapper
+    wrapper = (producer / "bin/install-keybindings.sh").read_text()
+    assert "install-offer" in wrapper and "--registry-policy" in wrapper
+    assert env["HOME"] not in wrapper and "--profile" not in wrapper
+    for target, host in [("niri", niri), ("umbriel", umbriel)]:
+        assert (Path(env["HOME"]) / f"registries/user/consumers.d/{target}.json").resolve() == (host / f"keybindings/consumers/user/{target}.json").resolve()
     invoke(producer / "bin/install.mjs", env)
     assert (umbriel / "config.toml").read_text() == template, "native publication must not rewrite the staged template"
     assert (receiver / "umbriel/config.toml").read_text() != template
@@ -128,10 +130,19 @@ def test_system_fixture_and_shared(area: Path, env: dict, deployed: dict, umbrel
     invoke(producer / "bin/install-system.mjs", env)
     assert json.loads((system / ".keybindings/membership.json").read_text())["groups"][MEDIA_NAME]["resources"]
     shared = area / "shared-material/etc"
-    shared_host, report = render("niri.etc.pb", area / "niri-shared-render", env, {"PREFIX_DIR": str(shared), "KEYBINDING_CONSUMERS": {"niri": {"contexts": {"user": contexts["user"]}, "registration": "copy", "placement_directory": "shared-native"}}})
+    shared_home = area / "shared-invocation-home"
+    shared_policy = registry_policy()
+    # A relocated owner cannot silently replace the existing receiver's reference.
+    # This separate public pair models deliberate operator registry selection.
+    for pair in shared_policy["audiences"].values():
+        for side in pair.values():
+            side["roots"] = [value.replace("${HOME}", str(shared_home)) for value in side["roots"]]
+            side["writeRoot"] = side["writeRoot"].replace("${HOME}", str(shared_home))
+    shared_host, report = render("niri.etc.pb", area / "niri-shared-render", env, {"PREFIX_DIR": str(shared), "KEYBINDING_REGISTRY_POLICY": shared_policy, "KEYBINDING_CONSUMERS": {"niri": {"contexts": {"user": contexts["user"]}, "registration": "copy", "placement_directory": "shared-native"}}})
     assert shared_host == shared / "niri" and Path(report["etc"]) == shared_host
-    override = {**env, "COMPFUZOR_NIRI_PROFILE": str(shared_host / "etc/keybinding-niri.json")}
-    invoke(producer / "bin/install.mjs", override)
+    invoke(shared_host / "bin/register-keybindings-consumer-niri-user.sh", env)
+    policy_locator = str(shared_host / "etc/keybindings/registry-policy.json")
+    invoke(producer / "bin/install.mjs", env, ["--registry-policy", policy_locator, "--target", "niri"])
     received = Path(env["XDG_CONFIG_HOME"]) / "niri"
     assert (received / "shared-native/media-mute.binding.kdl").exists()
     assert not (received / f".keybindings/source/{MEDIA_NAME}/action/media-mute.yaml").is_symlink()

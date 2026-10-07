@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import yaml
+from keybindings.fixtures import registry_policy, isolate_xdg
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent/keybindings-generated"
@@ -20,7 +21,7 @@ def render(directory, name, declarations, env):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "files").symlink_to(ROOT / "files", target_is_directory=True) if not (directory / "files").exists() else None
     payload = directory / "deployment"
-    variables = {"TYPE": name, "NAME": name, "DIR": str(payload), "ETC": str(payload / "etc"), "BINS_DIR": str(payload / "bin"), "DIRSET": ["etc"], "FILES": [], "ETC_FILES": [], "BINS": [{"name": "install.sh", "content": "printf 'authored-system-body\\n'\n"}, {"name": "install-user.sh", "content": "printf 'authored-user-body\\n'\n"}], "DIRS": [], "STATUSES": [], "PKGS": [], "ENV": {}, "BINS_RUN_BYPASS": True, **declarations}
+    variables = {"TYPE": name, "NAME": name, "DIR": str(payload), "ETC": str(payload / "etc"), "BINS_DIR": str(payload / "bin"), "DIRSET": ["etc"], "FILES": [], "ETC_FILES": [], "BINS": [{"name": "install.sh", "content": "printf 'authored-system-body\\n'\n"}, {"name": "install-user.sh", "content": "printf 'authored-user-body\\n'\n"}], "DIRS": [], "STATUSES": [], "PKGS": [], "ENV": {}, "BINS_RUN_BYPASS": True, "KEYBINDING_REGISTRY_POLICY": registry_policy(), **declarations}
     tasks = [{"set_fact": {"SUBSYSTEM": {}}}]
     for task in ["sub_attribution", "sub_config", "gen_keybindings", "gen_config", "gen_bins", "gen_attribution", "compile_artifacts"]:
         tasks.append({"import_tasks": str(ROOT / f"tasks/compfuzor/{task}.tasks")})
@@ -30,10 +31,16 @@ def render(directory, name, declarations, env):
     run(["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook), "-e", json.dumps({"TYPE": name, "NAME": name})], env)
     plan = json.loads((directory / "plan.json").read_text())
     assert plan["pkgs"].count("jq") == 1
-    for target in ["niri", "umbriel"]:
-        members = [item for item in plan["bins"] if item.get("name") == f"install-keybindings-{target}.sh"]
+    owned = declarations.get("KEYBINDING_CONSUMERS") or {}
+    entries = [f"install-keybindings-{id}.sh" for id in owned]
+    if "KEYBINDING_TARGETS" in declarations or not owned:
+        entries.append("install-keybindings.sh")
+    for entry in entries:
+        members = [item for item in plan["bins"] if item.get("name") == entry]
         assert len(members) == 1 and members[0]["scope"] == ["user"] and members[0]["run"] is False
-        assert sum(Path(name).name == f"install-keybindings-{target}.sh" for item in plan["bins"] for name in item.get("run_all", [])) == 1
+        assert sum(Path(name).name == entry for item in plan["bins"] for name in item.get("run_all", [])) == 1
+    if not owned:
+        assert not (payload / "bin/install-keybindings-niri.sh").exists()
     assert "authored-system-body" in (payload / "bin/install.sh").read_text()
     assert "install-keybindings-niri.sh" not in (payload / "bin/install.sh").read_text()
     assert (payload / "bin/config/run.sh").read_bytes() == (ROOT / "files/config-run.sh").read_bytes()
@@ -48,10 +55,10 @@ def test_generated():
         area = Path(tmp)
         home = area / "home"
         config = home / ".config"
-        env = {**os.environ, "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg"), "HOME": str(home), "XDG_CONFIG_HOME": str(config), "TMPDIR": str(SCRATCH)}
+        env = isolate_xdg({**os.environ, "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg"), "TMPDIR": str(SCRATCH)}, home)
         node = subprocess.run(["node", "-p", "process.execPath"], check=True, text=True, capture_output=True).stdout.strip()
         env["PATH"] = os.pathsep.join([str(Path(node).parent), "/usr/local/bin", "/usr/bin", "/bin", str(Path.home() / ".local/share/pnpm")])
-        for variable in ["DIR", "NAME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_DATA_HOME", "COMPFUZOR_CONFIG_BYPASS", "COMPFUZOR_KEYBINDINGS_BYPASS"]:
+        for variable in ["DIR", "NAME", "COMPFUZOR_CONFIG_BYPASS", "COMPFUZOR_KEYBINDINGS_BYPASS"]:
             env.pop(variable, None)
         consumers = {}
         for target, ext in [("niri", "kdl"), ("umbriel", "toml")]:

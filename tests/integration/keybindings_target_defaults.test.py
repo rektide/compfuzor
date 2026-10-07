@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Common producer wiring through stock tasks; consumer roles and overrides stay distinct."""
+"""Advertised producer selection through stock tasks; consumer roles stay distinct."""
 from __future__ import annotations
 
 import json
@@ -53,20 +53,19 @@ def files(result: dict) -> dict:
 
 def installers(result: dict) -> dict:
     return {entry["name"]: entry for entry in result["compiled"]["bins"]
-            if entry["name"].startswith("install-keybindings-")}
+            if entry["name"].startswith("install-keybindings")}
 
 
 def assert_common_targets(result: dict) -> None:
     manifest = files(result)["keybinding-producer.json"]["json"]
     assert manifest["targets"] == ["niri", "umbriel"]
     entries = installers(result)
-    assert set(entries) == {f"install-keybindings-{target}.sh" for target in manifest["targets"]}
-    for target in manifest["targets"]:
-        entry = entries[f"install-keybindings-{target}.sh"]
-        assert entry["scope"] == ["user"] and entry["run"] is False
-        assert " install " in entry["content"] and "--profile-selector" in entry["content"]
-        assert f"COMPFUZOR_{target.upper()}_PROFILE" in entry["content"]
-        assert f"${{XDG_DATA_HOME}}/compfuzor/etc/{target}/etc/keybinding-{target}.json" in entry["content"]
+    assert set(entries) == {"install-keybindings.sh"}
+    entry = entries["install-keybindings.sh"]
+    assert entry["scope"] == ["user"] and entry["run"] is False
+    assert " install-offer " in entry["content"] and "--selection" in entry["content"]
+    assert "--profile" not in entry["content"] and "COMPFUZOR_NIRI_PROFILE" not in entry["content"]
+    assert files(result)["keybindings/selection.json"]["json"]["receivers"] is None
     assert result["pkgs"] == ["jq"]
     assert result["explicit_targets"] is False
 
@@ -120,21 +119,20 @@ def test_target_defaults() -> None:
         assert " host " in installers(patched)["install-keybindings-umbriel.sh"]["content"]
 
         subset = render(area, "subset", {"KEYBINDING_ACTIONS": actions, "KEYBINDING_TARGETS": ["umbriel"]}, env)
-        assert files(subset)["keybinding-producer.json"]["json"]["targets"] == ["umbriel"]
-        assert set(installers(subset)) == {"install-keybindings-umbriel.sh"}
-        assert "--profile" not in installers(subset)["install-keybindings-umbriel.sh"]["content"]
+        assert files(subset)["keybinding-producer.json"]["json"]["targets"] == ["niri", "umbriel"]
+        assert files(subset)["keybindings/selection.json"]["json"]["receivers"] == [{"id": "umbriel"}]
+        assert set(installers(subset)) == {"install-keybindings.sh"}
         explicit = render(area, "explicit-host", {
             "KEYBINDING_ACTIONS": actions,
             "KEYBINDING_TARGETS": {"niri": {"consumer": "/selected/host", "context": "desktop", "scope": "user"}},
         }, env)
-        assert set(installers(explicit)) == {"install-keybindings-niri.sh"}
-        command = installers(explicit)["install-keybindings-niri.sh"]["content"]
-        assert "--profile /selected/host/etc/keybinding-niri.json" in command
-        assert "--context desktop --scope user" in command
+        assert set(installers(explicit)) == {"install-keybindings.sh"}
+        assert files(explicit)["keybindings/selection.json"]["json"]["receivers"] == [{"id": "niri", "profile": {"path": "/selected/host/etc/keybinding-niri.json"}, "context": "desktop", "scope": "user"}]
         for name, targets in [("empty-map", {}), ("empty-list", [])]:
             empty = render(area, name, {"KEYBINDING_ACTIONS": actions, "KEYBINDING_TARGETS": targets}, env)
             assert files(empty)["keybinding-producer.json"]["json"]["targets"] == []
-            assert installers(empty) == {}
+            assert files(empty)["keybindings/selection.json"]["json"]["receivers"] == []
+            assert set(installers(empty)) == {"install-keybindings.sh"}  # still advertises owned offer
 
         custom = render(area, "custom-defaults", {
             "KEYBINDING_ACTIONS": actions,
@@ -142,17 +140,20 @@ def test_target_defaults() -> None:
             "KEYBINDING_TARGET_DEFAULTS": {"umbriel": {"consumer": "{{ selected_consumer }}", "context": "user", "scope": "user"}},
         }, env)
         assert custom["explicit_targets"] is False
-        assert files(custom)["keybinding-producer.json"]["json"]["targets"] == ["umbriel"]
-        assert "--profile /custom/host/etc/keybinding-umbriel.json" in installers(custom)["install-keybindings-umbriel.sh"]["content"]
+        assert_common_targets(custom)  # retired shared defaults must not revive hardcoded profiles
 
         combined = render(area, "combined", {
             "KEYBINDING_ACTIONS": actions,
             "KEYBINDING_CONSUMERS": {"umbriel": {}}, "KEYBINDING_TARGETS": ["umbriel"],
         }, env)
         assert files(combined)["keybinding-umbriel.json"]["json"]["userSources"] == []
-        assert files(combined)["keybinding-producer.json"]["json"]["targets"] == ["umbriel"]
-        assert " install " in installers(combined)["install-keybindings-umbriel.sh"]["content"]
-        print("ok: shared producer targets, passive defaults, empty reinstalls, consumer layers and explicit overrides")
+        assert files(combined)["keybinding-producer.json"]["json"]["targets"] == ["niri", "umbriel"]
+        assert " host " in installers(combined)["install-keybindings-umbriel.sh"]["content"]
+        selection = files(combined)["keybindings/selection.json"]["json"]
+        assert selection["receivers"] == [{"id": "umbriel"}]
+        assert selection["prospectiveConsumers"]["user"] == [{"path": str(area / "combined/payload/etc/keybindings/consumers/user/umbriel.json")}]
+        assert list(installers(combined)) == ["install-keybindings-umbriel.sh", "install-keybindings.sh"]
+        print("ok: advertised default-all/subset/empty producer selection, passive generation, host layers and prospective owned receivers")
 
 
 if __name__ == "__main__":

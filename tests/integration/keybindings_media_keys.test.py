@@ -64,31 +64,30 @@ def test_media_keys_model_producer() -> None:
         assert len(resources) == 20
         assert len([path for path in resources if "/action/" in path]) == 10
         assert len([path for path in resources if "/keybinding/" in path]) == 10
+        leaf = (producer / "bin/install-keybindings.sh").read_text()
+        assert " install-offer " in leaf and "--selection" in leaf and "--registry-policy" in leaf
+        assert "--profile" not in leaf
+        assert json.loads((producer / "etc/keybindings/selection.json").read_text())["receivers"] is None
         for target in ["niri", "umbriel"]:
-            leaf = (producer / f"bin/install-keybindings-{target}.sh").read_text()
-            assert "--profile-selector" in leaf and " install " in leaf
-            assert f"COMPFUZOR_{target.upper()}_PROFILE" in leaf
-            assert f"${{XDG_DATA_HOME}}/compfuzor/etc/{target}/etc/keybinding-{target}.json" in leaf
+            assert not (producer / f"bin/install-keybindings-{target}.sh").exists()
         assert (producer / "bin/install.mjs").is_symlink()
         assert (producer / "bin/install-user.mjs").is_file() and not (producer / "bin/install-user.mjs").is_symlink()
         action_spec = json.loads((producer / "etc/compfuzor-actions/spec.json").read_text())
-        assert action_spec["actions"]["install"]["plans"]["user"] == [{"kind": "action", "action": "install-keybindings-niri"}, {"kind": "action", "action": "install-keybindings-umbriel"}]
+        assert action_spec["actions"]["install"]["plans"]["user"] == [{"kind": "action", "action": "install-keybindings"}]
 
         # Fresh roots; adoption first (consumer installers), then register.
         niri_home = area / "home-niri"
         umbriel_home = area / "home-umbriel"
         niri_env = consumer_env(niri_home)
         umbriel_env = consumer_env(umbriel_home)
-        # The common target selectors retain invocation-time profile overrides;
-        # no fixture-specific target wiring is added to the producer at render time.
-        niri_env["COMPFUZOR_NIRI_PROFILE"] = str(niri_host / "etc/keybinding-niri.json")
-        umbriel_env["COMPFUZOR_UMBRIEL_PROFILE"] = str(umbriel_host / "etc/keybinding-umbriel.json")
+        # Hosts publish their own descriptions; pure producer default-all needs
+        # no baked-in profiles or fixture-specific receiver wiring.
         run([str(niri_host / "bin/install.mjs")], niri_env)
         run([str(umbriel_host / "bin/install.mjs")], umbriel_env)
         # Producer leaves directly (the proposal test's pattern): the
         # aggregate would run both targets against one environment.
-        run([str(producer / "bin/install-keybindings-niri.sh")], niri_env)
-        run([str(producer / "bin/install-keybindings-umbriel.sh")], umbriel_env)
+        run([str(producer / "bin/install-keybindings.sh"), "--target", "niri"], niri_env)
+        run([str(producer / "bin/install-keybindings.sh"), "--target", "umbriel"], umbriel_env)
 
         # Niri outcomes: fine-step Shift chords, coarse plain chords,
         # add-keys doubling, allow-when-locked, receiver links, includes.

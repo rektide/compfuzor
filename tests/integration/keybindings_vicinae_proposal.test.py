@@ -45,18 +45,18 @@ def test_proposal():
             "proposal-vicinae",
             etc_typed=False,
         )
-        # Consumers are invocation-time selectors, not a pinned /etc/opt receiver.
-        for target, host in [("niri", niri_host), ("umbriel", umbriel_host)]:
-            leaf = (producer / f"bin/install-keybindings-{target}.sh").read_text()
-            assert "--profile-selector" in leaf and "${XDG_DATA_HOME}" in leaf and " install " in leaf
-            assert "/etc/opt/" not in leaf
+        # Consumers advertise owner-held descriptions; the producer owns one offer.
+        leaf = (producer / "bin/install-keybindings.sh").read_text()
+        assert " install-offer " in leaf and "--selection" in leaf and "--registry-policy" in leaf
+        assert "--profile" not in leaf and "/etc/opt/" not in leaf
+        for target in ["niri", "umbriel"]:
+            assert not (producer / f"bin/install-keybindings-{target}.sh").exists()
         assert (producer / "etc/keybinding-producer.json").is_file()
         for hand in ["install-niri.sh", "install-umbriel.sh"]:
             assert not (producer / "bin" / hand).exists()
         assert (producer / "bin/install-kde.sh").is_file()
         aggregate = (producer / "bin/install-user.sh").read_text()
-        assert aggregate.count('"$DIR/bin/install-keybindings-niri.sh"') == 1
-        assert aggregate.count('"$DIR/bin/install-keybindings-umbriel.sh"') == 1
+        assert aggregate.count('"$DIR/bin/install-keybindings.sh"') == 1
 
         # Niri live root mimics the real one: handy + vicinae blocks, a
         # config.d include, and unrelated text; its includes must exist.
@@ -81,15 +81,13 @@ def test_proposal():
 
         niri_env = consumer_env(niri_home)
         umbriel_env = consumer_env(umbriel_home)
-        niri_env["COMPFUZOR_NIRI_PROFILE"] = str(niri_host / "etc/keybinding-niri.json")
-        umbriel_env["COMPFUZOR_UMBRIEL_PROFILE"] = str(umbriel_host / "etc/keybinding-umbriel.json")
         # Adopt first (consumer installers), then register the producer.
         run([str(niri_host / "bin/install.mjs")], niri_env)
         run([str(umbriel_host / "bin/install.mjs")], umbriel_env)
         # Producer leaves directly: the authored aggregate body enables a
         # user service. We never execute it; HOME isolation does not isolate DBus.
-        run([str(producer / "bin/install-keybindings-niri.sh")], niri_env)
-        run([str(producer / "bin/install-keybindings-umbriel.sh")], umbriel_env)
+        run([str(producer / "bin/install-keybindings.sh"), "--target", "niri"], niri_env)
+        run([str(producer / "bin/install-keybindings.sh"), "--target", "umbriel"], umbriel_env)
 
         niri_root = (niri_dir / "config.kdl").read_text()
         assert "vicinae/keybinding-launch.kdl" not in niri_root and "vicinae start" not in niri_root
