@@ -3,18 +3,20 @@
   vars:
     PKGS:
       - crudini
-    ENV:
-      src: "{{DIR}}/etc/main.conf"
-      dest: "/etc/bluetooth/main.conf"
     BINS:
       - name: install.sh
         content: |
+          # absolute paths, rendered at generation: the January 2026 runs
+          # died on unbound $DST/$DEST/$SRC (the wrapper sets -u and the
+          # env never defined them uppercase)
+          SRC="{{DIR}}/etc/main.conf"
+          DST="/etc/bluetooth/main.conf"
           cp "$DST" "${DST}.bak.$(date +%s)"
-          crudini --merge "$DEST" < "$SRC"
-          IN_SRC="{{DIR}}/etc/input.conf"
-          IN_DEST="/etc/bluetooth/input.conf"
-          cp "$IN_DEST" "${IN_DEST}.bak.$(date +%s)"
-          crudini --merge "$IN_DEST" < "$IN_SRC"
+          crudini --merge "$DST" < "$SRC"
+          SRC="{{DIR}}/etc/input.conf"
+          DST="/etc/bluetooth/input.conf"
+          cp "$DST" "${DST}.bak.$(date +%s)"
+          crudini --merge "$DST" < "$SRC"
     ETC_FILES:
       - name: main.conf
         content: |
