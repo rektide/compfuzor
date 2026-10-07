@@ -99,18 +99,20 @@ uinput. **Whatever replaces the package must own an equivalent rule** or
 input injection breaks for every kanata instance.
 
 `_kanata` account facts (for the sysuser decision): uid 990 / gid 985 —
-**dynamically allocated** by `useradd --system` in postinst, not static;
-groups `_kanata` + `input` (114); home `/home/_kanata` (never created);
-shell `/bin/zsh` (login.defs default). The pb comments call it "static" —
-it is not; a machine rebuild without the package cannot recreate it, which
-is exactly what a declared sysuser fixes.
+a **persistent ordinary system account** created by `useradd --system` in
+postinst, with IDs allocated at install time. It is NOT a systemd
+`DynamicUser=` ephemeral identity — the srv.pb comments' "static" means
+*persistent account*, not *pinned UID*; groups `_kanata` + `input` (114);
+home `/home/_kanata` (never created); shell `/bin/zsh` (login.defs
+default). A declared sysuser preserves the current IDs on this box and
+handles fresh creation on machine rebuilds.
 
 # Inventory: what the replacement must own
 
 | Artifact | Current owner | Replacement must |
 |---|---|---|
 | `kanata.service` unit file | Debian (`/usr/lib/systemd/system/kanata.service`), enabled via `/etc/systemd/system/default.target.wants/kanata.service` → Debian path | Own a unit at the same name from `/etc` (masks the vendor one) or a fresh name; parent direction: `SYSTEMD_SERVICE: kanata` preserves identity despite `NAME: kanata-main` |
-| `_kanata` user + input group | Debian postinst (dynamic uid) | Declare via compfuzor's sysusers facility so it survives package removal and machine rebuilds |
+| `_kanata` user + input group | Debian postinst (persistent system account, install-time UID allocation) | Declare via compfuzor's sysusers facility so it survives package removal and machine rebuilds |
 | udev rule `50-kanata-uinput.rules` | Debian | Stage an equivalent rule (etc lane) |
 | `/etc/kanata/config.kbd` | dpkg conffile + compfuzor LINKS symlink (`/etc/opt/kanata-main/kanata.kbd`) | Already compfuzor-owned; after removal dpkg's conffile bookkeeping is moot |
 | `kanata-blueturn.service` | compfuzor (`/etc/opt/kanata-blueturn/`, enabled) | ExecStart retarget `/usr/bin/kanata` → `/usr/local/bin/kanata` |
@@ -306,11 +308,31 @@ modified by this slice).
   pgup/pgdn + meta-hold); 33 keyberon `layout.rs` commits since v1.9.0
   (mostly mouse/mwheel) are the residual uncertainty.
 
-## F. Repo bookkeeping note
+## F. Repo bookkeeping note (resolved)
 
-jj change `ynzvxrwq` is divergent: `/0` (`b4b278a1`) is the parent
-session's kernel-bins commit, `/1` (`3eb2146d`) is this slice's checkpoint
-commit — a change-ID race between two concurrent sessions. Both contents
-are intact; left for the parent to resolve (duplicate+abandon), not
-rewritten here.
+jj change `ynzvxrwq` had gone divergent — a change-ID race between two
+concurrent sessions: `/0` (`b4b278a1`) the parent's kernel-bins commit,
+`/1` (`3eb2146d`) this slice's checkpoint. The parent resolved it with
+`jj metaedit --update-change-id`: the build checkpoint now stands as
+`kmktxxqw` / commit `c2469324`. No duplicate/abandon was used; no content
+was discarded and no source revision was reset.
+
+## G. Checkpoint acceptance (parent review, 2026-10-06)
+
+Parent reviewed the code and the cited evidence (main.rs/mod.rs runtime
+gates, prerm/postrm semantics) and accepted the source
+artifact/capability checkpoint. Decisions recorded:
+
+- **udev**: OWN rule in main, at exactly `/etc/udev/rules.d/
+  50-kanata-uinput.rules` — no reliance on discretionary siblings.
+- **Unit identity**: canonical same-name main `/etc` unit.
+- **Scope holds**: no kinata adoption; no Kinesis-exclude change in the
+  live main config; no TCP listener yet (sandbox preserved).
+- **Authorization status**: the future cutover carries *actual* user
+  authorization, not merely in-principle — the remaining gate is internal
+  handoff (Services G declarations ready), after which this session
+  continues with cutover.
+
+Remaining ownership/status statements in this document stay as the
+first-slice snapshot (dated 2026-10-06) unless superseded above.
 

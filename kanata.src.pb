@@ -4,11 +4,17 @@
     TYPE: kanata
     INSTANCE: git
     REPO: https://github.com/jtroo/kanata
-    # Dev/exploration lane for kanata itself (the deployed service is
-    # kanata.srv.pb, running the Debian package). RUST: True stages the
-    # standard cargo build/install bins; the checkout doubles as local
-    # documentation for the exact features of whatever release is out --
-    # docs/ + cfg tests live in the tree.
+    # Production binary build lane for kanata: builds and copy-installs
+    # the source binary (/usr/local/bin/kanata, tcp_server enabled --
+    # RUST_COPY so sandboxed _kanata services can execute it) that the
+    # main/BlueTurn/kinata instances run. Configuration and units are
+    # owned by the service playbooks (kanata.srv.pb,
+    # kanata-blueturn.srv.pb, kinata.srv.pb), NOT here. As of 2026-10-06
+    # the Debian package still backs the live services; the source
+    # binary is staged pending the Services G cutover declarations. The
+    # checkout (a worktree of ~/archive/jtroo/kanata) doubles as local
+    # documentation for the built release -- docs/ + cfg tests live in
+    # the tree.
     RUST: True
     RUST_BIN: kanata
     # explicit tcp_server (also in default features): Debian 1.9.0+ds-1
