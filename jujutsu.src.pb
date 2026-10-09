@@ -13,7 +13,11 @@
       - name: snapshot.toml
         content: |
           [snapshot]
-          auto-update-stale = true
+          # 2026-10-10: silent auto-recovery snapshotted near-empty quarantined
+          # workspace dirs as mass deletions across ~55 workspaces (jj 0.45.1).
+          # Stale workspaces must ERROR loudly instead; see the incident report
+          # at /home/rektide/tmp-opencode/update-stale-report.glm53max.md.
+          auto-update-stale = false
     BINS:
       - name: install-config.sh
         content: |
