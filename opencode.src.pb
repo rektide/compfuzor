@@ -95,6 +95,20 @@
       # shelling out `watchman get-sockname`, which can auto-spawn a private
       # daemon in this unit's cgroup.
       WATCHMAN_SOCK: "{{WATCHMAN_CANONICAL_SOCKET_ABS}}"
+      # FFF search-index event source. "shared" (opt-in; default "native")
+      # stops FFF from installing its own per-directory inotify watcher and
+      # feeds its index incrementally from the same shared watcher feed
+      # OPENCODE_WATCHER_BACKEND selects — FFF's own native pipeline still
+      # applies every batch (ignore rules, frecency, ranking, git status).
+      # Inert on stock upstream builds: the env var is unrecognized there
+      # and native FFF watching continues unchanged. Needs the composed
+      # workspace's external-ingestion FFF artifacts (vendored under
+      # vendor/fff, incl. a Linux library requiring glibc >= 2.38); with a
+      # stock or unloadable binary, or after terminal feed loss, search
+      # degrades to the ripgrep fallback for that location with a journal
+      # warning — it never re-installs the native watcher mid-flight.
+      # Applies on the next unit restart.
+      OPENCODE_FFF_WATCH: shared
       # Location activity TTL: inert on stock upstream; the composed working
       # workspace reads it. 8h keeps location service stacks warm across a
       # working day while still bounding memory (stock default: 60m).
@@ -233,6 +247,15 @@
         manager: user
         expected:
           WATCHMAN_SOCK: "{{WATCHMAN_CANONICAL_SOCKET_ABS}}"
+      # FFF search-feed opt-in must reach the running server's environ;
+      # a stale env file (unit not restarted after a playbook run) fails
+      # here instead of silently serving native-watch FFF.
+      - name: opencode-fff-env
+        check: mainpid-env
+        unit: "{{OPENCODE_UNIT}}.service"
+        manager: user
+        expected:
+          OPENCODE_FFF_WATCH: shared
       # Credential view of the running server: systemd's LoadCredential
       # tmpfs dir plus the unit-only pointer override that directs the
       # binary at the copy (see {{ETC}}/env-credential).
@@ -487,7 +510,8 @@
       `bin/status.sh` runs the registered reporters: status-cleanup.sh (leaked
       native libraries and the cleanup timer's state), status-opencode-ok.sh
       (below), status-mainpid-env.sh (the live server inherited the canonical
-      WATCHMAN_SOCK and serves the LoadCredential password view:
+      WATCHMAN_SOCK, the `OPENCODE_FFF_WATCH=shared` search-feed opt-in, and
+      serves the LoadCredential password view:
       `$CREDENTIALS_DIRECTORY` present, `OPENCODE_PASSWORD_FILE` pointing
       at the tmpfs copy), status-exe-current.sh (the MainPID still executes
       the currently deployed opencode inode), plus the config and link drift
