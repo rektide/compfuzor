@@ -38,10 +38,17 @@
       for compression or `-m 4G` for build VM memory. Use `ARGS='--dry-run
       --print-recipe' {{DIR}}/bin/build.sh` to inspect the debos recipes.
 
+      Debos/fakemachine temporary storage defaults to `{{DIR}}/tmp` on the
+      deployment filesystem; export TMPDIR to override it.
+
       The SDM845 support metapackage currently depends on a different kernel;
       the build installs qcom-support-common and the requested kernel directly.
       Boot images select the kernel version from that package's file list.
       Default image login is upstream's `mobian` / `1234`; use `-u` / `-p`
       to customize it. Debos normally uses /dev/kvm (the builder needs access).
+
+      For a host without working KVM/QEMU, debos can build directly using
+      root privileges and the host's registered arm64 binfmt interpreter:
+      `sudo env ARGS=--disable-fakemachine TMPDIR={{DIR}}/tmp {{DIR}}/bin/build.sh`.
   tasks:
     - import_tasks: tasks/compfuzor.includes

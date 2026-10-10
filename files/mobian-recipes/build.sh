@@ -1,3 +1,8 @@
+# Debos/fakemachine scratch files can be large; keep them on the deployment's
+# disk rather than the host's /tmp tmpfs. Allow an explicit caller override.
+export TMPDIR="${TMPDIR:-$DIR/tmp}"
+mkdir -p "$TMPDIR"
+
 # Keep the deployment checkout pristine and retain upstream build artifacts.
 mkdir -p "$DIR/build"
 rsync -a --exclude=/.git --exclude=/.jj "$REPO_DIR/" "$DIR/build/"
