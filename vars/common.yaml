@@ -382,7 +382,10 @@ SUBSYSTEM:
           basedir: repo
           generated: |
             {{ BUN_COMMENT_INSTALL | join2(prefix='# ') }}
-            bun link -g
+            # `bun link` (no -g): bun >= 1.4 misreads `bun link -g` as
+            # registering a package literally named "global" and links no
+            # bins; bare `bun link` is bun's global-registration form.
+            bun link
       ENV: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
       TOOL_VERSIONS:
         bun: true
