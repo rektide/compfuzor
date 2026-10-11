@@ -75,6 +75,30 @@ into host globals (`BINS`, `ENV`, `PKGS`, etc.) via `merge_subsys`.
   when: lookup('subsys', id='go', get='active', default=false) | bool
 ```
 
+## Bun source builds
+
+`BUN: true` contributes `build-bun.sh` (runs in `DIR/repo`) and
+`install-bun.sh` (`bun link`). The build installs dependencies first, then runs
+the package scripts selected by `BUN_BUILD_SCRIPTS` in order. It accepts a YAML
+list or a comma-separated string and is exported into the deployment environment
+for runtime overrides. Unset or empty means install dependencies only, preserving
+the existing default; explicitly selected scripts fail normally if missing or
+unsuccessful.
+
+`BUN_COMMENT` adds comments before the build commands;
+`BUN_COMMENT_INSTALL` does the same for installation. Both accept a string or a
+list of lines, rendered with `# ` prefixes.
+
+```yaml
+BUN: true
+BUN_BUILD_SCRIPTS: [web:build]
+BUN_COMMENT:
+  - Build the web assets served by the source checkout.
+```
+
+No custom `BINS` entry is needed. The shared build/install run and bypass flags
+still control these subsystem scripts. See [`motel.src.pb`](../motel.src.pb).
+
 ## Typed status providers
 
 Status declarations are grouped by their authoritative observation source.

@@ -376,6 +376,13 @@ SUBSYSTEM:
           generated: |
             {{ BUN_COMMENT | join2(prefix='# ') }}
             bun install
+            if [ -n "${BUN_BUILD_SCRIPTS:-}" ]; then
+                IFS=',' read -ra _cf_build_scripts <<< "$BUN_BUILD_SCRIPTS"
+                for _cf_script in "${_cf_build_scripts[@]}"; do
+                    echo "Building via ${_cf_script}..."
+                    bun run "$_cf_script"
+                done
+            fi
         - name: install-bun.sh
           bypass: ["LINK", "BUN"]
           run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
@@ -386,7 +393,11 @@ SUBSYSTEM:
             # registering a package literally named "global" and links no
             # bins; bare `bun link` is bun's global-registration form.
             bun link
-      ENV: "{{ ({'BUN_BIN': BUN_BIN}) if BUN_BIN is defined else ({}) }}"
+      ENV: >-
+        {{ {} | combine_iff({
+          'BUN_BIN': BUN_BIN,
+          'BUN_BUILD_SCRIPTS': BUN_BUILD_SCRIPTS | join2(',')
+        }) }}
       TOOL_VERSIONS:
         bun: true
 
