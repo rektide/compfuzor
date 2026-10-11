@@ -13,16 +13,9 @@ if [[ -z ${OPENCODE_PASSWORD:-} && -r ${OPENCODE_PASSWORD_FILE:-} ]]; then
   export OPENCODE_PASSWORD
 fi
 
-# Default interactive clients to the bus proxy when one is deployed (the
-# proxy shares the origin's password domain). An explicit --server or
-# --standalone wins, and `service` subcommands manage the channel service
-# rather than dial a server, so those pass through untouched.
-if [[ -n ${OPENCODE_PROXY_URL:-} ]]; then
-  opencode() {
-    if [[ "$1" == --server* || "$1" == --standalone || "$1" == service ]]; then
-      command opencode "$@"
-    else
-      command opencode --server "$OPENCODE_PROXY_URL" "$@"
-    fi
-  }
+# Retire the former module-owned proxy wrapper when re-sourced in an old
+# shell. Native clients read the publisher/daemon's contact from discovery.
+# Do not remove an unrelated user function: only the old body names this key.
+if (( ${+functions[opencode]} )) && [[ ${functions[opencode]} == *OPENCODE_PROXY_URL* ]]; then
+  unfunction opencode
 fi

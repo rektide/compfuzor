@@ -24,9 +24,8 @@
       # The origin: the opencode.src.pb primary, whose port authority is
       # OPENCODE_PRIMARY_PORT in vars/opencode.yaml.
       BUS_PROXY_UPSTREAM: "http://127.0.0.1:{{OPENCODE_PRIMARY_PORT}}"
-      # Loopback-only; one below the origin by convention. Clients use this
-      # as their server URL — opencode.src.pb derives OPENCODE_PROXY_URL
-      # from the same OPENCODE_BUS_PROXY_PORT.
+      # Loopback-only; one below the origin by convention. Native publication
+      # and optional daemon contribution advertise this same listener.
       BUS_PROXY_LISTEN: "127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}"
       # shared origin password: the opencode deployment's home-file view
       BUS_PROXY_PASSWORD_FILE: "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"
@@ -54,6 +53,33 @@
       setting `experimental.session_streaming: true`; without it clients
       broadcast exactly as before.
 
+      Opt in to ordinary native discovery (not a shell wrapper) by running
+      this and opencode.src.pb with `-e OPENCODE_BUS_PROXY_DISCOVERY=true`.
+      Only the configured OPENCODE_DISCOVERY_FILE is contributed; no file
+      is written by the playbook. The daemon validates forwarded /api/info
+      plus source health first, retains the origin PID/version/id/password,
+      and adds public endpoint markup and its own contribution PID.
+      Default mode is cooperate: the new server-reg publisher chooses its
+      contact via OPENCODE_PROXY_URL; the daemon only supplements it.
+      Explicit `-e OPENCODE_BUS_PROXY_SERVICE_MODE=stomp` reapplies proxy
+      routing whenever an eligible old/new publisher writes its origin or
+      override URL. Managed/foreign records remain ineligible. The fixed
+      BUS_PROXY_UPSTREAM never comes from the discovery file.
+
+      Endpoint enrichment defaults on (OPENCODE_DISCOVERY_METADATA), but
+      discovery routing itself stays opt-in. The default watcher bridge
+      reuses the existing Effect FileSystemWatchClient from
+      OPENCODE_BUS_PROXY_WATCH_SOURCE through Bun; it watches the parent
+      directory and filters the registration filename, including atomic
+      replacements. Missing helper/dependencies fall back to bounded
+      polling with a warning; `-e OPENCODE_BUS_PROXY_EFFECT_WATCH=false`
+      selects the standalone Rust polling path. Graceful stop restores
+      only the exact last contributed record; an externally changed slot
+      is left alone. The single-slot native publisher does not share the
+      proxy lock, so check-plus-rename is not transactional fencing.
+      This needs the new daemon flags in the selected build; generating
+      config is not build installation or service activation.
+
       Health is source readiness, not process liveness:
 
           curl -fsS -u "opencode:$(cat ~/.config/opencode/secrets/OPENCODE_PASSWORD)" \
@@ -72,4 +98,23 @@
       `opencode-bus-proxy --help` and
       doc/event-multiplexer/operations.md before overriding.
   tasks:
+    - name: "opencode-bus-proxy: validate discovery contribution mode"
+      assert:
+        that: OPENCODE_BUS_PROXY_SERVICE_MODE in ['cooperate', 'stomp']
+      when: OPENCODE_BUS_PROXY_DISCOVERY|bool
+    - name: "opencode-bus-proxy: opt-in native discovery environment"
+      set_fact:
+        ENV_PRIO: "{{ ENV_PRIO|default({}) | combine({
+          'BUS_PROXY_SERVICE_FILE': OPENCODE_DISCOVERY_FILE,
+          'BUS_PROXY_SERVICE_MODE': OPENCODE_BUS_PROXY_SERVICE_MODE,
+          'BUS_PROXY_SERVICE_METADATA': 'true' if OPENCODE_DISCOVERY_METADATA|bool else 'false'
+          }) }}"
+      when: OPENCODE_BUS_PROXY_DISCOVERY|bool
+    - name: "opencode-bus-proxy: reuse existing Effect watcher via Bun bridge"
+      set_fact:
+        ENV_PRIO: "{{ ENV_PRIO|default({}) | combine({
+          'BUS_PROXY_SERVICE_WATCH_HELPER': OPENCODE_BUS_PROXY_WATCH_HELPER,
+          'BUS_PROXY_SERVICE_WATCH_SOURCE': OPENCODE_BUS_PROXY_WATCH_SOURCE
+          }) }}"
+      when: OPENCODE_BUS_PROXY_DISCOVERY|bool and OPENCODE_BUS_PROXY_EFFECT_WATCH|bool
     - import_tasks: tasks/compfuzor.includes

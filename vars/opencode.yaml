@@ -4,8 +4,8 @@
 # Ansible variables do not cross playbook runs by themselves.
 # OPENCODE_SERVER_PORT stays the origin port authority inside opencode.src.pb;
 # this file only feeds its primary default. The proxy derives BUS_PROXY_LISTEN
-# and opencode.src.pb derives the client OPENCODE_PROXY_URL from the same two
-# numbers, so origin bind, proxy listen, and client dial cannot drift apart
+# and opencode.src.pb derives the native publisher OPENCODE_PROXY_URL from
+# the same two numbers, so origin bind, proxy listen, and client dial cannot drift apart
 # silently. Moving a port means overriding it consistently on BOTH playbook
 # runs (-e OPENCODE_PRIMARY_PORT=..., -e OPENCODE_BUS_PROXY_PORT=...); a
 # mismatch surfaces as failed readiness (curl /_bus/health), not silent
@@ -15,3 +15,15 @@
 # service's port.
 OPENCODE_PRIMARY_PORT: 49373
 OPENCODE_BUS_PROXY_PORT: 49372
+# Opt-in affects generated configuration only; neither playbook activates it.
+# New server-reg publishers use OPENCODE_PROXY_URL natively. On an older
+# publisher explicitly select stomp to reapply proxy routing after each write.
+OPENCODE_BUS_PROXY_DISCOVERY: false
+OPENCODE_BUS_PROXY_SERVICE_MODE: cooperate
+OPENCODE_DISCOVERY_METADATA: true
+OPENCODE_DISCOVERY_FILE: "{{ ansible_env.XDG_STATE_HOME | default(ansible_user_dir ~ '/.local/state', true) }}/opencode/service-local.json"
+# Reuse effect-watch's process owner via a daemon-supervised Bun bridge.
+# This module root must carry effect-watch; this is not an OpenCode rebuild.
+OPENCODE_BUS_PROXY_EFFECT_WATCH: true
+OPENCODE_BUS_PROXY_WATCH_SOURCE: "{{ansible_user_dir}}/src/opencode-working"
+OPENCODE_BUS_PROXY_WATCH_HELPER: "{{ansible_user_dir}}/src/opencode-bus-proxy/script/service-watch.ts"

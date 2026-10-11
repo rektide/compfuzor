@@ -2,7 +2,7 @@
 - hosts: all
   # Port contract shared with opencode-bus-proxy.src.pb: both playbooks load
   # this one input, so the primary port, the proxy listen port, and the
-  # client proxy URL interpolate from a single authority.
+    # native published proxy URL interpolate from a single authority.
   vars_files:
     - vars/opencode.yaml
   vars:
@@ -124,15 +124,11 @@
       # reads it to flag links drifting out of the composed workspace. Exported
       # for shells without the ZIM client-env module too (never contains the secret).
       OPENCODE_WORKING_DIR: "{{OPENCODE_WORKING_DIR}}"
-      # Interactive clients default to the bus proxy through the client-env
-      # module's opencode() wrapper; empty for secondary instances (their
-      # launcher already prepends its own --server). The port is
-      # OPENCODE_BUS_PROXY_PORT from vars/opencode.yaml — the same var
-      # opencode-bus-proxy.src.pb binds BUS_PROXY_LISTEN to, so client dial
-      # and proxy listen cannot drift. Exported to shells via ZIM_ENV below:
-      # the wrapper keys off it, and env.export alone never reaches
-      # interactive shells. Inert to the server itself.
-      OPENCODE_PROXY_URL: "{{ 'http://127.0.0.1:' ~ OPENCODE_BUS_PROXY_PORT if OPENCODE_PRIMARY else '' }}"
+      # Native server-reg publisher default, NOT a client-shell wrapper.
+      # Empty unless deliberately enabled; secondary launchers stay direct.
+      # Older publishers ignore it: select daemon stomp for that transition.
+      OPENCODE_PROXY_URL: "{{ 'http://127.0.0.1:' ~ OPENCODE_BUS_PROXY_PORT if OPENCODE_PRIMARY and OPENCODE_BUS_PROXY_DISCOVERY|bool else '' }}"
+      OPENCODE_SERVICE_METADATA: "{{ 'true' if OPENCODE_DISCOVERY_METADATA|bool else 'false' }}"
     # Optional deployment inputs. Define these as Ansible variables to enable
     # OpenCode's native OTLP/HTTP logs and traces without hard-coding a backend.
     ENV_LIST:
@@ -297,9 +293,6 @@
       - OPENCODE_SERVER_URL
       - OPENCODE_SERVER_PORT
       - OPENCODE_PASSWORD_FILE
-      # The bus-proxy URL must reach shells for the phase-55 client-env
-      # wrapper to route `opencode` through it; env.export alone never does.
-      - OPENCODE_PROXY_URL
     ZIM_MODULES:
       # Reuse the existing ZIM module identity so its active fragment and init
       # file are updated in place from the old array module to scalar env args.
@@ -560,6 +553,19 @@
       discover the server natively from service-local.json. Interactive
       shells opened before the OPENCODE_ARGS removal may still carry a
       stale export — `unset OPENCODE_ARGS` in them.
+
+      Native proxy discovery is opt-in: run both this playbook and
+      opencode-bus-proxy.src.pb with `-e OPENCODE_BUS_PROXY_DISCOVERY=true`.
+      New server-reg source publishes OPENCODE_PROXY_URL as its contact and
+      describes the original service/proxy URLs; the daemon defaults to
+      cooperative enrichment. For older publishers, explicitly set
+      `-e OPENCODE_BUS_PROXY_SERVICE_MODE=stomp` on the proxy playbook to
+      reapply its contact after every origin publication. Metadata is
+      default-on (OPENCODE_DISCOVERY_METADATA); routing is never globally
+      enabled merely by that default. No shell URL projection is required.
+      Re-source the client-env module in an old shell to remove its former
+      proxy wrapper. Source support is not proof that a deployed binary has
+      the new flags; composition/build/activation remain operator-gated.
 
       For standalone mode, pass `--standalone` explicitly.
 
