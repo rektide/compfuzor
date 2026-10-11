@@ -158,9 +158,9 @@
         # Literal serve arguments, no wrapper. hostname/port are per-instance
         # render-time constants; --publish claims the channel's single
         # local-discovery registration slot as operator-owned (mode:"server"
-        # in service-local.json) — stop the channel-local managed service
-        # before restarting the unit onto a --publish vector (register
-        # refuses to replace a live registration). Secondaries omit
+        # in service-local.json). Successful binding is the ownership test;
+        # the publisher replaces a prior valid record, even a live one on
+        # another port. Secondaries omit
         # --publish: the slot is primary-owned, and their clients route via
         # the instance launcher's prepended --server. CORS origins are
         # host-dynamic and deliberately not here: with no --cors flags the
@@ -610,11 +610,12 @@
       `~/.local/state/opencode/service-local.json` under the local channel
       (the stock channel's `service.json` is a separate file and world). That
       file is a single slot, not a directory of records: exactly one
-      registration, last claimant wins, and the register path refuses to
-      replace a live one. Bring-up order matters — stop the channel-local
-      managed service first (`opencode service stop`, which also clears its
-      registration) and then restart this unit, otherwise the boot fails on
-      the refusal and `Restart=always` crash-loops. While the operator
+      registration, last successful publisher wins. The current server-reg
+      publisher replaces a prior valid record after binding and does not
+      self-evict when the slot changes. An unrelated managed service may
+      observe that replacement and stop itself; coordinate the deployment
+      deliberately rather than treating publication as cross-port fencing.
+      While the operator
       registration exists, clients neither spawn nor stop a managed service
       on their own; after the unit is stopped, `opencode service forget`
       clears the stale registration. The registered URL is the bind address
