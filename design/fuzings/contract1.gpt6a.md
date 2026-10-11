@@ -42,7 +42,10 @@ operations consume their results.
 
 Human direction includes **`etc/env.d/` as the ENV assembly contribution target**.
 This draft interprets that as the input collection; assembled output is a file
-such as `env`. The other spellings and declaration examples below are proposals.
+such as `env`. The follow-up suggestion is that **`SYSTEMD_ENV` should name
+contribution files**. This draft favors that file-selection interface, while
+keeping its proposed service use distinct from today's manager-publication
+meaning. The other spellings and declaration examples below are proposals.
 This document changes the intended contract, not the current implementation.
 
 ## Terms
@@ -251,6 +254,8 @@ explicit local ENV + installed producer env inputs
                          |
                      etc/env.d/
                          |
+               consumer file selection
+                         |
                   CONFIG ENV assembly
                     /           \
        service assignment file   application shell export/default projection
@@ -265,6 +270,58 @@ be the application-only shell projection. The exact private runtime-context file
 name is an implementation choice; separating the two responsibilities is the
 contract. This is a deliberate migration for callers that currently expect the
 generic floor in env.export, not a claim that removing it today is harmless.
+
+### SYSTEMD_ENV selects contribution files
+
+Prefer **select files, rather than repeat values or variable names**, for the
+systemd consumer interface. Illustrative future declaration, not supported syntax
+today:
+
+```yaml
+opencodeService:
+  SYSTEMD_ENV:
+    - 50-origin.env
+    - 90-origin-credential.env
+```
+
+These names select exact installed contributions under the bound consumer's
+`etc/env.d/`. They do not search the machine for similarly named providers. The
+service-specific selection is compiled into the existing consumer recipe, with
+the explicit list determining input order. A whole-collection recipe instead
+uses its declared glob order. Inspection and execution use that compiled
+selection; generated wrappers do not maintain another copy of the list.
+
+Explicitly named missing or disabled contributions make that selection incomplete;
+selection does not silently enable them. Merely finding another file in env.d
+does not add it to a service's explicit selection. For deployments with several
+units, bind selection per unit rather than assuming every unit wants the whole
+deployment environment.
+
+The example produces a service environment with the credential override last.
+A ZIM client projection selects the client contribution file instead, containing
+the stable credential pointer. The producer owns each file's values. A contribution
+used unchanged by both consumers is the same source file, not two rewritten maps.
+
+There are two execution arrangements to assess at the ENV implementation seam:
+
+- Assemble the selected contributions to a service-specific EnvironmentFile
+  through CONFIG; other projections use the same input selection and reducer.
+- When contributions already satisfy native systemd EnvironmentFile syntax,
+  emit the ordered EnvironmentFile directives directly. Systemd can perform its
+  native combination; do not manufacture an aggregate solely for uniformity.
+  Inspection and shell projection must still agree on parsing and precedence.
+
+The first fits the proposed shared ENV assembly; the second can be smaller for
+a service-only consumer. Neither needs per-contribution descriptor JSON.
+
+**Naming remains a deliberate contract change.** Today's SYSTEMD_ENV is a mapping
+for manager publication. If that name becomes service file selection, give the
+manager publisher an explicitly named surface and migrate existing declarations.
+Alternatively, retain the name for manager publication but change its input to
+file selection, with service-file selection separately named. Do not make a
+mapping mean manager-wide effects while a list silently means service-local effects.
+In either naming arrangement, the manager publisher can consume explicit env
+contributions too; publication remains a separately selected operation.
 
 ### One resolved map, consumer-specific serialization
 
@@ -303,9 +360,11 @@ publish aggregate outputs through CONFIG alone.
 ### Make the contribution boundary explicit
 
 The whole service environment is usually not the desired interactive-shell
-environment. Offer named native env artifacts, or explicitly select keys from
-an existing contribution. Do not infer an export set by subtracting a blacklist
-of Compfuzor variables from a running process's environment.
+environment. Prefer named native env artifacts selected by consumer: origin,
+proxy, client, or a genuinely shared contribution. Explicit key projection can
+serve migration or a real subset need, but it should not require every consumer
+to restate a well-defined contribution key by key. Do not infer an export set by
+subtracting a blacklist of Compfuzor variables from a running process's environment.
 
 For OpenCode/proxy, distinguish at least:
 
@@ -325,9 +384,12 @@ ZIM, service arguments, and a fuzing descriptor.
 
 Keep ZIM's direct `env:` module facility for genuinely shell-owned configuration.
 For an application contribution shared with service/launcher consumers, ZIM should
-render or load a projection of the named ENV input set. The existing `ZIM_ENV`
-key list can remain shorthand for explicit selection, backed by the same ENV
-normalization rather than its current separate implementation.
+render or load a projection of the selected ENV contribution files. This is the
+same file-selection idea as SYSTEMD_ENV, with a Zsh serializer/activation policy.
+The existing `ZIM_ENV` key list can remain a migration shorthand for explicit key
+selection, backed by the same ENV normalization rather than its current separate
+implementation. Decide its file-selector spelling explicitly; do not guess
+whether a string names an environment variable or a path.
 
 There are two distinct kinds of reuse:
 
@@ -418,8 +480,10 @@ generic contract.
 Choices still requiring a concrete implementation proposal:
 
 - Exact ENV fragment grammar and how current shell-expression values migrate.
-- Smallest authored declaration for named env contributions/key projections;
+- Smallest authored declaration for named env contributions and ZIM file selection;
   direct ZIM `env:` and existing ENV_LIST already cover part of the need.
+- Whether SYSTEMD_ENV names service-selected files or manager-publication files;
+  both should reference contributions, with the effects explicitly distinguished.
 - Whether a fuze.d exposure is useful enough to install at all; native membership
   remains sufficient. Bundle membership should be added only for an actual need.
 - How narrow shell activation records managed defaults and handles first adoption.
