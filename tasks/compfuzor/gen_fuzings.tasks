@@ -1,0 +1,14 @@
+---
+# Explicit composition data only. Membership publication belongs to installation.
+- name: "Compfuzor: compile fuze and constituent declarations"
+  set_fact:
+    _FUZINGS: >-
+      {{ FUZE | default(none) | resolve |
+         fuzings_compile(FUZINGS | default(none) | resolve, NAME, DIR) }}
+  changed_when: false
+
+- name: "Compfuzor: contribute local fuzing descriptors"
+  set_fact:
+    ETC_FILES: "{{ ETC_FILES | default([]) | merge_list(_FUZINGS.etc_files, preset='append') }}"
+    ETC_DIRS: "{{ ETC_DIRS | default([]) | merge_list(_FUZINGS.etc_dirs, preset='append_unique') }}"
+  changed_when: false
