@@ -57,8 +57,10 @@ This document changes the intended contract, not the current implementation.
 - **Type:** the native configuration contract: ENV assignments, ZIM declarations,
   OpenCode config fragments, and later other supported formats.
 - **Config instance:** one named use of a type, with its own recipes, consumer
-  bindings, contribution rules, delivery policy, and install/activation owner.
-  A type can have several instances in one deployment.
+  bindings and delivery policy: a complete CONFIG definition, not a partition
+  of one deployment-wide configuration. The same CONFIG implementation can be
+  instantiated several times. ZIM continues to own its normal ZIM operations
+  around its own CONFIG instance.
 - **Membership:** an installed reference in the consumer's input collection.
   A reference can enroll a contribution root whose recognized native files are
   resolved into the selected recipes at assembly time.
@@ -194,12 +196,12 @@ installation identity:
 
 | Current constraint | Consequence for independent subsystems |
 |---|---|
-| One `SUBSYSTEM.config`, generated `etc/config.spec.json`, and public command family | Re-running the existing generator for several independent instances does not simply create isolated instances; contributions need collection/namespacing first. |
+| One `SUBSYSTEM.config`, generated `etc/config.spec.json`, and public command family | Re-running the generator does not create isolated CONFIGs; each invocation needs its own bound spec and generated artifact locations. |
 | One default CONFIG context and one `CONFIG_INSTALL_OWNER` | Different domains cannot independently claim their ordinary installation through the current ownership switch. Multiple contexts alone do not fix that. |
 | Flat recipe IDs and shared remote/mutable input naming | Independently authored subsystems can collide even when their material lives in different directories. |
 | ZIM requires `installOwner: zim` and fixed `zimrc`/`zimenv` recipe names | ZIM works as the complete installer for its host, not as an arbitrarily instantiable recipe group alongside other complete installers. |
 | Ordinary ENV uses `fs_env.tasks`, outside CONFIG | ENV is not currently a CONFIG-backed subsystem instance at all. |
-| CONFIG compiles before `gen_zim.tasks` consumes its spec | Additional domain-owned recipe contributions must be collected before compilation, or the current generation order must be split. |
+| CONFIG compiles before `gen_zim.tasks` consumes its spec | Each domain must receive its own compiled CONFIG at the right point; the current single SUBSYSTEM.config handoff cannot identify several definitions. |
 
 The ownership issue is concrete: `CONFIG_INSTALL_OWNER: zim` suppresses ordinary
 CONFIG install composition, while ZIM install explicitly selects only `zimrc`
@@ -216,33 +218,48 @@ Sources: [CONFIG publication](/library/filter_plugins/config_compile.py),
 
 ### Intended instance boundary
 
-Conceptually, one deployment should be able to contain:
+**We need multiple CONFIGs. Normal ZIM config does normal ZIM config things.**
+This clarification replaces the earlier suggestion to prefer one collected,
+namespaced CONFIG package with divided installation ownership.
+
+Conceptually, one deployment can contain several complete configurations:
 
 ```text
-env.service      -> selected service env contribution files and projections
-env.client       -> selected client env contribution files and projections
-zim.shell        -> zimrc + zimenv recipes, loaders, and caches
-opencode.main    -> owned OpenCode config recipe
+ENV CONFIG       -> its env inputs, recipes, outputs, and delivery
+ZIM CONFIG       -> its normal zimrc/zimenv inputs and recipes
+OpenCode CONFIG  -> its normal native config inputs and recipes
 ```
 
-These are instance identities, not a proposed finished YAML syntax. Each instance
-owns its recipe/input names, source and consumer roots, native recognition rules,
-delivery modes, validation, and activation. Two uses of the same type must work
-as well as two different types. A producer can offer material to several instances;
-the parent binds the intended instance rather than inferring it from ambient DIR.
+Each is an ordinary CONFIG definition with its own spec/binding, input names,
+recipes, output paths, default context, and installation settings. They share
+implementation, not a single configuration identity. A second ZIM configuration
+can likewise use the normal `zimrc` and `zimenv` names within its own CONFIG;
+it should not require rewriting those native names to distinguish it globally.
 
-Keep one reusable CONFIG engine. A collected, namespaced spec can represent these
-instances, or adapters can pass independently bound specs through the existing
-API. Separate engine copies and one JSON file per instance are not requirements.
-What must become plural is ownership and binding. Prefer collecting domain-owned
-instances into one compiled package first, with explicit scoped install ownership
-and qualified recipe/input IDs, so the existing transaction machinery remains
-available where the outputs belong together.
+ZIM's normal complete installer still assembles its channels and handles its
+loaders/caches. OpenCode's config still uses its existing native recipes. ENV
+acquires ordinary CONFIG recipes for its inputs and outputs. Fuzing delivers
+producer pieces into those configurations; it does not replace their internal
+behavior with a universal type dispatcher or activation protocol.
 
-Ordinary install composition must invoke each selected instance's complete
-operation exactly once: generic CONFIG for ordinary material, the ZIM adapter for
-its config plus activation artifacts, and equivalent domain operations as needed.
-An instance owning activation must not disable unrelated instances' installation.
+The implementation work is to make existing CONFIG packaging **instantiable**:
+bind spec paths, generated leaf paths, runtime roots, command entrypoints, and
+installation ownership to the selected CONFIG rather than fixed deployment-wide
+slots. The runtime already accepts explicit specs in useful places; generators
+still emit fixed spec/command/leaf locations. Separate generated specs are normal
+CONFIG data, not the per-fuzing descriptor envelopes we are trying to avoid.
+Share the runtime and processors instead of duplicating the engine.
+
+An enclosing deployment can compose these normal installation operations. ZIM
+owning installation of its CONFIG does not suppress installation of ENV's or
+OpenCode's CONFIG. Each CONFIG keeps its existing transaction boundary; an
+explicit operation can sequence dependent configurations without pretending their
+separate outputs form one transaction.
+
+The parent binding identifies which CONFIG receives a contribution. It must not
+infer that from ambient DIR or assume every config named `user` is the same
+consumer. File recognition reduces declaration repetition after that binding;
+it does not merge independent CONFIG identities.
 
 ### Producer material to parent material
 
@@ -668,12 +685,12 @@ this draft.
 
 ## Next proof and remaining choices
 
-First prove that one isolated parent can host independent ENV, ZIM, and OpenCode
-config instances, including two instances of one type, without recipe/input
-collisions or a deployment-wide install-owner switch. Demonstrate one instance's
-install/disable/activation does not swallow another's ordinary installation.
-Use existing processors where sufficient to test that packaging boundary before
-implementing all ENV serialization details.
+First prove that one isolated parent can host several complete CONFIG definitions,
+including two with the same local recipe names, without fixed spec/command/leaf
+collisions. Normal ZIM installation must continue to do its normal work on its
+selected CONFIG while ordinary ENV/OpenCode configuration remains independently
+invokable and installable. Use existing processors where sufficient to prove
+multiple-CONFIG packaging before implementing all ENV serialization details.
 
 Then prove ENV with two isolated producers and one consumer `etc/env.d/`:
 local inputs and enrolled roots, automatic recognition of added native files,
@@ -691,8 +708,8 @@ generic contract.
 
 Choices still requiring a concrete implementation proposal:
 
-- Instance declaration/namespace and per-instance installation ownership,
-  collected before CONFIG compilation; keep runtime/spec packaging proportional.
+- Multiple-CONFIG declaration and per-CONFIG spec/leaf/command binding; compile
+  each normal configuration without sharing fixed deployment-wide output slots.
 - Exact ENV fragment grammar and how current shell-expression values migrate.
 - Smallest authored declaration for named env contributions and ZIM file selection;
   direct ZIM `env:` and existing ENV_LIST already cover part of the need.
