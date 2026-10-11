@@ -1,5 +1,10 @@
 ---
 - hosts: all
+  # Port contract shared with opencode-bus-proxy.src.pb: both playbooks load
+  # this one input, so the primary port, the proxy listen port, and the
+  # client proxy URL interpolate from a single authority.
+  vars_files:
+    - vars/opencode.yaml
   vars:
     TYPE: opencode
     # INSTANCE selects the deployment variant. `git` is the primary instance:
@@ -25,8 +30,10 @@
     OPENCODE_SERVER_HOSTNAME: "{{ '0.0.0.0' if OPENCODE_PRIMARY else '127.0.0.1' }}"
     # Secondary instances have no port default: pick an explicit distinct one
     # (-e OPENCODE_SERVER_PORT=<port>) or the guard task fails the run.
-    # 49373 is the primary; 49374 is the stock upstream managed service.
-    OPENCODE_SERVER_PORT: "{{ 49373 if OPENCODE_PRIMARY else None }}"
+    # The primary default is OPENCODE_PRIMARY_PORT from vars/opencode.yaml —
+    # the same input the bus proxy dials and the guard reserves. 49374 is
+    # the stock upstream managed service.
+    OPENCODE_SERVER_PORT: "{{ OPENCODE_PRIMARY_PORT if OPENCODE_PRIMARY else None }}"
     OPENCODE_SERVER_URL: "http://127.0.0.1:{{OPENCODE_SERVER_PORT}}"
     # Secondary deployments build from their own composed working workspace.
     OPENCODE_WORKING_DIR: "{{ ansible_user_dir }}/src/opencode-working{{OPENCODE_SUFFIX}}"
@@ -117,11 +124,15 @@
       # reads it to flag links drifting out of the composed workspace. Exported
       # for shells without the ZIM client-env module too (never contains the secret).
       OPENCODE_WORKING_DIR: "{{OPENCODE_WORKING_DIR}}"
-      # Interactive clients default to the bus proxy (opencode-bus-proxy.src.pb
-      # listens one port below the primary) through the client-env module's
-      # opencode() wrapper; empty for secondary instances (their launcher
-      # already prepends its own --server). Inert to the server itself.
-      OPENCODE_PROXY_URL: "{{ 'http://127.0.0.1:49372' if OPENCODE_PRIMARY else '' }}"
+      # Interactive clients default to the bus proxy through the client-env
+      # module's opencode() wrapper; empty for secondary instances (their
+      # launcher already prepends its own --server). The port is
+      # OPENCODE_BUS_PROXY_PORT from vars/opencode.yaml — the same var
+      # opencode-bus-proxy.src.pb binds BUS_PROXY_LISTEN to, so client dial
+      # and proxy listen cannot drift. Exported to shells via ZIM_ENV below:
+      # the wrapper keys off it, and env.export alone never reaches
+      # interactive shells. Inert to the server itself.
+      OPENCODE_PROXY_URL: "{{ 'http://127.0.0.1:' ~ OPENCODE_BUS_PROXY_PORT if OPENCODE_PRIMARY else '' }}"
     # Optional deployment inputs. Define these as Ansible variables to enable
     # OpenCode's native OTLP/HTTP logs and traces without hard-coding a backend.
     ENV_LIST:
@@ -286,6 +297,9 @@
       - OPENCODE_SERVER_URL
       - OPENCODE_SERVER_PORT
       - OPENCODE_PASSWORD_FILE
+      # The bus-proxy URL must reach shells for the phase-55 client-env
+      # wrapper to route `opencode` through it; env.export alone never does.
+      - OPENCODE_PROXY_URL
     ZIM_MODULES:
       # Reuse the existing ZIM module identity so its active fragment and init
       # file are updated in place from the old array module to scalar env args.
@@ -314,8 +328,8 @@
       and `opencode2-node` (plus `opencode-status-ok`, `opencode-last`,
       `opencode-live`, `opencode-restart-clients`), the `~/.config/opencode`
       symlink, the interactive
-      `opencode` client-env ZIM module, port 49373, wildcard bind, and the
-      server's default database.
+      `opencode` client-env ZIM module, port {{OPENCODE_PRIMARY_PORT}}, wildcard bind, and
+      the server's default database.
 
       Any other instance runs side by side with explicit isolation:
 
@@ -342,8 +356,8 @@
       Isolation defaults for secondaries are deliberate:
 
       - An explicit distinct `OPENCODE_SERVER_PORT` is required (the run fails
-        without one); 49373 is the primary and 49374 the stock upstream
-        managed service.
+        without one); {{OPENCODE_PRIMARY_PORT}} is the primary, {{OPENCODE_BUS_PROXY_PORT}}
+        the bus proxy, and 49374 the stock upstream managed service.
       - The bind defaults to `127.0.0.1`, not the primary's wildcard. Expose a
         secondary deliberately with `-e OPENCODE_SERVER_HOSTNAME=<addr>` and
         the same trust/funnel considerations as the primary's wildcard notes
@@ -598,7 +612,7 @@
       registration exists, clients neither spawn nor stop a managed service
       on their own; after the unit is stopped, `opencode service forget`
       clears the stale registration. The registered URL is the bind address
-      (`http://0.0.0.0:49373`); Linux dials 0.0.0.0 as loopback, so local
+      (`http://0.0.0.0:{{OPENCODE_PRIMARY_PORT}}`); Linux dials 0.0.0.0 as loopback, so local
       clients connect. Discovery also version-gates: the registration
       carries the build stamp, so clients from a different build refuse with
       "the operator owns this deployment" rather than replacing — rebuild
@@ -1045,12 +1059,14 @@
         msg: >-
           INSTANCE={{INSTANCE}} is a secondary deployment and needs an
           explicit port: rerun with -e OPENCODE_SERVER_PORT=<port>, distinct
-          from every other OpenCode server on this host (49373 is the primary
-          instance, 49374 the stock upstream managed service).
+          from every other OpenCode endpoint on this host
+          ({{OPENCODE_PRIMARY_PORT}} primary server, {{OPENCODE_BUS_PROXY_PORT}}
+          bus proxy, 49374 stock upstream managed service).
       when: >-
         not OPENCODE_PRIMARY and (
           OPENCODE_SERVER_PORT is not defined or
-          OPENCODE_SERVER_PORT|default('')|string in ['', 'None', '49373', '49374']
+          OPENCODE_SERVER_PORT|default('')|string in
+          ['', 'None', OPENCODE_PRIMARY_PORT|string, OPENCODE_BUS_PROXY_PORT|string, '49374']
         )
     - name: "opencode: note operator-selected database path"
       debug:

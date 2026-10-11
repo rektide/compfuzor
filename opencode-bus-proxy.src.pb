@@ -1,11 +1,15 @@
 ---
 # opencode-bus-proxy (~/src/opencode-bus-proxy) as a user service:
-# clients -> 127.0.0.1:49372 -> opencode.service on 49373. Requires the
+# clients -> 127.0.0.1:<proxy port> -> opencode.service on <primary port>
+# (both from vars/opencode.yaml, the port contract loaded by this playbook
+# and opencode.src.pb alike; today 49372 -> 49373). Requires the
 # bus-smart origin (OpenCode-Event-Scope: 1; the deployed primary has it,
 # verified 2026-10-11). Source is local-first: the dev checkout's `main`
 # bookmark over file:// (its other remotes are unreachable from this host);
 # advance the bookmark and rerun to ship a new build.
 - hosts: all
+  vars_files:
+    - vars/opencode.yaml
   vars:
     TYPE: opencode-bus-proxy
     INSTANCE: git
@@ -17,9 +21,13 @@
     SYSTEMD_INSTALL: user
     SYSTEMD_ROOTS: [busProxyService]
     ENV:
-      BUS_PROXY_UPSTREAM: "http://127.0.0.1:49373"
-      # one below the origin, loopback-only; clients use this as their server URL
-      BUS_PROXY_LISTEN: "127.0.0.1:49372"
+      # The origin: the opencode.src.pb primary, whose port authority is
+      # OPENCODE_PRIMARY_PORT in vars/opencode.yaml.
+      BUS_PROXY_UPSTREAM: "http://127.0.0.1:{{OPENCODE_PRIMARY_PORT}}"
+      # Loopback-only; one below the origin by convention. Clients use this
+      # as their server URL — opencode.src.pb derives OPENCODE_PROXY_URL
+      # from the same OPENCODE_BUS_PROXY_PORT.
+      BUS_PROXY_LISTEN: "127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}"
       # shared origin password: the opencode deployment's home-file view
       BUS_PROXY_PASSWORD_FILE: "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"
     busProxyService:
@@ -38,7 +46,8 @@
       # OpenCode bus proxy (user service)
 
       Gateway between clients and the managed OpenCode server. Clients use
-      `http://127.0.0.1:49372` (one port below the 49373 primary) as their
+      `http://127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}` (one port below the
+      {{OPENCODE_PRIMARY_PORT}} primary) as their
       complete server URL with the usual credentials; event GETs and
       interest PUTs are owned here, everything else is forwarded (WebSocket
       upgrades tunneled). Selective delivery additionally needs the client
@@ -48,7 +57,7 @@
       Health is source readiness, not process liveness:
 
           curl -fsS -u "opencode:$(cat ~/.config/opencode/secrets/OPENCODE_PASSWORD)" \
-            http://127.0.0.1:49372/_bus/health
+            http://127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}/_bus/health
 
       `/_bus/subscriptions` answers who listens to what; `/_bus/metrics`
       exposes Prometheus counters. No replay / exactly-once: source loss

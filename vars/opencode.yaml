@@ -1,0 +1,17 @@
+---
+# OpenCode cross-deployment port contract — the one shared input loaded
+# independently (vars_files) by opencode.src.pb and opencode-bus-proxy.src.pb;
+# Ansible variables do not cross playbook runs by themselves.
+# OPENCODE_SERVER_PORT stays the origin port authority inside opencode.src.pb;
+# this file only feeds its primary default. The proxy derives BUS_PROXY_LISTEN
+# and opencode.src.pb derives the client OPENCODE_PROXY_URL from the same two
+# numbers, so origin bind, proxy listen, and client dial cannot drift apart
+# silently. Moving a port means overriding it consistently on BOTH playbook
+# runs (-e OPENCODE_PRIMARY_PORT=..., -e OPENCODE_BUS_PROXY_PORT=...); a
+# mismatch surfaces as failed readiness (curl /_bus/health), not silent
+# cross-wiring. 49374 remains reserved for the stock upstream managed service.
+# 49372 sits one below the origin by current convention, kept explicit rather
+# than derived: a moved primary must not silently land the proxy on the stock
+# service's port.
+OPENCODE_PRIMARY_PORT: 49373
+OPENCODE_BUS_PROXY_PORT: 49372
