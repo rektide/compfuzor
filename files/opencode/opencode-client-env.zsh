@@ -12,3 +12,17 @@ if [[ -z ${OPENCODE_PASSWORD:-} && -r ${OPENCODE_PASSWORD_FILE:-} ]]; then
   IFS= read -r OPENCODE_PASSWORD < "$OPENCODE_PASSWORD_FILE"
   export OPENCODE_PASSWORD
 fi
+
+# Default interactive clients to the bus proxy when one is deployed (the
+# proxy shares the origin's password domain). An explicit --server or
+# --standalone wins, and `service` subcommands manage the channel service
+# rather than dial a server, so those pass through untouched.
+if [[ -n ${OPENCODE_PROXY_URL:-} ]]; then
+  opencode() {
+    if [[ "$1" == --server* || "$1" == --standalone || "$1" == service ]]; then
+      command opencode "$@"
+    else
+      command opencode --server "$OPENCODE_PROXY_URL" "$@"
+    fi
+  }
+fi

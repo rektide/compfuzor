@@ -117,6 +117,11 @@
       # reads it to flag links drifting out of the composed workspace. Exported
       # for shells without the ZIM client-env module too (never contains the secret).
       OPENCODE_WORKING_DIR: "{{OPENCODE_WORKING_DIR}}"
+      # Interactive clients default to the bus proxy (opencode-bus-proxy.src.pb
+      # listens one port below the primary) through the client-env module's
+      # opencode() wrapper; empty for secondary instances (their launcher
+      # already prepends its own --server). Inert to the server itself.
+      OPENCODE_PROXY_URL: "{{ 'http://127.0.0.1:49372' if OPENCODE_PRIMARY else '' }}"
     # Optional deployment inputs. Define these as Ansible variables to enable
     # OpenCode's native OTLP/HTTP logs and traces without hard-coding a backend.
     ENV_LIST:
