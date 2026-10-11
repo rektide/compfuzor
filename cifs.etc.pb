@@ -37,7 +37,12 @@
     # WARNING:nostrictsync!
     # WARNING idsfromsid
     # WARNING uid=1000, not cifs.idmap
-    # not set: `fsc` caching, `compress` experimental, `persistenthandles`, `cache=loose`, `nosetuids`
+    # not set: `fsc` caching, `compress` experimental, `cache=loose`, `nosetuids`
+    # not set: `persistenthandles` — server must negotiate CAP_PERSISTENT_HANDLES
+    #   (continuously-available/clustered); Samba never does, and the client
+    #   fails the mount flat (-EOPNOTSUPP, "persistent handles not supported
+    #   by server") rather than falling back. `resilienthandles` is the ceiling
+    #   against Samba; the kernel also rejects both handle options at once.
     MOUNT_OPTS: "uid=1000,gid=staff,actimeo=10,max_cached_dirs=1024,max_channels=4,resilienthandles,echo_interval=20,nostrictsync,credentials={{CREDENTIALS}},vers=3.1.1,posix,iocharset=utf8,soft{{ ',' ~ mount_opts if mount_opts is defined else '' }}"
     SYSTEMD_ROOTS:
       - CIFS_MOUNT
