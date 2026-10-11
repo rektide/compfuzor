@@ -57,6 +57,8 @@ This document changes the intended contract, not the current implementation.
 - **Type:** the native configuration contract: ENV assignments, ZIM declarations,
   OpenCode config fragments, and later other supported formats.
 - **Membership:** an installed reference in the consumer's input collection.
+  A reference can enroll a contribution root whose recognized native files are
+  resolved into the selected recipes at assembly time.
 - **Exposure:** another route to that same collection or artifact; it does not
   acquire independent membership controls.
 - **Assembly / activation:** producing validated config / making its consumer
@@ -173,39 +175,60 @@ are separate consumer targets, even when the same deployment manages both.
 
 ### Membership without envelopes
 
-Prefer the existing native input directory as the maintained membership set.
-For ENV, that is **`etc/env.d/`**. If `fuze.d/` is useful as a common view, expose
-the very same directories there:
+The follow-up direction is **enroll once, contribute by native path/filename**.
+The parent knows its accepted configuration types. Within an explicitly enrolled
+fuzing, files in the recognized places contribute semi-automatically to those
+types. Authors do not repeat every file in a member action descriptor and then
+again in the parent's input roster.
+
+Illustrative layout, with a link to a deliberately prepared contribution root:
 
 ```text
-consumer/etc/
-  env.d/
-    50-local.env
-    60-proxy-client.env -> /owned/proxy/etc/env-contributions/client.env
-  etc_d/
-    proxy.json -> /owned/proxy/etc/opencode-contributions/proxy.json
-  fuze.d/
-    env -> ../env.d
-    opencode -> ../etc_d
+parent/etc/
+  env.d/50-local.env
+  etc_d/local.json
+  fuze.d/proxy -> /owned/proxy/etc/fuzings/opencode
+
+/owned/proxy/etc/fuzings/opencode/
+  env.d/60-proxy-client.env
+  opencode.json
+  zim/zimrc/active/60-proxy-client.conf
 ```
 
-The ENV reference is reachable as `etc/fuze.d/env/60-proxy-client.env` and as
-`etc/env.d/60-proxy-client.env`: **one membership entry, two routes**. ZIM can
-similarly expose its existing channel input directories. The producer's directory
-names above are illustrative; a producer can supply its own local input directly
-when it has exactly the intended contents.
+The parent type rules recognize ENV inputs under `env.d/`, the native OpenCode
+fragment named `opencode.json`, and the declared ZIM channel paths. These are
+illustrative conventions to settle with the adapters. The files themselves can
+be symlinks to an existing producer-owned native artifact; their values need not
+be copied. Enrollment does not implicitly expose the producer's entire deployment
+ENV or every neighboring config file.
 
-An equally valid placement is a native recipe reading a type collection directly
-under `fuze.d/`. There should still be only one collection per input relationship.
-A single bundle link such as `fuze.d/proxy -> <producer>/contribution` is another
-possible layout, but would require typed bundle expansion into several recipes.
-Prefer direct native membership initially; do not silently maintain a second
-editable set of links in `env.d/` as a bundle cache.
+**`etc/env.d/` remains the native ENV contribution target.** The linker resolves
+the local inputs plus matching inputs in enrolled roots into one input inventory.
+It need not materialize a second set of per-file membership links there. This
+draft favors assembly-time expansion over a persistent mirrored input directory:
+the root reference owns enrollment; the transient resolved inventory is derived.
+Adding a recognized file to that root is visible on the next assembly. Rendering
+the producer does not itself execute the parent's assembly or activation.
 
-The consumer recipe/context specifies the accepted format, exact destination,
-scope, input order, and output. The link names the exact source. Installation
-declarations need source and destination information, but the installed payload
-need not repeat deployment ID, target path, fuze ID, scope, and action kind.
+Native direct input links remain useful for individual contributions and existing
+CONFIG consumers. They are another authored input form, not an independently
+editable mirror of enrolled-root membership. A fuze.d view of an existing native
+collection is also possible, but does not implement the new enrolled-root resolver
+by itself. Do not adopt both enrollment and a manually maintained per-file roster
+for the same contributions.
+
+The consumer recipe/context specifies accepted type paths, scope, ordering, and
+output. The installed link names the exact contribution root. Installation needs
+that destination/root relationship; the payload need not repeat deployment ID,
+target path, fuze ID, scope, and action kind. Unrecognized files are inert. A root
+need not implement every type; explicitly required contributions remain required.
+
+Keep source identities qualified by member and relative path. Two members can
+both publish `opencode.json` without their identities collapsing. Native merge
+policy decides how their values combine. Define member ordering once in the
+parent's selection convention and retain each type's native within-member order;
+do not infer overrides from filesystem enumeration. Selecting a file by an
+unqualified name must be unambiguous.
 
 Use existing native enable/disable and input mutation operations. A disabled
 input is absent from assembly, not a reason to fall back to a different source.
@@ -215,6 +238,73 @@ owned artifacts; installation joins the intended consumer. Missing consumer
 installation fails with an actionable prerequisite, not a guessed alternate host.
 These are intended admission requirements; reuse of CONFIG/LINKS must verify
 them rather than assume every existing mutation entrypoint already enforces them.
+
+### Link-time points in the current pipeline
+
+There is no universal linker callback today. The useful existing seams are:
+
+| Point | Current machinery | What gets bound or linked |
+|---|---|---|
+| Declaration compilation | `sub_config.tasks`, `config_compile.py`, `config_context_compile.py` | CONFIG inputs become file/glob recipes, named remote targets, and context bindings. This declares where later input collection happens; it does not find arbitrary contributors. |
+| Artifact/link-plan compilation | `compile_artifacts.tasks`, `gen_links.tasks` | Local material paths and declared exposures become LINKS records. `link_plan.tasks` writes links.json; generated link installers apply deferred records later. Structural links such as deployment `etc` are also materialized by filesystem tasks. |
+| Consumer input installation | `syncInputs()` and `putInput()` | Canonical inputs are seeded/copied/linked into a context, or one external source is placed into a named input. `installContext()` in assemble mode seeds inputs before running assembly. |
+| Native contributor import | ZIM `importProducer()`; `config-remote.mjs put` | ZIM recognizes channel directories and fragment filenames, imports them, then assembles/builds touched channels. Config-remote manages an explicitly named remote link and rebuilds its recipe. |
+| Assembly binding and enumeration | `bindContextConfigs()`, `runAssemblyResult()`, `config-run.sh` | Context paths are bound, then concrete file/glob inputs are enumerated into CONFIG_INPUTS_FILE before a processor runs. This is the closest semantic link step. |
+| Candidate validation/publication | Per-recipe validation, CONFIG_TRANSACTION_VALIDATE, output commit, native activation | Validate assembled bytes and publish outputs; optional output links are delivery. This is too late to discover new contribution membership. |
+
+Sources: [CONFIG install](/files/config/install.ts),
+[input synchronization](/files/config/input-state.ts),
+[input mutation](/files/config/inputs.ts),
+[remote input mutation](/files/config-remote/runtime.ts),
+[ZIM import](/files/zim/runtime.ts),
+[context binding](/files/config/context.ts),
+[assembly adapter](/files/config/assembly.ts), and
+[transaction runner](/files/config-run.sh).
+
+Two details constrain reuse. The current compiler requires a concrete glob
+directory, and the runner uses `find -L ... -maxdepth 1`; writing
+`fuze.d/*/env.d/*.env` is not an already-supported solution. Also, bare deferred
+LINKS installers occupy the `records` phase: installing membership there does
+not automatically put it before a CONFIG assembly. A domain install operation
+must explicitly establish its inputs before calling the assembler.
+
+Input APIs have different failure boundaries today. `config-remote` restores
+its changed link when rebuilding fails; context `putInput` leaves the input
+mutation in place and reports failed rebuild. Neither is a generic atomic
+multi-member enrollment transaction. Choose the enrollment boundary deliberately.
+
+### The proposed small linker seam
+
+Extend **CONFIG input resolution**, between selected-context binding and processor
+invocation, to expand enrolled contribution roots through parent-owned type rules:
+
+```text
+parent recipe/context + explicit fuze.d root references
+                         |
+       recognize supported relative paths and filenames
+                         |
+  resolve native sources, controls, qualified identities, order
+                         |
+            ordinary CONFIG input inventory
+                         |
+       existing processors -> validation -> publication
+                         |
+                 native activation
+```
+
+Enrollment remains an explicit install action. File-to-type contribution becomes
+automatic inside that enrolled boundary. Assembly/check/inspection share the
+same resolver; check does not install links. The resolver produces a transient
+input inventory, not another editable JSON registry. The raw CONFIG runner and
+its CLI adapters must reach the same resolution path, so direct assembly cannot
+silently omit enrolled inputs.
+
+ZIM's import logic is a concrete precedent for recognizing native paths, but the
+new resolver must not also leave ZIM with an independently editable imported
+mirror of that same enrollment. Either bind the resolved inputs into its selected
+CONFIG context or make any required native materialization explicitly derived.
+Shell activation consumes the same selection. This is the part to design and
+prove; it is not implemented by the existing fuzing planner.
 
 ### How much JSON?
 
@@ -285,7 +375,9 @@ opencodeService:
 ```
 
 These names select exact installed contributions under the bound consumer's
-`etc/env.d/`. They do not search the machine for similarly named providers. The
+`etc/env.d/` input namespace, including sources resolved from enrolled roots.
+Use a member-qualified reference when necessary to distinguish identical names.
+They do not search the machine for similarly named providers. The
 service-specific selection is compiled into the existing consumer recipe, with
 the explicit list determining input order. A whole-collection recipe instead
 uses its declared glob order. Inspection and execution use that compiled
@@ -451,7 +543,7 @@ work, rather than smuggling `exec` handlers into config fragments.
 | Owner action descriptor | Existing typed consumer recipe/context plus native adapter |
 | Per-member action descriptor | Actual native contribution artifact |
 | Separate `order` on each action join | Native input order; no duplicate load-order field |
-| `fuze.d/<id>.json` as a new membership system | Native input link, optionally reachable through a fuze.d exposure |
+| `fuze.d/<id>.json` as a new membership system | Root enrollment link; native paths/filenames resolve into CONFIG inputs without per-file descriptor envelopes |
 | `zim-import` kind | Existing ZIM install/import operation invoked by its owner |
 | Generic `shell-source` kind | Selected shell projection with explicit activation semantics |
 | Generic `exec` kind | Existing deployment/lifecycle commands and their composition authority |
@@ -465,7 +557,8 @@ this draft.
 ## Next proof and remaining choices
 
 Prove ENV first with two isolated producers and one consumer `etc/env.d/`:
-local and linked inputs, explicit override order, native disable/enable, and
+local inputs and enrolled roots, automatic recognition of added native files,
+explicit override order, native disable/enable, and
 application-only service/shell projections. Demonstrate that foreign `DIR` cannot
 redirect assembly and neither output acquires undeclared deployment plumbing.
 Inspect winners; verify special-character serialization without executing input
@@ -484,8 +577,8 @@ Choices still requiring a concrete implementation proposal:
   direct ZIM `env:` and existing ENV_LIST already cover part of the need.
 - Whether SYSTEMD_ENV names service-selected files or manager-publication files;
   both should reference contributions, with the effects explicitly distinguished.
-- Whether a fuze.d exposure is useful enough to install at all; native membership
-  remains sufficient. Bundle membership should be added only for an actual need.
+- Exact contribution-root paths and filename conventions, member ordering, and
+  per-file controls; enrolled-root expansion must share CONFIG's input resolver.
 - How narrow shell activation records managed defaults and handles first adoption.
 - Where OpenCode-native validation is obtained for the deployed version.
 
