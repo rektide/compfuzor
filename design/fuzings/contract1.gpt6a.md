@@ -56,6 +56,9 @@ This document changes the intended contract, not the current implementation.
   to that consumer. The producer can itself be a consumer of the same input.
 - **Type:** the native configuration contract: ENV assignments, ZIM declarations,
   OpenCode config fragments, and later other supported formats.
+- **Config instance:** one named use of a type, with its own recipes, consumer
+  bindings, contribution rules, delivery policy, and install/activation owner.
+  A type can have several instances in one deployment.
 - **Membership:** an installed reference in the consumer's input collection.
   A reference can enroll a contribution root whose recognized native files are
   resolved into the selected recipes at assembly time.
@@ -165,6 +168,108 @@ Compfuzor OpenCode type assembles the particular owned config output; it does no
 replace that discovery. Server/project configuration and terminal `cli.json`
 are separate consumer targets, even when the same deployment manages both.
 
+## Multiple recipes exist; independent config subsystems remain unfinished
+
+The next clarification is that ENV, ZIM, OpenCode, and other types must coexist
+as **separate config subsystems offering pieces**, with more than one instance
+where needed. Producer material must support linked or copied delivery into the
+parent. An input resolver alone does not supply that whole contract.
+
+The existing foundation is genuinely plural:
+
+- `CONFIGS` holds multiple recipes, including different processors. The existing
+  [config graph fixture](/tests/integration/config_graph.test.py) declares JSON,
+  block-in-file, and concat outputs together; ZIM itself has two channel recipes.
+- CONFIG_CONTEXTS can bind subsets of recipes to different consumer roots and
+  input/output paths. Runtime APIs accept a selected spec, context, and recipe set.
+- CONFIG installs can assemble, copy, or link aggregate outputs; assembly-mode
+  installs separately select copy/link delivery of their inputs. These are two
+  different representation choices already present in the toolkit.
+- Multiple selected output candidates can share the existing validation and
+  commit boundary. That is not a dependency graph: one candidate's output path
+  as another recipe's input does not make the latter read its uncommitted bytes.
+
+But the generated subsystem package still assumes a single deployment-wide CONFIG
+installation identity:
+
+| Current constraint | Consequence for independent subsystems |
+|---|---|
+| One `SUBSYSTEM.config`, generated `etc/config.spec.json`, and public command family | Re-running the existing generator for several independent instances does not simply create isolated instances; contributions need collection/namespacing first. |
+| One default CONFIG context and one `CONFIG_INSTALL_OWNER` | Different domains cannot independently claim their ordinary installation through the current ownership switch. Multiple contexts alone do not fix that. |
+| Flat recipe IDs and shared remote/mutable input naming | Independently authored subsystems can collide even when their material lives in different directories. |
+| ZIM requires `installOwner: zim` and fixed `zimrc`/`zimenv` recipe names | ZIM works as the complete installer for its host, not as an arbitrarily instantiable recipe group alongside other complete installers. |
+| Ordinary ENV uses `fs_env.tasks`, outside CONFIG | ENV is not currently a CONFIG-backed subsystem instance at all. |
+| CONFIG compiles before `gen_zim.tasks` consumes its spec | Additional domain-owned recipe contributions must be collected before compilation, or the current generation order must be split. |
+
+The ownership issue is concrete: `CONFIG_INSTALL_OWNER: zim` suppresses ordinary
+CONFIG install composition, while ZIM install explicitly selects only `zimrc`
+and `zimenv`. Appending an ENV or OpenCode recipe does not make ZIM install it,
+and the generic composed installer has been suppressed. Direct explicit CONFIG
+commands can still operate on those recipes; ordinary multi-domain installation
+is what is missing.
+
+Sources: [CONFIG publication](/library/filter_plugins/config_compile.py),
+[context/compiler ownership](/library/filter_plugins/config_context_compile.py),
+[ZIM compiler requirements](/library/filter_plugins/zim_context_compile.py),
+[ZIM installation](/files/zim/runtime.ts), and
+[task ordering](/tasks/compfuzor.includes).
+
+### Intended instance boundary
+
+Conceptually, one deployment should be able to contain:
+
+```text
+env.service      -> selected service env contribution files and projections
+env.client       -> selected client env contribution files and projections
+zim.shell        -> zimrc + zimenv recipes, loaders, and caches
+opencode.main    -> owned OpenCode config recipe
+```
+
+These are instance identities, not a proposed finished YAML syntax. Each instance
+owns its recipe/input names, source and consumer roots, native recognition rules,
+delivery modes, validation, and activation. Two uses of the same type must work
+as well as two different types. A producer can offer material to several instances;
+the parent binds the intended instance rather than inferring it from ambient DIR.
+
+Keep one reusable CONFIG engine. A collected, namespaced spec can represent these
+instances, or adapters can pass independently bound specs through the existing
+API. Separate engine copies and one JSON file per instance are not requirements.
+What must become plural is ownership and binding. Prefer collecting domain-owned
+instances into one compiled package first, with explicit scoped install ownership
+and qualified recipe/input IDs, so the existing transaction machinery remains
+available where the outputs belong together.
+
+Ordinary install composition must invoke each selected instance's complete
+operation exactly once: generic CONFIG for ordinary material, the ZIM adapter for
+its config plus activation artifacts, and equivalent domain operations as needed.
+An instance owning activation must not disable unrelated instances' installation.
+
+### Producer material to parent material
+
+Root enrollment identifies eligible producer material. Type/path recognition
+resolves its role. The selected instance then applies its delivery policy:
+
+- **Input link:** parent-owned input entries refer to exact producer artifacts.
+- **Input copy:** parent-owned inputs contain a refreshable copy; changed producer
+  bytes do not become effective until that copy is refreshed.
+- **Assembly:** the instance processes those selected parent inputs into its
+  native output, using the existing CONFIG transaction.
+- **Output copy/link:** when the selected strategy uses a producer's complete
+  aggregate, publish that aggregate instead of reassembling its pieces.
+
+Input delivery and output publication remain distinct. Reuse `syncInputs`, input
+delivery primitives, assembly, and publication rather than implementing them in
+each type. Extend their relation binding for enrolled producers and instance
+namespaces. Parent material is an installed representation of resolved sources,
+with native local controls; it is not a second hand-authored producer manifest.
+
+This qualifies the earlier assembly-time expansion proposal: a read-only source
+inventory is useful, but **copy/link materialization into the parent is also a
+first-class operation**. Inspection must show source, installed representation,
+and drift separately. Pure assembly/check does not silently refresh copies.
+Disabling enrollment must exclude its material from selection even if old copied
+files remain on disk. Do not let an indiscriminate flat glob reactivate them.
+
 ## Choose native membership plus thin adapters
 
 | Model | Membership and execution authority | Fit here |
@@ -204,11 +309,12 @@ ENV or every neighboring config file.
 
 **`etc/env.d/` remains the native ENV contribution target.** The linker resolves
 the local inputs plus matching inputs in enrolled roots into one input inventory.
-It need not materialize a second set of per-file membership links there. This
-draft favors assembly-time expansion over a persistent mirrored input directory:
-the root reference owns enrollment; the transient resolved inventory is derived.
-Adding a recognized file to that root is visible on the next assembly. Rendering
-the producer does not itself execute the parent's assembly or activation.
+It need not materialize a second editable membership roster there. The root
+reference owns enrollment; the resolved inventory is derived. Selected copy/link
+delivery can nevertheless create parent-owned input material, as described in
+the instance contract above. A newly recognized file is visible on the next
+resolution; an installed-input recipe consumes it after delivery. Rendering the
+producer does not itself execute the parent's delivery, assembly, or activation.
 
 Native direct input links remain useful for individual contributions and existing
 CONFIG consumers. They are another authored input form, not an independently
@@ -273,17 +379,22 @@ its changed link when rebuilding fails; context `putInput` leaves the input
 mutation in place and reports failed rebuild. Neither is a generic atomic
 multi-member enrollment transaction. Choose the enrollment boundary deliberately.
 
-### The proposed small linker seam
+### The proposed linker seam within the instance contract
 
-Extend **CONFIG input resolution**, between selected-context binding and processor
-invocation, to expand enrolled contribution roots through parent-owned type rules:
+Extend **CONFIG input resolution**, between selected-instance/context binding and
+processor invocation, to expand enrolled contribution roots through parent-owned
+type rules. Install/sync uses those same resolved relations for copy/link delivery:
 
 ```text
-parent recipe/context + explicit fuze.d root references
+parent instance/recipe/context + explicit fuze.d root references
                          |
        recognize supported relative paths and filenames
                          |
   resolve native sources, controls, qualified identities, order
+                         |
+      selected source/parent-input relations
+                         |
+       install/sync: copy or link as selected
                          |
             ordinary CONFIG input inventory
                          |
@@ -294,7 +405,8 @@ parent recipe/context + explicit fuze.d root references
 
 Enrollment remains an explicit install action. File-to-type contribution becomes
 automatic inside that enrolled boundary. Assembly/check/inspection share the
-same resolver; check does not install links. The resolver produces a transient
+same resolver; check does not install links or refresh copies. The diagram's
+delivery step belongs to install/sync, not every assembly invocation. The resolver produces a transient
 input inventory, not another editable JSON registry. The raw CONFIG runner and
 its CLI adapters must reach the same resolution path, so direct assembly cannot
 silently omit enrolled inputs.
@@ -556,9 +668,16 @@ this draft.
 
 ## Next proof and remaining choices
 
-Prove ENV first with two isolated producers and one consumer `etc/env.d/`:
+First prove that one isolated parent can host independent ENV, ZIM, and OpenCode
+config instances, including two instances of one type, without recipe/input
+collisions or a deployment-wide install-owner switch. Demonstrate one instance's
+install/disable/activation does not swallow another's ordinary installation.
+Use existing processors where sufficient to test that packaging boundary before
+implementing all ENV serialization details.
+
+Then prove ENV with two isolated producers and one consumer `etc/env.d/`:
 local inputs and enrolled roots, automatic recognition of added native files,
-explicit override order, native disable/enable, and
+explicit override order, parent input copy/link modes, native disable/enable, and
 application-only service/shell projections. Demonstrate that foreign `DIR` cannot
 redirect assembly and neither output acquires undeclared deployment plumbing.
 Inspect winners; verify special-character serialization without executing input
@@ -572,6 +691,8 @@ generic contract.
 
 Choices still requiring a concrete implementation proposal:
 
+- Instance declaration/namespace and per-instance installation ownership,
+  collected before CONFIG compilation; keep runtime/spec packaging proportional.
 - Exact ENV fragment grammar and how current shell-expression values migrate.
 - Smallest authored declaration for named env contributions and ZIM file selection;
   direct ZIM `env:` and existing ENV_LIST already cover part of the need.
