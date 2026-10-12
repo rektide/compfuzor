@@ -617,6 +617,8 @@ function parseConfigCommandArgs(argv, deploymentDir, invokedAs, admission = fals
 		context: values.context,
 		invokedAs,
 		specPath: resolve(values.spec ?? (values.definition ? join(deploymentDir, "etc", "config", values.definition, "spec.json") : join(deploymentDir, "etc", "config.spec.json"))),
+		specExplicit: values.spec !== void 0,
+		definition: values.definition,
 		runner: resolve(values.runner ?? join(deploymentDir, "bin", "config", "run.sh")),
 		strategy: values.strategy,
 		dropins: values.dropins,
@@ -632,6 +634,7 @@ function parseConfigCommandArgs(argv, deploymentDir, invokedAs, admission = fals
 	};
 }
 function configAliasPieces(options, contextNames) {
+	if (options.definitionAlias) return {};
 	if (options.action !== void 0 && options.context !== void 0) return {};
 	if (options.invokedAs === "command.ts") return {};
 	const fixed = CONFIG_ACTIONS.find((action) => options.invokedAs === `config-${action}.sh`);
@@ -2083,7 +2086,24 @@ async function runConfigCommand(options) {
 	return runAdmittedConfigCommand(await admitConfigCommand(options));
 }
 async function main$9(argv, deploymentDir, invokedAs) {
-	return runConfigCommand(parseConfigCommandArgs(argv, deploymentDir, invokedAs));
+	const options = parseConfigCommandArgs(argv, deploymentDir, invokedAs);
+	if (!CONFIG_ACTIONS.some((action) => invokedAs === `config-${action}.sh`) && invokedAs.startsWith("config-") && invokedAs.endsWith(".sh")) {
+		let index;
+		try {
+			index = JSON.parse(await readFile(join(deploymentDir, "etc/config/instances.json"), "utf8"));
+		} catch (error) {
+			if (error.code !== "ENOENT") throw error;
+		}
+		for (const [identity, binding] of Object.entries(index?.definitions ?? {})) {
+			const action = CONFIG_ACTIONS.find((candidate) => invokedAs === `config-${identity}-${candidate}.sh`);
+			if (!action) continue;
+			options.action ??= action;
+			options.definitionAlias = true;
+			if (!options.specExplicit && options.definition === void 0) options.specPath = resolve(deploymentDir, binding.spec);
+			break;
+		}
+	}
+	return runConfigCommand(options);
 }
 //#endregion
 //#region files/config-remote/runtime.ts

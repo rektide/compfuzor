@@ -10,7 +10,7 @@ import shlex
 from ansible.template import accept_args_markers
 
 from config_compile import compile_config, config_runtime_packages, _mapping, _error, _ID
-from config_context_compile import compile_config_contexts
+from config_context_compile import compile_config_contexts, _ACTIONS
 from template_data import raw_copy_template_data
 
 
@@ -33,6 +33,14 @@ def compile_definitions(definitions, etc, bins_dir, legacy=None, defaults=None, 
     contrib = {"DIRS": [], "ETC_FILES": [], "BINS": [], "STATUSES": [], "PKGS": config_runtime_packages()}
     claimed_outputs = {}
     single_legacy = bool(legacy) and len(definitions) == 1
+    if not single_legacy:
+        command_claims = {"config-{}.sh".format(action): "the fixed default command" for action in _ACTIONS}
+        for identity in sorted(definitions):
+            for action in _ACTIONS:
+                command = "config-{}-{}.sh".format(identity, action)
+                if command in command_claims:
+                    _error("CONFIG definition {}/{} command {} collides with {}; choose an unambiguous definition name".format(identity, action, command, command_claims[command]))
+                command_claims[command] = identity + "/" + action
     for identity in sorted(definitions):
         if not isinstance(identity, str) or not _ID.fullmatch(identity):
             _error("CONFIG_DEFINITIONS names must be stable identifiers")
@@ -48,8 +56,7 @@ def compile_definitions(definitions, etc, bins_dir, legacy=None, defaults=None, 
             declaration.get("disabled_suffix", ".disabled"), declaration.get("transaction_validate"), None if single_legacy else bound_identity)
         compiled = compile_config_contexts(compiled, declaration.get("contexts", {}), material, bins_dir,
             declaration.get("context", "user"), declaration.get("install_owner", "config"),
-            declaration.get("audiences", defaults.get("audiences")), declaration.get("action_contexts"), None if single_legacy else bound_identity,
-            posixpath.join(etc, "config", identity, "spec.json"))
+            declaration.get("audiences", defaults.get("audiences")), declaration.get("action_contexts"), None if single_legacy else bound_identity)
         spec = compiled["spec"]
         if any(recipe["processor"] in ("env", "env-export", "env-zsh") for recipe in spec["configs"].values()):
             if "python3" not in contrib["PKGS"]:
@@ -96,7 +103,6 @@ def compile_definitions(definitions, etc, bins_dir, legacy=None, defaults=None, 
     contrib["ETC_FILES"].append({"name": "config.spec.json", "json": instances[selected_default]["spec"]})
     # Existing default entrypoints are exposures of the selected definition.
     from runtime_bundles import runtime_alias_bin
-    from config_context_compile import _ACTIONS
     if not single_legacy:
         contrib["BINS"].extend(runtime_alias_bin("config-{}.sh".format(action)) for action in _ACTIONS)
     index = {"version": 1, "default": selected_default, "definitions": {key: {"spec": value["path"]} for key, value in instances.items()}}

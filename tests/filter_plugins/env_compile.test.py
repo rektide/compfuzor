@@ -40,6 +40,8 @@ def test_env():
     def definition(base, root):
         return {"etc": base, "configs": {"main.conf": {"processor": "concat", "inputs": [{"glob": "parts/*.conf", "name": "parts"}]}}, "contexts": {"user": {"scope": "user", "root": root}}}
     fails(lambda: compile_definitions({"a": definition("/fixture/etc/a", "/same"), "b": definition("/fixture/etc/b", "/same")}, "/fixture/etc", "/fixture/bin"), AnsibleFilterError)
+    fails(lambda: compile_definitions({"sync": definition("/fixture/etc/sync", "/sync")}, "/fixture/etc", "/fixture/bin"), AnsibleFilterError)
+    fails(lambda: compile_definitions({"foo": definition("/fixture/etc/foo", "/foo"), "foo-sync": definition("/fixture/etc/foo-sync", "/foo-sync")}, "/fixture/etc", "/fixture/bin"), AnsibleFilterError)
     definitions = {"a": definition("/fixture/etc/a", "/a"), "b": definition("/fixture/etc/b", "/b")}
     compiled = compile_definitions(definitions, "/fixture/etc", "/fixture/bin", defaults={"audiences": {"available": ["user"]}})
     actions = compile_action_audiences(compiled["contrib"]["BINS"], {"available": ["user"]})["spec"]["actions"]

@@ -21,6 +21,9 @@ export type ConfigCliOptions = {
   context?: string;
   invokedAs: string;
   specPath: string;
+  specExplicit?: boolean;
+  definition?: string;
+  definitionAlias?: boolean;
   runner: string;
   strategy?: string;
   dropins?: string;
@@ -211,6 +214,8 @@ export function parseConfigCommandArgs(
           ? join(deploymentDir, "etc", "config", values.definition, "spec.json")
           : join(deploymentDir, "etc", "config.spec.json")),
     ),
+    specExplicit: values.spec !== undefined,
+    definition: values.definition,
     runner: resolve(values.runner ?? join(deploymentDir, "bin", "config", "run.sh")),
     strategy: values.strategy,
     dropins: values.dropins,
@@ -230,6 +235,7 @@ export function configAliasPieces(
   options: ConfigCliOptions,
   contextNames: string[],
 ): ConfigAliasPieces {
+  if (options.definitionAlias) return {};
   if (options.action !== undefined && options.context !== undefined) return {};
   if (options.invokedAs === "command.ts") return {};
   const fixed = CONFIG_ACTIONS.find((action) => options.invokedAs === `config-${action}.sh`);

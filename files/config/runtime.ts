@@ -1,6 +1,7 @@
 /** Thin multicall dispatcher for the fixed CONFIG action vocabulary. */
 
 import { readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 import { runAssembly } from "./assembly.ts";
 import {
@@ -314,5 +315,29 @@ export async function main(
   deploymentDir: string,
   invokedAs: string,
 ): Promise<number> {
-  return runConfigCommand(parseConfigCommandArgs(argv, deploymentDir, invokedAs));
+  const options = parseConfigCommandArgs(argv, deploymentDir, invokedAs);
+  if (
+    !CONFIG_ACTIONS.some((action) => invokedAs === `config-${action}.sh`) &&
+    invokedAs.startsWith("config-") &&
+    invokedAs.endsWith(".sh")
+  ) {
+    let index: { definitions: Record<string, { spec: string }> } | undefined;
+    try {
+      index = JSON.parse(await readFile(join(deploymentDir, "etc/config/instances.json"), "utf8"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+    for (const [identity, binding] of Object.entries(index?.definitions ?? {})) {
+      const action = CONFIG_ACTIONS.find(
+        (candidate) => invokedAs === `config-${identity}-${candidate}.sh`,
+      );
+      if (!action) continue;
+      options.action ??= action;
+      options.definitionAlias = true;
+      if (!options.specExplicit && options.definition === undefined)
+        options.specPath = resolve(deploymentDir, binding.spec);
+      break;
+    }
+  }
+  return runConfigCommand(options);
 }

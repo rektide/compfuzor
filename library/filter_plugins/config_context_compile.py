@@ -7,7 +7,6 @@ import copy
 import json
 import posixpath
 import re
-import shlex
 
 from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
@@ -158,7 +157,7 @@ def _canonical_context(configs):
 
 
 @accept_args_markers
-def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config", audience_policy=None, action_contexts=None, identity=None, spec_path=None):
+def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config", audience_policy=None, action_contexts=None, identity=None):
     """Compile the v2 context schema and one fixed multicall command surface."""
     compiled = copy.deepcopy(_mapping(raw_copy_template_data(compiled), "compiled config"))
     contexts = _mapping(raw_copy_template_data(contexts), "CONFIG_CONTEXTS")
@@ -274,13 +273,6 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
             "basedir": False,
         }
         spec_relative = "etc/config/{}/spec.json".format(identity) if identity else "etc/config.spec.json"
-        if identity:
-            descriptor.pop("dest")
-            descriptor.pop("link")
-            descriptor["helpers"] = False
-            descriptor["content"] = 'exec {} config --action {} --spec {} "$@"'.format(
-                shlex.quote(posixpath.join(bins_dir, "compfuzor-runtime.mjs")), action,
-                shlex.quote(spec_path or posixpath.join(etc, spec_relative.removeprefix("etc/"))))
         if action == "install" and normalized_contexts and selected_default != _CANONICAL and install_owner == "config":
             descriptor["action"] = "install"
             descriptor.pop("compose")

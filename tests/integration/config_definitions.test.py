@@ -38,6 +38,7 @@ def generate(temporary, variables, *, env_config=False, preliminary_tasks=None):
         tasks += [{"import_tasks": str(ROOT / "tasks/compfuzor/sub_env_config.tasks")}]
     tasks += [{"import_tasks": str(ROOT / "tasks/compfuzor/sub_config.tasks")},
               {"import_tasks": str(ROOT / "tasks/compfuzor/gen_config.tasks")},
+              {"import_tasks": str(ROOT / "tasks/compfuzor/gen_bins.tasks")},
               {"file": {"path": "{{ item }}", "state": "directory", "mode": "0700"},
                "loop": "{{ DIRS + [DIR, ETC, BINS_DIR] + (ETC_DIRS | map('regex_replace', '^', ETC + '/') | list) }}"},
               {"file": {"path": "{{ ETC }}/{{ item.name | dirname }}", "state": "directory"}, "loop": "{{ ETC_FILES }}"},
@@ -189,8 +190,27 @@ def test_current_proxy_priority_preservation():
                 assert env["BUS_PROXY_SERVICE_METADATA"] == "true"
 
 
+def test_named_audience_install():
+    with tempfile.TemporaryDirectory(prefix="named-config-actions-", dir="/tmp/opencode") as tmp:
+        temporary = Path(tmp)
+        deployment = temporary / "deployment"
+        definitions = {identity: {"etc": str(deployment / "etc" / identity),
+            "configs": {"main.conf": {"processor": "concat", "inputs": [{"glob": "pieces/*.conf", "name": "fragments"}]}},
+            "contexts": {"user": {"scope": "user", "root": str(temporary / "consumer" / identity)}}}
+            for identity in ("alpha", "beta")}
+        deployment, _ = generate(temporary, {"CONFIG_DEFINITIONS": definitions, "ACTION_AUDIENCES": {"available": ["user"]}})
+        for identity in definitions:
+            (deployment / f"etc/{identity}/pieces/local.conf").write_text(identity + "\n")
+            assert (deployment / f"bin/config-{identity}-install.sh").is_symlink()
+            run([deployment / f"bin/config-{identity}-assemble.sh", "--context", "canonical"], deployment)
+        run([deployment / "bin/install-user.mjs"], deployment)
+        for identity in definitions:
+            assert (temporary / f"consumer/{identity}/main.conf").read_text() == identity + "\n"
+
+
 if __name__ == "__main__":
     test_definitions()
     test_env()
     test_current_proxy_priority_preservation()
+    test_named_audience_install()
     print("ok: independent CONFIG definitions and literal env.d projections")
