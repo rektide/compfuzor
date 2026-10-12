@@ -118,7 +118,7 @@ documents and current source, not inherited as authority from its status labels.
 The [composition brief](composition-problem0.gpt6a.md#concrete-design-tests) asks
 for considerably more than a cleaner shell runner: open contribution, meaningful
 narrowing, reusable programs, material/exposure relationships, confext construction,
-and bootstrap before a project's first write. The [experiment disposition](experiments0.gpt6a.md#experiment-4-parent-assessment-and-end-of-sequence)
+and bootstrap before a project's first write. The [experiment disposition](experiments0.gpt6a.md#experiment-4--parent-assessment-and-end-of-sequence)
 correctly says the four probes did not deliver an integrated backbone.
 
 Those goals remain useful. What changed is the evidence about **where integration
