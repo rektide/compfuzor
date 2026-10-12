@@ -6,6 +6,8 @@ resource: /doc/config/README.md
 status: active
 modified: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
 sources:
+  - resource: opencode://ses_ed1c4aafeffectZuEW8rySlAgl
+    title: lucky-engine — connect concrete proxy ENV adoption to the CONFIG reading map
   - resource: opencode://ses_ed1c3f231ffec43Dwg4C35l77Z
     title: Link the Ahiru and TPM remote plugin receiver adoption
   - resource: opencode://ses_ed21877fbffeK90YzBIZKC1jHb
@@ -24,7 +26,10 @@ configuration for a selected consumer context.
 
 - [Independent CONFIGs and env.d](/doc/config/definitions.md) — complete named
   definitions, separate normal ZIM ownership, bound remote fanout, and opt-in
-  literal application ENV; no proxy adoption or live cutover.
+  literal application ENV; no live cutover.
+- [Proxy-first ENV adoption](/design/fuzings/proxy0.gpt61sol.md) — exact service
+  and client contributions, preserved runtime shell defaults, and normal Zim
+  import with an explicit assembly prerequisite; broader fuze work deferred.
 - [Tmux plugin receivers](/doc/tmux/README.md) — Ahiru and TPM share a named
   remote CONFIG input; separate Resurrect and Continuum playbooks contribute
   persistence settings with explicit manual restoration.

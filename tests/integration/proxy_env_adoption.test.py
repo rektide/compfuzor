@@ -145,7 +145,7 @@ def check_projection(deployment, environment, primary, proxy, discovery, watcher
     assert daemon["BUS_PROXY_LISTEN"] == f"127.0.0.1:{proxy}"
     assert daemon["BUS_PROXY_PASSWORD_FILE"] == environment["HOME"] + "/.config/opencode/secrets/OPENCODE_PASSWORD"
     assert daemon["KEEP"] == "seed"
-    assert ("BUS_PROXY_SERVICE_FILE" in daemon) == discovery, (discovery, watcher, daemon)
+    assert ("BUS_PROXY_SERVICE_FILE" in daemon) == discovery, (discovery, watcher, {key: value for key, value in daemon.items() if key.startswith("BUS_PROXY_")})
     assert ("BUS_PROXY_SERVICE_WATCH_HELPER" in daemon) == (discovery and watcher)
     assert ("BUS_PROXY_SERVICE_WATCH_SOURCE" in daemon) == (discovery and watcher)
     if discovery:

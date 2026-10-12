@@ -6,6 +6,10 @@ resource: /doc/config/definitions.md
 status: draft
 generated: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
 sources:
+  - resource: opencode://ses_ed1c4aafeffectZuEW8rySlAgl
+    title: lucky-engine — document proxy-first adoption and restored invocation-default preference
+  - resource: /design/fuzings/proxy0.gpt61sol.md
+    title: Concrete service/client selection, normal Zim import prerequisite, and isolated adoption evidence
   - resource: opencode://ses_ed21877fbffeK90YzBIZKC1jHb
     title: shiny-sailor — implement and verify complete CONFIGs, prepared-action alias transport, separate normal ZIM, and literal ENV contributions
   - resource: /design/fuzings/contract1.gpt6a.md
@@ -206,6 +210,11 @@ then restore their execution context: inherited foreign DIR and authored applica
 DIR cannot redirect commands. Do not source a producer's complete env.export as a
 selective projection; choose its native contribution/projection.
 
+The helper retains the legacy envdefault preference for application defaults;
+when that tool is installed, already-set invocation values (including empty ones)
+win. Its existing direct-source fallback remains when envdefault is unavailable.
+env.context is restored independently of that application-loading choice.
+
 Systemd's default EnvironmentFile remains DIR/env, including ENV_CONFIG-only use.
 **SYSTEMD_ENV still means manager publication**; it is not reinterpreted. Select a
 service-specific projection through the explicit native unit interface:
@@ -239,12 +248,16 @@ Isolated tests use local Ansible, temporary outputs, and real workers:
   transaction-fault tests provide regressions; typecheck, relevant Vitest, and lint
   are separate checks, not proof of live application compatibility.
 
-The user-owned proxy playbook, shared ports, phase-56 native OPENCODE_ARGS ZIM module,
-discovery modes, and Effect watcher declarations are preserved, not adopted/replaced.
-The preservation fixture reads current pre-include tasks without running the proxy
-play. A fresh follow-on should adopt this baseline for **opencode-bus-proxy first**,
-then reassess wider fuzings. No deployment, proxy/OpenCode build, systemd activation,
-or client/pane restart is claimed.
+The follow-on [proxy-first adoption](/design/fuzings/proxy0.gpt61sol.md) uses a
+service-only EnvironmentFile projection and a client-only literal export. Its
+normal phase-56 Zim module preserves runtime URL/argument defaults; build prepares
+ENV before Rust, and the importer assembles ENV before host cache construction.
+Shared ports, discovery modes, conditional ENV_PRIO, and watcher declarations
+remain with their original owners.
+proxy_env_adoption.test.py renders the real playbook and imports into an isolated
+normal host. The lighter preservation fixture still checks pre-include tasks.
+No live deployment, proxy/OpenCode build, systemd activation, or client/pane restart
+is claimed. Wider fuze integration remains deferred.
 
 The [native-root checkpoint](/design/fuzings/checkpoint0.gpt61sol.md) is experimental
 work started before scope narrowing, not finished fuze integration. ENV winner-source
