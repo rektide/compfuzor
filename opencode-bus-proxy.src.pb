@@ -40,10 +40,20 @@
         BUS_PROXY_PASSWORD_FILE: "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"
       60-proxy-client.env:
         OPENCODE_PROXY_URL: "{{_bus_proxy_url}}"
-    # Normal contributor import owns this concrete source-order prerequisite.
+    # Concrete build/import operations own their source-order prerequisites.
     # CONFIG has no candidate dependency DAG; do not make Zim read ENV's
     # uncommitted candidate or assume a prior render assembled it.
     BINS:
+      - name: build-proxy-env.sh
+        # Both the render run lane (this bin precedes generated Rust bins)
+        # and ordinary build.sh (identity/prepare before main) need ENV before Rust's
+        # helper loads application defaults. Reuse normal bound CONFIG assembly.
+        phase: identity
+        helpers: False
+        basedir: False
+        bypass: False
+        run: True
+        content: 'exec {{ (BINS_DIR ~ "/config-assemble.sh") | quote }} --definition env --context canonical'
       - name: install-zimfw.sh
         early: '"$DIR/bin/config-assemble.sh" --definition env --context canonical'
     # Explicitly importing this producer into a Zim host selects the proxy for
@@ -115,7 +125,8 @@
           {{DIR}}/bin/config-assemble.sh --definition env --context canonical
           ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
 
-      Normal rendering also assembles ENV. With BINS_RUN_BYPASS=true the
+      Build/render assembles ENV before Rust; the normal importer also supplies
+      its own prerequisite. With BINS_RUN_BYPASS=true the
       importer supplies the same prerequisite without building the daemon.
       This deployment contributes Zim material; it is not another Zim host.
       Updating files does not refresh existing shells or restart the service.

@@ -77,10 +77,16 @@ def render(temporary, deployment, playbook, environment, overrides=None):
     # These are authored test defaults, NOT extra-vars: Ansible extra-vars
     # would mask the play's conditional ENV_PRIO set_fact updates.
     scenario = temporary / "scenario.pb"
-    scenario.write_text(yaml.safe_dump([{"import_playbook": str(playbook), "vars": variables}], sort_keys=False))
+    scenario.write_text(yaml.safe_dump([
+        {"import_playbook": str(playbook), "vars": variables},
+        {"hosts": "all", "gather_facts": False, "tasks": [{"copy": {
+            "dest": str(temporary / "render-state.json"),
+            "content": "{{ {'files': FILES | default([]), 'bins': BINS, 'artifacts': _ARTIFACTS} | to_nice_json }}"}}]},
+    ], sort_keys=False))
     # Shared vars_files defaults outrank imported play vars. Port/feature
-    # switches are genuine command-line controls; only those go in extra-vars.
-    switches = {key: value for key, value in variables.items() if key.startswith("OPENCODE_")}
+    # switches are genuine command-line controls. DIR also must be an explicit
+    # override: vars_base otherwise rebinds it to <prefix>/<derived NAME>.
+    switches = {key: value for key, value in variables.items() if key.startswith("OPENCODE_") or key == "DIR"}
     run(["ansible-playbook", "-i", "localhost,", "-c", "local", scenario, "-e", json.dumps(switches)], env=environment)
 
 
@@ -89,6 +95,15 @@ def assemble(deployment, environment, *, check=False):
     if check:
         args.append("--check")
     return run(args, env={**environment, "DIR": "/foreign-deployment"})
+
+
+def check_build_prerequisite(deployment, environment):
+    build = (deployment / "bin/build.sh").read_text()
+    assert build.index('"$DIR/bin/build-proxy-env.sh"') < build.index('"$DIR/bin/build-rust.sh"')
+    projection = deployment / "etc/env-projections/proxy-service.env"
+    projection.unlink()
+    run([deployment / "bin/build-proxy-env.sh"], env={**environment, "DIR": "/foreign-deployment"})
+    assert projection.is_file()
 
 
 def exported(path, environment):
@@ -186,16 +201,26 @@ def normal_zim_import(temporary, producer, environment):
     block = Path(os.environ.get("PROXY_TEST_BLOCK_IN_FILE", str(Path.home() / "src/block-in-file/dist/block-in-file.mjs")))
     controller = Path(os.environ.get("PROXY_TEST_ZIMFW", str(ROOT / "runtime/zimfw.zsh")))
     assert block.is_file() and controller.is_file(), "set PROXY_TEST_BLOCK_IN_FILE/PROXY_TEST_ZIMFW to available checkouts"
-    node = shutil.which("node")
+    node = shutil.which("node", path=environment["PATH"])
     wrapper = temporary / "block-in-file"
     wrapper.write_text(f"#!/bin/sh\nexec {shlex.quote(node)} {shlex.quote(str(block))} \"$@\"\n")
     wrapper.chmod(0o755)
     host = temporary / "zim-host"
-    render(temporary, host, ROOT / "zim.opt.pb", environment, {"ZIM_MODULES": [], "type": "opt"})
-    assert not list((host / "etc/zimrc.d").iterdir()) and not list((host / "etc/zimenv.d").iterdir()), "fixture host must contain no remote modules"
+    # Real zimfw refuses empty channels. Give each one a harmless local module,
+    # and assert exact declarations before any controller operation: no git or
+    # remote module installation may occur in this fixture.
+    local_modules = [{"name": "proxy-test-host-" + short, "phase": 20, "channel": channel,
+                      "env": {"PROXY_TEST_HOST_" + short.upper(): "1"}}
+                     for short, channel in (("rc", "zimrc"), ("env", "zimenv"))]
+    render(temporary, host, ROOT / "zim.opt.pb", environment, {"ZIM_MODULES": local_modules, "type": "opt"})
+    for module in local_modules:
+        fragments = list((host / ("etc/" + module["channel"] + ".d")).iterdir())
+        assert len(fragments) == 1 and fragments[0].name == "20-" + module["name"] + ".conf"
+        assert fragments[0].read_text().strip() == "zmodule " + str(host / ("etc/zim-modules/" + module["name"]))
     (host / "src").mkdir(exist_ok=True)
     shutil.copyfile(controller, host / "src/zimfw.zsh")
     runtime_env = {**environment, "CONFIG_BLOCK_IN_FILE": str(wrapper)}
+    run([host / "bin/config-assemble.sh", "--definition", "zim", "--context", "canonical"], env=runtime_env)
     run([host / "bin/install-zim.sh"], env=runtime_env)
     # The producer's authored ordinary ENV contains a deliberately wrong host.
     # Its generated helper must preserve this explicit invocation override.
@@ -231,12 +256,13 @@ def main():
             assemble(deployment, environment)
             check_projection(deployment, environment, 49373, 49372, discovery, watcher)
         values = command_environment(deployment, {**environment, "DIR": "/foreign", "NAME": "foreign", "RUST_COPY": "false", "ZIM_HOST_DIR": "/invocation-host"})
-        assert values["DIR"] == str(deployment) and values["NAME"] == "opencode-bus-proxy-git"
-        assert values["RUST_COPY"] == "false" and values["ZIM_HOST_DIR"] == "/invocation-host"
+        assert values["DIR"] == str(deployment) and values["NAME"] == "opencode-bus-proxy-git", {key: values.get(key) for key in ("DIR", "NAME", "RUST_COPY", "ZIM_HOST_DIR")}
+        assert values["RUST_COPY"] == "false" and values["ZIM_HOST_DIR"] == "/invocation-host", {key: values.get(key) for key in ("DIR", "NAME", "RUST_COPY", "ZIM_HOST_DIR")}
         values = command_environment(deployment, {**environment, "RUST_COPY": "", "DIR": "/foreign"})
-        assert values["RUST_COPY"] == "" and values["APP_LOCAL"] == "local" and values["DIR"] == str(deployment)
+        assert values["RUST_COPY"] == "" and values["APP_LOCAL"] == "local" and values["DIR"] == str(deployment), {key: values.get(key) for key in ("DIR", "RUST_COPY", "APP_LOCAL")}
         values = command_environment(deployment, {**environment, "RUST_COPY": "", "ENV_BYPASS": "true", "DIR": "/foreign"})
         assert values["RUST_COPY"] == "" and values["DIR"] == str(deployment) and "APP_LOCAL" not in values
+        check_build_prerequisite(deployment, environment)
         check_shell(deployment, environment, 49372)
         normal_zim_import(temporary, deployment, environment)
         # A retired optional contribution remains on disk, but exact service
