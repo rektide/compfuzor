@@ -8,6 +8,10 @@
 
 ## Latest direction and constraints
 
+- [Selected environment and retained defaults](/design/compfuzor-runtime/environment0.gpt6a.md):
+  post-proxy direction for cfr: exact env selection, findable defaults, and
+  managed/local-change comparison; distinguishes implemented projections from
+  proposed live-shell refresh.
 - [Native contributions and collaborative pipelines — draft2](/design/compfuzor-runtime/effect-draft2.gpt6a.md):
   latest synthesis: annotated native exports, default directory discovery,
   extensible init, mutable typed run data, stage ordering and durable history.
