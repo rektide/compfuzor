@@ -3,6 +3,9 @@
   vars:
     TYPE: block-in-file
     INSTANCE: git
+    # The global standalone command must be reachable by fresh accounts,
+    # not only members of the deployment owner's group.
+    DIRMODE: "0755"
     REPO: https://github.com/jauntywunderkind/block-in-file
     # nodejs subsystem: build-nodejs.sh runs pnpm i --frozen-lockfile plus the
     # package `build` script (bundle + standalone) inside the local-first repo
