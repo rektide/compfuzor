@@ -173,7 +173,8 @@ def test_current_proxy_priority_preservation():
     for discovery, watcher in ((False, True), (True, False), (True, True)):
         with tempfile.TemporaryDirectory(prefix="proxy-env-preservation-", dir="/tmp/opencode") as tmp:
             temporary = Path(tmp)
-            variables = {**shared, "ENV_CONFIG": True, "ENV": proxy["vars"]["ENV"], "ENV_PRIO": {"KEEP": "seed"},
+            variables = {**shared, **{key: value for key, value in proxy["vars"].items() if key in ("ENV", "ENV_CONTRIBUTIONS", "_bus_proxy_listen", "_bus_proxy_url")},
+                         "ENV_CONFIG": True, "ENV_PRIO": {"KEEP": "seed"},
                          "OPENCODE_BUS_PROXY_DISCOVERY": discovery, "OPENCODE_BUS_PROXY_EFFECT_WATCH": watcher,
                          "ansible_user_dir": str(temporary / "home"), "ansible_env": {"XDG_STATE_HOME": str(temporary / "state")}}
             deployment, _ = generate(temporary, variables, env_config=True, preliminary_tasks=proxy["tasks"][:-1])

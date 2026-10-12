@@ -20,6 +20,32 @@
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
     SYSTEMD_ROOTS: [busProxyService]
+    # One authored listener supplies both daemon bind and client dial defaults.
+    # Both ports still come from the shared cross-playbook input above.
+    _bus_proxy_listen: "127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}"
+    _bus_proxy_url: "http://{{_bus_proxy_listen}}"
+    ENV_CONFIG:
+      projections:
+        proxy-service.env:
+          files: [50-proxy-service.env, 99-local-priority.env]
+          format: env
+        proxy-client.env.export:
+          files: [60-proxy-client.env]
+          format: env-export
+    ENV_CONTRIBUTIONS:
+      50-proxy-service.env:
+        BUS_PROXY_UPSTREAM: "http://127.0.0.1:{{OPENCODE_PRIMARY_PORT}}"
+        BUS_PROXY_LISTEN: "{{_bus_proxy_listen}}"
+        # shared origin password: the opencode deployment's home-file view
+        BUS_PROXY_PASSWORD_FILE: "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"
+      60-proxy-client.env:
+        OPENCODE_PROXY_URL: "{{_bus_proxy_url}}"
+    # Normal contributor import owns this concrete source-order prerequisite.
+    # CONFIG has no candidate dependency DAG; do not make Zim read ENV's
+    # uncommitted candidate or assume a prior render assembled it.
+    BINS:
+      - name: install-zimfw.sh
+        early: '"$DIR/bin/config-assemble.sh" --definition env --context canonical'
     # Explicitly importing this producer into a Zim host selects the proxy for
     # that account's clients, including accounts without the server's native
     # discovery record. The CLI consumes OPENCODE_ARGS itself; no shell wrapper.
@@ -28,15 +54,6 @@
         source: opencode-proxy-env.zsh
         phase: 56
         comment: Default OpenCode clients to this proxy after the origin credential module.
-    ENV:
-      # The origin: the opencode.src.pb primary, whose port authority is
-      # OPENCODE_PRIMARY_PORT in vars/opencode.yaml.
-      BUS_PROXY_UPSTREAM: "http://127.0.0.1:{{OPENCODE_PRIMARY_PORT}}"
-      # Loopback-only; one below the origin by convention. Native publication
-      # and optional daemon contribution advertise this same listener.
-      BUS_PROXY_LISTEN: "127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}"
-      # shared origin password: the opencode deployment's home-file view
-      BUS_PROXY_PASSWORD_FILE: "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"
     busProxyService:
       SYSTEMD_SERVICE: opencode-bus-proxy
       SYSTEMD_UNITS:
@@ -45,6 +62,9 @@
         After: opencode.service
       SYSTEMD_SERVICES:
         Type: exec
+        # Required service-only CONFIG output, not the whole deployment ENV
+        # or SYSTEMD_ENV (which publishes to the manager).
+        EnvironmentFile: "{{ ETC }}/env-projections/proxy-service.env"
         ExecStart: "{{GLOBAL_BINS_DIR}}/opencode-bus-proxy"
         # missing credential = deployment prerequisite; fail loudly, no crash-loop
         ExecStartPre: /bin/sh -c 'test -r "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"'
@@ -53,7 +73,7 @@
       # OpenCode bus proxy (user service)
 
       Gateway between clients and the managed OpenCode server. Clients use
-      `http://127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}` (one port below the
+      `{{_bus_proxy_url}}` (one port below the
       {{OPENCODE_PRIMARY_PORT}} primary) as their
       complete server URL with the usual credentials; event GETs and
       interest PUTs are owned here, everything else is forwarded (WebSocket
@@ -74,6 +94,31 @@
       nonempty OPENCODE_ARGS is preserved; explicit CLI --server/--standalone
       overrides the default in builds carrying the native args support.
       No shell function, alias, or service lifecycle action is installed.
+
+      ENV CONFIG assembles `etc/env.d/50-proxy-service.env` and the existing
+      `99-local-priority.env` into `etc/env-projections/proxy-service.env`,
+      the unit's required EnvironmentFile. Discovery/watch flags below still
+      add their service values to ENV_PRIO, preserving other priority keys.
+      Build knobs in ordinary ENV remain command-only; use ENV_PRIO for
+      explicit daemon overrides. Service selection excludes client values
+      and implicit DIR/NAME/TYPE execution plumbing.
+
+      The client module sources only the literal projection of
+      `etc/env.d/60-proxy-client.env` when OPENCODE_PROXY_URL is empty/unset;
+      it then derives OPENCODE_ARGS from that effective runtime URL when args
+      are empty/unset. Neither daemon settings nor the full env.export are
+      sourced into the account. Both projections use the same authored
+      listener/port defaults, not independently maintained endpoint copies.
+      The normal Zim importer reassembles ENV before importing/rebuilding its
+      host cache. Standalone assembly remains available for service config:
+
+          {{DIR}}/bin/config-assemble.sh --definition env --context canonical
+          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
+
+      Normal rendering also assembles ENV. With BINS_RUN_BYPASS=true the
+      importer supplies the same prerequisite without building the daemon.
+      This deployment contributes Zim material; it is not another Zim host.
+      Updating files does not refresh existing shells or restart the service.
 
       Opt in to ordinary native discovery (not a shell wrapper) by running
       this and opencode.src.pb with `-e OPENCODE_BUS_PROXY_DISCOVERY=true`.
@@ -105,7 +150,7 @@
       Health is source readiness, not process liveness:
 
           curl -fsS -u "opencode:$(cat ~/.config/opencode/secrets/OPENCODE_PASSWORD)" \
-            http://127.0.0.1:{{OPENCODE_BUS_PROXY_PORT}}/_bus/health
+            {{_bus_proxy_url}}/_bus/health
 
       `/_bus/subscriptions` answers who listens to what; `/_bus/metrics`
       exposes Prometheus counters. No replay / exactly-once: source loss
