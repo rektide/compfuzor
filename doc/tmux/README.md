@@ -62,21 +62,26 @@ saves require an enabled status line and Continuum's status hook to remain intac
 
 ## Install and use
 
+The [verified user deployment](/doc/tmux/deployment.md) records the installed
+paths, live checks, and ready-to-run restore command for `rektide`.
+
 Render the desired manager and both plugin playbooks with the local connector:
 
 ```sh
-ansible-playbook -i 'localhost,' -c local tpm-ahiru.src.pb
-ansible-playbook -i 'localhost,' -c local tmux-resurrect.etc.pb tmux-continuum.etc.pb
+ansible-playbook -i 'localhost,' -c local tpm-ahiru.src.pb -e NAME=tpm-ahiru-git
+ansible-playbook -i 'localhost,' -c local tmux-resurrect.etc.pb -e USERMODE=True -e NAME=tmux-resurrect-main
+ansible-playbook -i 'localhost,' -c local tmux-continuum.etc.pb -e USERMODE=True -e NAME=tmux-continuum-main
 ```
 
-Use each playbook's rendered `DIR` below; these are the ordinary system-layout
-paths. USERMODE or prefix overrides can select different material locations.
+These examples retain the existing manager material under `/usr/local/src` and
+place plugin contributions in the user's config tree. Use each playbook's rendered
+`DIR` when selecting other names or prefixes.
 
 ```sh
-host=/usr/local/src/tpm-ahiru
+host=/usr/local/src/tpm-ahiru-git
 "$host/bin/install-user.sh"
-/etc/opt/tmux-resurrect/bin/install-tmux.sh "$host"
-/etc/opt/tmux-continuum/bin/install-tmux.sh "$host"
+~/.config/tmux-resurrect-main/bin/install-tmux.sh "$host"
+~/.config/tmux-continuum-main/bin/install-tmux.sh "$host"
 
 # Inside tmux, source the root chosen by install-user.sh:
 tmux source-file ~/.tmux.conf
@@ -84,7 +89,7 @@ tmux source-file ~/.tmux.conf
 ahiru-tpm install
 
 # Restore only when wanted, from inside a tmux session:
-/etc/opt/tmux-resurrect/bin/restore-session.sh
+~/.config/tmux-resurrect-main/bin/restore-session.sh
 ```
 
 For TPM, select its deployment as `host`, then use **prefix + I** after sourcing
