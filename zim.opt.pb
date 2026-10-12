@@ -13,31 +13,32 @@
     ZIM_CONFIG_DROPINS: link
     # The complete Zim installer owns ordinary composition for this host; the
     # generic config installer remains directly invokable but does not duplicate it.
-    CONFIG_INSTALL_OWNER: zim
-    CONFIGS:
-      zimrc:
-        processor: block-in-file
-        validate: 'zsh -dfn "$CONFIG_CANDIDATE"'
-        inputs:
-          - glob: zimrc.d/*.conf
-            name: zimrc
-            remote: true
-        block:
-          remove_match:
-            - '^zim-main-zimfw-'
-            - '^zim/main/'
-      zimenv:
-        processor: block-in-file
-        validate: 'zsh -dfn "$CONFIG_CANDIDATE"'
-        inputs:
-          - glob: zimenv.d/*.conf
-            name: zimenv
-            remote: true
-        block:
-          remove_match:
-            - '^zim-main-zimfw-'
-            - '^zim/main/'
-    CONFIG_CONTEXTS:
+    ZIM_CONFIG_DEFINITION: zim
+    CONFIG_DEFINITIONS:
+      zim:
+        install_owner: zim
+        configs:
+          zimrc:
+            processor: block-in-file
+            validate: 'zsh -dfn "$CONFIG_CANDIDATE"'
+            inputs:
+              - glob: zimrc.d/*.conf
+                name: zimrc
+                remote: true
+            block:
+              remove_match: ['^zim-main-zimfw-', '^zim/main/']
+          zimenv:
+            processor: block-in-file
+            validate: 'zsh -dfn "$CONFIG_CANDIDATE"'
+            inputs:
+              - glob: zimenv.d/*.conf
+                name: zimenv
+                remote: true
+            block:
+              remove_match: ['^zim-main-zimfw-', '^zim/main/']
+        context: "{{ CONFIG_CONTEXT }}"
+        contexts: "{{ ZIM_CONFIG_CONTEXTS | default(CONFIG_CONTEXTS | default(_ZIM_CONFIG_CONTEXTS)) }}"
+    _ZIM_CONFIG_CONTEXTS:
       user:
         scope: user
         root: config
@@ -49,16 +50,12 @@
             output:
               env: ZIM_CONFIG_FILE
               default: zimrc
-              ignore:
-                - "{{ ETC }}/zimrc"
-                - "{{ DIR }}/etc/zimrc"
+              ignore: ["{{ ETC }}/zimrc", "{{ DIR }}/etc/zimrc"]
           zimenv:
             output:
               env: ZIM_ENV_CONFIG
               default: zimenv
-              ignore:
-                - "{{ ETC }}/zimenv"
-                - "{{ DIR }}/etc/zimenv"
+              ignore: ["{{ ETC }}/zimenv", "{{ DIR }}/etc/zimenv"]
     ENV: {}
     ENV_LIST:
       - zim_home

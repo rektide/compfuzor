@@ -160,6 +160,13 @@ function bindContextConfigs(spec, contextName, names) {
 			else {
 				input.directory = path;
 				input.glob = join(path, String(input.pattern));
+				if (input.fuzings && !context.canonical) {
+					const fuzings = object$6(input.fuzings, `config ${name}.inputs[${index}].fuzings`);
+					input.fuzings = {
+						...fuzings,
+						roots: resolve(base, String(fuzings.relative))
+					};
+				}
 			}
 			return input;
 		});
@@ -472,6 +479,11 @@ Fixed actions:
   config-inputs.sh        Inspect or mutate consumer inputs
   config-status.sh        Report input, assembly, and output health
 
+Binding options on every action:
+  --definition ID  Select one complete CONFIG definition
+  --spec PATH      Select an exact spec (instead of --definition)
+  --runner PATH    Override the shared candidate worker
+
 Run a fixed command with --help for its action-specific options.`;
 const ACTION_HELP = {
 	install: `Usage: config-install.sh [--context NAME] [--strategy assemble|copy|link] [--dropins copy|link] [CONFIG ...]
@@ -524,6 +536,9 @@ Subactions:
   enable CONFIG/INPUT NAME
   disable CONFIG/INPUT NAME
   remove CONFIG/INPUT [NAME]
+  fuzings CONFIG/INPUT
+  fuze put CONFIG/INPUT MEMBER ROOT
+  fuze enable|disable CONFIG/INPUT MEMBER
 
 Use CONFIG/INPUT when an input name is ambiguous across recipes.`,
 	status: `Usage: config-status.sh [--context NAME] [--json|--json-array] [CONFIG ...]
@@ -566,6 +581,7 @@ function parseConfigCommandArgs(argv, deploymentDir, invokedAs, admission = fals
 			action: { type: "string" },
 			context: { type: "string" },
 			spec: { type: "string" },
+			definition: { type: "string" },
 			runner: { type: "string" },
 			strategy: { type: "string" },
 			dropins: { type: "string" },
@@ -593,12 +609,14 @@ function parseConfigCommandArgs(argv, deploymentDir, invokedAs, admission = fals
 	}
 	const formatToken = tokens.findLast((token) => token.kind === "option" && (token.name === "json" || token.name === "json-array"));
 	const format = formatToken?.name === "json-array" ? "array" : formatToken?.name === "json" ? "jsonl" : "human";
+	if (values.spec && values.definition) fail$20("--spec and --definition are mutually exclusive");
+	if (values.definition && !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(values.definition)) fail$20("invalid CONFIG definition");
 	return {
 		...values.help ? { help: true } : {},
 		action: values.action,
 		context: values.context,
 		invokedAs,
-		specPath: resolve(values.spec ?? join(deploymentDir, "etc", "config.spec.json")),
+		specPath: resolve(values.spec ?? (values.definition ? join(deploymentDir, "etc", "config", values.definition, "spec.json") : join(deploymentDir, "etc", "config.spec.json"))),
 		runner: resolve(values.runner ?? join(deploymentDir, "bin", "config", "run.sh")),
 		strategy: values.strategy,
 		dropins: values.dropins,
@@ -647,6 +665,144 @@ function rejectIrrelevantFlags(options, action) {
 	if (action !== "sync-inputs" && options.seed) fail$20(`${action} does not accept --seed`);
 	if (action !== "inputs" && (!options.rebuild || options.initiallyDisabled)) fail$20(`${action} does not accept input mutation flags`);
 	if (action !== "install" && options.dropins !== void 0) fail$20(`${action} does not accept --dropins`);
+}
+//#endregion
+//#region files/config/fuzings.ts
+/** Native contribution-root resolution and derived input delivery (no registry). */
+init_delivery();
+async function entries(path) {
+	try {
+		return (await readdir(path)).sort();
+	} catch (error) {
+		if (error.code === "ENOENT") return [];
+		throw error;
+	}
+}
+function rules(input) {
+	const value = input.fuzings;
+	if (!value || typeof value.roots !== "string" || !Array.isArray(value.paths)) throw new Error("input has no compiled fuzing contract");
+	return value;
+}
+/** Sorted member order, authored rule order, then native filename order. */
+async function resolveFuzings(input) {
+	const selection = rules(input);
+	const suffix = typeof input.disabled_suffix === "string" ? input.disabled_suffix : void 0;
+	const result = [];
+	const members = await entries(selection.roots);
+	const seen = /* @__PURE__ */ new Set();
+	for (const member of members) {
+		if (member.endsWith(".disabled")) continue;
+		if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(member)) throw new Error(`invalid enrolled fuzing name: ${member}`);
+		if (members.includes(`${member}.disabled`)) throw new Error(`fuzing is both enabled and disabled: ${member}`);
+		const enrollment = join(selection.roots, member);
+		if (!(await lstat(enrollment)).isSymbolicLink()) throw new Error(`fuzing enrollment is not a root symlink: ${enrollment}`);
+		if (!(await stat(enrollment)).isDirectory()) throw new Error(`enrolled fuzing root is not a directory: ${enrollment}`);
+		const sourceRoot = await realpath(enrollment);
+		for (const pattern of selection.paths) {
+			const directory = dirname(pattern);
+			const names = await entries(join(enrollment, directory));
+			for (const filename of names) {
+				const sourceDisabled = !!suffix && filename.endsWith(suffix);
+				const logical = sourceDisabled ? filename.slice(0, -suffix.length) : filename;
+				if (!matchesGlob(`x${logical}`, `x${basename(pattern)}`)) continue;
+				if (/[\t\r\n]/.test(logical)) throw new Error(`unsupported control characters in fuzing filename`);
+				const relative = join(directory, logical);
+				const identity = `${member}/${relative}`;
+				if (seen.has(identity)) throw new Error(`duplicate/active-disabled fuzing contribution: ${identity}`);
+				seen.add(identity);
+				const source = join(sourceRoot, directory, filename);
+				if (!(await stat(source)).isFile()) throw new Error(`recognized fuzing input is not a file: ${source}`);
+				const destination = join(String(input.directory), ".fuzings", member, relative);
+				result.push({
+					member,
+					relative,
+					source,
+					destination,
+					disabled: suffix ? `${destination}${suffix}` : void 0,
+					sourceDisabled
+				});
+			}
+		}
+	}
+	return result;
+}
+async function installedFuzing(relation) {
+	const active = await inspectDeliveryEntry(relation.destination);
+	const disabled = relation.disabled ? await inspectDeliveryEntry(relation.disabled) : void 0;
+	if (active.kind !== "missing" && disabled && disabled.kind !== "missing") throw new Error(`both active and disabled fuzing inputs exist: ${relation.destination}`);
+	if (active.kind !== "missing") return {
+		path: relation.destination,
+		disabled: relation.sourceDisabled
+	};
+	if (disabled && disabled.kind !== "missing") return {
+		path: relation.disabled,
+		disabled: true
+	};
+	return { disabled: relation.sourceDisabled };
+}
+/** Explicit refresh; assembly never enters here, and retained stale files are not pruned. */
+async function syncFuzings(input, strategy, seed) {
+	const relations = await resolveFuzings(input);
+	for (const relation of relations) {
+		const installed = await installedFuzing(relation);
+		const destination = installed.path ?? (relation.sourceDisabled ? relation.disabled : relation.destination);
+		const entry = await inspectDeliveryEntry(destination);
+		if (entry.kind === "directory" || entry.kind === "special") throw new Error(`foreign fuzing input slot: ${destination}`);
+		if (entry.kind === "symlink" && resolve(dirname(destination), await readlink(destination)) !== resolve(relation.source)) throw new Error(`foreign fuzing input link: ${destination}`);
+		if (seed && installed.path) continue;
+		await mkdir(dirname(destination), { recursive: true });
+		if (strategy === "link") await replaceWithLink(relation.source, destination);
+		else await replaceWithCopy(relation.source, destination);
+		console.log(`fuzing\t${relation.member}/${relation.relative}\t${strategy}\t${destination}`);
+	}
+}
+/** Explicit root membership, kept in native symlink/disabled controls. */
+async function mutateFuzing(input, action, member, source) {
+	if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(member) || member.endsWith(".disabled")) throw new Error(`invalid fuzing member: ${member}`);
+	const selection = rules(input);
+	const active = join(selection.roots, member);
+	const disabled = `${active}.disabled`;
+	const [a, d] = await Promise.all([inspectDeliveryEntry(active), inspectDeliveryEntry(disabled)]);
+	if (a.kind !== "missing" && d.kind !== "missing") throw new Error(`both active and disabled fuzings exist: ${member}`);
+	if (action === "put") {
+		if (!source) throw new Error("fuze put requires a contribution root");
+		const root = await realpath(source);
+		if (/[\t\r\n]/.test(root)) throw new Error("fuzing root has unsupported control characters");
+		if (!(await stat(root)).isDirectory()) throw new Error(`fuzing root is not a directory: ${root}`);
+		const existing = a.kind !== "missing" ? a : d;
+		if (existing.kind !== "missing") {
+			if (existing.kind !== "symlink" || await realpath(a.kind !== "missing" ? active : disabled) !== root) throw new Error(`foreign enrollment slot: ${member}; remove/rebind deliberately`);
+			return;
+		}
+		await mkdir(selection.roots, { recursive: true });
+		await symlink(root, active);
+	} else if (action === "enable" || action === "disable") {
+		const from = action === "enable" ? disabled : active;
+		const to = action === "enable" ? active : disabled;
+		const fromEntry = action === "enable" ? d : a;
+		if ((action === "enable" ? a : d).kind !== "missing") return;
+		if (fromEntry.kind !== "symlink") throw new Error(`missing/foreign fuzing membership: ${from}`);
+		await rename(from, to);
+	} else throw new Error("fuze action must be put, enable, or disable");
+}
+/** Raw candidate worker uses exactly the same relation/selection resolver. */
+async function main$10(argv) {
+	const [action, path, name, index] = argv;
+	if (action !== "manifest" || !path || !name || index === void 0) throw new Error("config-fuzings manifest SPEC RECIPE INDEX");
+	const input = JSON.parse(await readFile(path, "utf8")).configs[name].inputs[Number(index)];
+	for (const relation of await resolveFuzings(input)) {
+		const installed = await installedFuzing(relation);
+		if (installed.disabled) continue;
+		if (!installed.path) throw new Error(`fuzing input not delivered: ${relation.member}/${relation.relative}; run config-sync-inputs.sh before assembly`);
+		if (!(await stat(installed.path)).isFile()) throw new Error(`installed fuzing input is not a file: ${installed.path}`);
+		const settings = {
+			...input.block,
+			place: input.place ?? null,
+			envsubst: input.envsubst ?? null
+		};
+		console.log(`glob\tfuzing/${relation.member}/${relation.relative}\t${installed.path}\t${JSON.stringify(settings)}`);
+	}
+	return 0;
 }
 //#endregion
 //#region files/config/file-state.ts
@@ -859,6 +1015,9 @@ async function applyRelation(relation, strategy, seed) {
 	return `${seed ? "seeded" : "refreshed"}\t${relation.id}\t${state}\t${strategy}\t${destination}`;
 }
 async function syncInputs(options) {
+	const resolved = bindContextConfigs(options.spec, options.contextName, options.names);
+	for (const config of Object.values(resolved.configs)) for (const input of config.inputs) if (input.fuzings) await syncFuzings(input, options.strategy, options.seed);
+	if (options.spec.contexts?.[options.contextName]?.canonical) return 0;
 	const catalog = await inputCatalog(options.spec, options.contextName, options.names);
 	let failed = catalog.rows.some((row) => row.severity === "error");
 	for (const row of catalog.rows) console.error(`${row.status}: ${row.config}/${row.name}: ${row.note}`);
@@ -1293,6 +1452,22 @@ async function runInputAction(options, commandArgs) {
 			source,
 			name
 		});
+	}
+	if (action === "fuze") {
+		const [mutation, selector, member, source] = args;
+		if (!mutation || !selector || !member || args.length > 4) fail$18("usage: config-inputs.sh fuze put|enable|disable INPUT MEMBER [ROOT]");
+		await mutateFuzing(selectInput(spec, options.contextName, selector).consumer, mutation, member, source);
+		return 0;
+	}
+	if (action === "fuzings") {
+		const [selector] = args;
+		if (!selector || args.length !== 1) fail$18("usage: config-inputs.sh fuzings INPUT");
+		const selected = selectInput(spec, options.contextName, selector);
+		for (const relation of await resolveFuzings(selected.consumer)) {
+			const installed = await installedFuzing(relation);
+			console.log(`${relation.member}/${relation.relative}\t${relation.source}\t${installed.path ?? "not-delivered"}\t${installed.disabled ? "disabled" : "enabled"}`);
+		}
+		return 0;
 	}
 	if (action === "enable" || action === "disable" || action === "remove") return inputMutation(options, action, args);
 	fail$18("usage: config-inputs.sh <list|status|put|enable|disable|remove> ...");
@@ -1759,11 +1934,13 @@ async function admitConfigCommand(options, binding) {
 	}
 	rejectIrrelevantFlags(options, action);
 	const canonicalInputAction = action === "inputs" ? options.args[0] : void 0;
-	const canonicalAllowed = action === "assemble" || action === "status" || action === "inputs" && [
+	const canonicalAllowed = action === "assemble" || action === "status" || action === "sync-inputs" && selectRecipeNames(spec, contextName, options.args).some((name) => spec.configs[name].inputs.some((input) => input.fuzings)) || action === "inputs" && [
 		"list",
 		"status",
 		"enable",
-		"disable"
+		"disable",
+		"fuze",
+		"fuzings"
 	].includes(canonicalInputAction ?? "");
 	if (context.canonical && !canonicalAllowed) fail$16(`config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`);
 	if (!binding) return {
@@ -1911,6 +2088,7 @@ async function main$9(argv, deploymentDir, invokedAs) {
 //#endregion
 //#region files/config-remote/runtime.ts
 /** Manage external symlinks declared by config.spec.json remote targets. */
+init_assembly();
 async function linkState(path) {
 	try {
 		if (!(await lstat(path)).isSymbolicLink()) throw new Error(`managed destination is not a symlink: ${path}`);
@@ -1940,21 +2118,14 @@ async function atomicLink(source, destination) {
 		throw error;
 	});
 }
-async function rebuild(config, deploymentDir) {
-	await new Promise((resolve, reject) => {
-		const child = spawn(join(deploymentDir, "bin", "config", "command.mjs"), [
-			"--action",
-			"assemble",
-			"--context",
-			"canonical",
-			config
-		], {
-			cwd: deploymentDir,
-			stdio: "inherit"
-		});
-		child.once("error", reject);
-		child.once("exit", (code, signal) => code === 0 ? resolve() : reject(/* @__PURE__ */ new Error(`config rebuild failed: ${signal ?? code}`)));
+async function rebuild(config, spec, runner) {
+	const code = await runAssembly({
+		spec,
+		runner,
+		contextName: "canonical",
+		names: [config]
 	});
+	if (code !== 0) throw new Error(`config rebuild failed (exit ${code})`);
 }
 async function inspect(remote, target, name) {
 	validateName(remote, target, name);
@@ -1967,29 +2138,123 @@ async function inspect(remote, target, name) {
 		disabled
 	};
 }
+async function putRemote(remote, target, name, source, spec, runner, pair) {
+	const { active, disabled } = pair;
+	const previous = active ?? disabled;
+	const destination = previous?.path ?? join(remote.directory, name);
+	await mkdir(remote.directory, { recursive: true });
+	await atomicLink(source, destination);
+	try {
+		await rebuild(remote.config, spec, runner);
+	} catch (error) {
+		if (previous) await atomicLink(previous.target, destination);
+		else await rm(destination, { force: true });
+		throw error;
+	}
+	console.log(`put: ${target}/${name}${disabled ? " (disabled)" : ""} -> ${source}`);
+}
+async function targets(deploymentDir, specs, definitions) {
+	if (specs && definitions) throw new Error("--spec and --definition are mutually exclusive");
+	let bindings;
+	if (specs) bindings = specs.map((path) => ({
+		id: resolve(path),
+		path: resolve(path)
+	}));
+	else {
+		let index;
+		try {
+			index = JSON.parse(await readFile(join(deploymentDir, "etc/config/instances.json"), "utf8"));
+		} catch (error) {
+			if (error.code !== "ENOENT") throw error;
+			index = { definitions: { default: { spec: "etc/config.spec.json" } } };
+		}
+		bindings = (definitions ?? Object.keys(index.definitions).sort()).map((id) => {
+			const binding = index.definitions[id];
+			if (!binding) throw new Error(`unknown CONFIG definition: ${id}`);
+			return {
+				id,
+				path: resolve(deploymentDir, binding.spec)
+			};
+		});
+	}
+	const result = [];
+	for (const binding of bindings) {
+		const spec = JSON.parse(await readFile(binding.path, "utf8"));
+		for (const [name, remote] of Object.entries(spec.remotes ?? {})) result.push({
+			id: `${binding.id}/${name}`,
+			name,
+			remote,
+			spec,
+			specPath: binding.path
+		});
+	}
+	return result;
+}
 async function main$8(argv, deploymentDir) {
 	const parsed = parseArgs({
 		args: argv,
 		allowPositionals: true,
 		strict: true,
-		options: { name: {
-			type: "string",
-			short: "n"
-		} }
+		options: {
+			name: {
+				type: "string",
+				short: "n"
+			},
+			spec: {
+				type: "string",
+				multiple: true
+			},
+			definition: {
+				type: "string",
+				multiple: true
+			},
+			runner: { type: "string" },
+			target: {
+				type: "string",
+				multiple: true
+			}
+		}
 	});
 	const [rawAction, target, value, positionalName] = parsed.positionals;
 	const action = rawAction === "link" ? "put" : rawAction;
-	const remotes = JSON.parse(await readFile(join(deploymentDir, "etc", "config.spec.json"), "utf-8")).remotes ?? {};
+	const available = await targets(deploymentDir, parsed.values.spec, parsed.values.definition);
+	const runner = resolve(parsed.values.runner ?? join(deploymentDir, "bin/config/run.sh"));
 	if (action === "list") {
 		if (target) throw new Error("usage: config-remote.mjs list");
-		for (const name of Object.keys(remotes).sort()) {
-			const remote = remotes[name];
-			console.log(`${name}\tconfig=${remote.config}\tdestination=${join(remote.directory, remote.pattern)}\tdisabled=${remote.disabled_suffix ?? "-"}`);
+		for (const entry of available) {
+			const remote = entry.remote;
+			console.log(`${entry.id}\tconfig=${remote.config}\tdestination=${join(remote.directory, remote.pattern)}\tdisabled=${remote.disabled_suffix ?? "-"}`);
 		}
 		return;
 	}
-	if (!target || !remotes[target]) throw new Error(`unknown remote target: ${target ?? ""}`);
-	const remote = remotes[target];
+	if (action === "put-matching") {
+		for (const selector of parsed.values.target ?? []) if (!available.some((entry) => entry.id === selector || entry.name === selector)) throw new Error(`unknown selected remote target: ${selector}`);
+		if (!target || positionalName) throw new Error("usage: config-remote.mjs put-matching SOURCE [NAME] [--definition ID ...] [--target ID/INPUT ...]");
+		if (parsed.values.name && value) throw new Error("filename specified twice");
+		const source = await realpath(target);
+		if (!(await lstat(source)).isFile()) throw new Error(`remote source is not a file: ${source}`);
+		const name = parsed.values.name ?? value ?? basename(source);
+		const selected = available.filter((entry) => matches(entry.remote.pattern, name) && (!parsed.values.target || parsed.values.target.includes(entry.id) || parsed.values.target.includes(entry.name)));
+		if (!selected.length) throw new Error(`no matching remote input for ${name} in selected CONFIG definitions`);
+		const plans = [];
+		for (const entry of selected) plans.push({
+			entry,
+			pair: await inspect(entry.remote, entry.id, name)
+		});
+		const errors = [];
+		for (const { entry, pair } of plans) try {
+			await putRemote(entry.remote, entry.id, name, source, entry.spec, runner, pair);
+		} catch (error) {
+			console.error(`failed: ${entry.id}/${name}: ${error instanceof Error ? error.message : String(error)}`);
+			errors.push(new Error(`${entry.id}: delivery or rebuild failed`, { cause: error }));
+		}
+		if (errors.length) throw new AggregateError(errors, `${errors.length}/${selected.length} matching targets failed; successful targets remain installed`);
+		return;
+	}
+	if (parsed.values.target) throw new Error("--target requires put-matching");
+	const selected = available.filter((entry) => entry.id === target || entry.name === target);
+	if (selected.length !== 1) throw new Error(selected.length ? `ambiguous remote target ${target}; use DEFINITION/INPUT or --spec` : `unknown remote target: ${target ?? ""}`);
+	const { remote, spec } = selected[0];
 	if (action === "status") {
 		if (!value) throw new Error("usage: config-remote.mjs status <target> <name>");
 		const { active, disabled } = await inspect(remote, target, value);
@@ -2004,19 +2269,7 @@ async function main$8(argv, deploymentDir) {
 		});
 		if (!(await lstat(source)).isFile()) throw new Error(`remote source is not a file: ${source}`);
 		const name = parsed.values.name ?? positionalName ?? basename(source);
-		const { active, disabled } = await inspect(remote, target, name);
-		const previous = active ?? disabled;
-		const destination = previous?.path ?? join(remote.directory, name);
-		await mkdir(remote.directory, { recursive: true });
-		await atomicLink(source, destination);
-		try {
-			await rebuild(remote.config, deploymentDir);
-		} catch (error) {
-			if (previous) await atomicLink(previous.target, destination);
-			else await rm(destination, { force: true });
-			throw error;
-		}
-		console.log(`put: ${target}/${name}${disabled ? " (disabled)" : ""} -> ${source}`);
+		await putRemote(remote, target, name, source, spec, runner, await inspect(remote, target, name));
 		return;
 	}
 	if (![
@@ -2031,7 +2284,7 @@ async function main$8(argv, deploymentDir) {
 		const backup = join(remote.directory, `.${basename(existing.path)}.remove-${process.pid}-${Date.now()}`);
 		await rename(existing.path, backup);
 		try {
-			await rebuild(remote.config, deploymentDir);
+			await rebuild(remote.config, spec, runner);
 			await rm(backup);
 		} catch (error) {
 			await rename(backup, existing.path);
@@ -2045,7 +2298,7 @@ async function main$8(argv, deploymentDir) {
 		const destination = action === "disable" ? `${from.path}${remote.disabled_suffix}` : from.path.slice(0, -remote.disabled_suffix.length);
 		await rename(from.path, destination);
 		try {
-			await rebuild(remote.config, deploymentDir);
+			await rebuild(remote.config, spec, runner);
 		} catch (error) {
 			await rename(destination, from.path);
 			throw error;
@@ -3587,6 +3840,7 @@ function parseZimArgs(argv, deploymentDir) {
 		invokedAs: basename(values["invoked-as"] ?? "install-zim.sh"),
 		zimSpecPath: resolve(values.spec ?? join(deploymentDir, "etc", "zim.spec.json")),
 		configSpecPath: resolve(values["config-spec"] ?? join(deploymentDir, "etc", "config.spec.json")),
+		configSpecExplicit: values["config-spec"] !== void 0,
 		configRunner: resolve(values["config-runner"] ?? join(deploymentDir, "bin", "config", "run.sh")),
 		activationOnly: values["activation-only"] ?? false,
 		args
@@ -3780,7 +4034,8 @@ async function runZim(options, deploymentDir) {
 		console.error(`skipped Zim ${options.action}: COMPFUZOR_ZIM_BYPASS`);
 		return 0;
 	}
-	const [zimSpec, configSpec] = await Promise.all([readFile(options.zimSpecPath, "utf8").then((text) => JSON.parse(text)), readFile(options.configSpecPath, "utf8").then((text) => JSON.parse(text))]);
+	const zimSpec = JSON.parse(await readFile(options.zimSpecPath, "utf8"));
+	const configSpec = JSON.parse(await readFile(!options.configSpecExplicit && zimSpec.configSpec ? zimSpec.configSpec : options.configSpecPath, "utf8"));
 	if (zimSpec.version !== 2) fail$8(`unsupported Zim spec version: ${String(zimSpec.version)}; rerender the deployment with the current playbook (expected version 2)`);
 	const settings = resolveSettings(options, zimSpec, configSpec);
 	const activation = resolveActivation(settings.contextName, zimSpec, configSpec);
@@ -32221,7 +32476,7 @@ async function selectedDomain(argvPath, argv) {
 	}
 	if (basename(argvPath) !== RUNTIME_NAME && basename(argvPath) !== RUNTIME_SOURCE_NAME) fail(`unknown Compfuzor runtime alias: ${basename(argvPath)}\n${USAGE}`);
 	const [domain, ...domainArgv] = argv;
-	if (domain !== "catalog" && domain !== "registry" && domain !== "config" && domain !== "config-remote" && domain !== "flow" && domain !== "links" && domain !== "zim" && domain !== "keybindings" && domain !== "actions") fail(USAGE);
+	if (domain !== "catalog" && domain !== "registry" && domain !== "config" && domain !== "config-remote" && domain !== "config-fuzings" && domain !== "flow" && domain !== "links" && domain !== "zim" && domain !== "keybindings" && domain !== "actions") fail(USAGE);
 	return {
 		domain,
 		argv: domainArgv,
@@ -32249,6 +32504,7 @@ async function runDomain(domain, argv, invokedAs, deploymentDir) {
 			return outcome.code;
 		}
 		if (domain === "config") return await main$9(argv, deploymentDir, invokedAs);
+		if (domain === "config-fuzings") return await main$10(argv);
 		if (domain === "links") return await main$5(argv, deploymentDir);
 		if (domain === "zim") return await main$4(argv, deploymentDir);
 		if (domain === "keybindings") return await main$3(argv, {

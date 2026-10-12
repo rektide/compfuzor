@@ -37,6 +37,8 @@ if [ "$print" = 1 ] && [ "$check" = 1 ]; then
 fi
 
 [ -f "$spec" ] || { printf 'missing config spec: %s\n' "$spec" >&2; exit 2; }
+bound_root=$(jq -r '.deploymentRoot // empty' "$spec")
+if [ -n "$bound_root" ]; then DIR=$bound_root; export DIR; fi
 if [ "$list" = 1 ]; then
   [ "${#targets[@]}" -eq 0 ] || { printf '--list does not accept recipe names\n' >&2; exit 2; }
   jq -r '.configs | keys[]' "$spec"
@@ -109,19 +111,23 @@ for config in "${configs[@]}"; do
           [ -d "$value" ] || { printf '%s: config input directory is missing: %s\n' "$config" "$value" >&2; exit 1; }
           found="$transaction/found-${config}-${input_index}"
           sorted="$transaction/sorted-${config}-${input_index}"
-          if ! find -L "$value" -maxdepth 1 -type f -name "$pattern" -print0 > "$found"; then
+          if ! find -L "$value" -maxdepth 1 \( -type f -o -type l \) -name "$pattern" -print0 > "$found"; then
             printf '%s: failed to enumerate config input directory: %s\n' "$config" "$value" >&2
             exit 1
           fi
-          if ! sort -z "$found" > "$sorted"; then
+          if ! LC_ALL=C sort -z "$found" > "$sorted"; then
             printf '%s: failed to sort config inputs from: %s\n' "$config" "$value" >&2
             exit 1
           fi
           while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             if [ -n "$suffix" ] && [[ "$filename" == *"$suffix" ]]; then continue; fi
+            [ -f "$file" ] || { printf '%s: active config input is missing or not a regular file: %s\n' "$config" "$file" >&2; exit 1; }
             printf 'glob\t%s/%s/%s\t%s\t%s\n' "$(basename "$value")" "$input_index" "$filename" "$file" "$block" >> "$input_manifest"
           done < "$sorted"
+          if jq -e --arg config "$config" --argjson index "$input_index" '.configs[$config].inputs[$index].fuzings' "$spec" >/dev/null; then
+            "$DIR/bin/compfuzor-runtime.mjs" config-fuzings manifest "$spec" "$config" "$input_index" >> "$input_manifest"
+          fi
           ;;
       esac
       input_index=$((input_index + 1))

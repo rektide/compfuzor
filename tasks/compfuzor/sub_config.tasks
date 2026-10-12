@@ -1,19 +1,18 @@
 ---
 - name: "Compfuzor: compile config declarations"
   set_fact:
-    SUBSYSTEM: "{{ SUBSYSTEM | config_publish(compiled) }}"
+    SUBSYSTEM: "{{ SUBSYSTEM | config_definitions_publish(compiled) }}"
   vars:
-    base_compiled: >-
-      {{ CONFIGS | default({}) | resolve |
-         config_compile(ETC, BINS_DIR, CONFIG_DISABLED_SUFFIX, CONFIG_TRANSACTION_VALIDATE | default(None)) }}
+    _config_defaults:
+      contexts: "{{ {} if (CONFIG_CONTEXTS_BYPASS | default(False) | bool) else (CONFIG_CONTEXTS | default({}) | resolve) }}"
+      context: "{{ CONFIG_CONTEXT }}"
+      install_owner: "{{ CONFIG_INSTALL_OWNER }}"
+      disabled_suffix: "{{ CONFIG_DISABLED_SUFFIX }}"
+      transaction_validate: "{{ CONFIG_TRANSACTION_VALIDATE | default(None) }}"
+      audiences: "{{ ACTION_AUDIENCES | default(None) }}"
+      action_contexts: "{{ CONFIG_ACTION_CONTEXTS | default(None) }}"
     compiled: >-
-      {{ base_compiled |
-         config_context_compile(
-            ({} if (CONFIG_CONTEXTS_BYPASS | default(False) | bool) else (CONFIG_CONTEXTS | default({}) | resolve)),
-            ETC,
-            BINS_DIR,
-            CONFIG_CONTEXT,
-             CONFIG_INSTALL_OWNER,
-             ACTION_AUDIENCES | default(None),
-             CONFIG_ACTION_CONTEXTS | default(None)) }}
-  when: CONFIGS is defined
+      {{ CONFIG_DEFINITIONS | default({}) | resolve |
+         config_definitions_compile(ETC, BINS_DIR, CONFIGS | default(None) | resolve,
+             _config_defaults | resolve, CONFIG_DEFAULT | default(None)) }}
+  when: CONFIGS is defined or CONFIG_DEFINITIONS is defined

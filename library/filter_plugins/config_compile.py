@@ -15,7 +15,7 @@ from runtime_bundles import runtime_alias_bin
 
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
-_PROCESSORS = {"concat", "json-deep-merge", "block-in-file"}
+_PROCESSORS = {"concat", "json-deep-merge", "block-in-file", "env", "env-export", "env-zsh"}
 _PLACEMENTS = ("before", "after")
 
 
@@ -148,14 +148,16 @@ def _json_input_settings(item, label, processor):
     return result
 
 
-def config_runtime_bins():
+def config_runtime_bins(env=False):
     """Stock candidate runner and built-in leaves, also reused by domain hosts."""
     bins = [
         {"name": "config/run.sh", "src": "../config-run.sh", "raw": True, "compose": False, "bypass": False, "basedir": False, "run": True, "requires_fs": True},
-        {"name": "config/processor.sh", "src": "../config-processor.sh", "compose": False, "bypass": False, "basedir": False},
+        {"name": "config/processor.sh", "src": "../config-processor.sh", "raw": True, "helpers": False, "compose": False, "bypass": False, "basedir": False},
     ]
-    for processor in sorted(_PROCESSORS):
-        bins.append({"name": "config/processors/" + processor, "basedir": False, "helpers": ["env"], "bypass": False, "content": 'exec "$DIR/bin/config/processor.sh" {} "$@"'.format(processor)})
+    if env:
+        bins.append({"name": "config/env.py", "src": "../config-env.py", "raw": True, "helpers": False, "compose": False, "bypass": False, "basedir": False})
+    for processor in sorted(_PROCESSORS if env else _PROCESSORS - {"env", "env-export", "env-zsh"}):
+        bins.append({"name": "config/processors/" + processor, "basedir": False, "helpers": False, "bypass": False, "content": 'exec "$(dirname "$(readlink -f "$0")")/../processor.sh" {} "$@"'.format(processor)})
     return bins
 
 
@@ -165,7 +167,7 @@ def config_runtime_packages():
 
 
 @accept_args_markers
-def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", transaction_validate=None):
+def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", transaction_validate=None, identity=None):
     """Normalize CONFIGS and emit config subsystem contributions."""
     configs = _mapping(raw_copy_template_data(configs), "CONFIGS")
     if transaction_validate is not None and (not isinstance(transaction_validate, str) or not transaction_validate):
@@ -178,7 +180,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", tra
     statuses = []
 
     if configs:
-        bins.extend(config_runtime_bins())
+        bins.extend(config_runtime_bins(any(isinstance(raw, collections.abc.Mapping) and raw.get("processor") in ("env", "env-export", "env-zsh") for raw in configs.values())))
 
     output_owners = {}
     for output_key, raw in configs.items():
@@ -237,7 +239,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", tra
                     _error("file input has unknown settings: {}".format(", ".join(sorted(unknown))))
                 normalized_input = {"file": _path(input_base, value, "config file input")}
             else:
-                unknown = set(item) - {"glob", "dir", "name", "remote", "disabled_suffix", "block", "place", "envsubst"}
+                unknown = set(item) - {"glob", "dir", "name", "remote", "disabled_suffix", "block", "place", "envsubst", "fuzings"}
                 if unknown:
                     _error("glob input has unknown settings: {}".format(", ".join(sorted(unknown))))
                 glob_path = _path(input_base, value, "config glob input")
@@ -258,6 +260,20 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", tra
                     "disabled_suffix": suffix,
                     "remote": bool(item.get("remote", False)),
                 }
+                if "fuzings" in item:
+                    fuzings = _mapping(item["fuzings"], "glob fuzings")
+                    if set(fuzings) != {"roots", "paths"}:
+                        _error("glob fuzings requires roots and paths")
+                    root_path = _path(input_base, fuzings["roots"], "fuzing roots")
+                    relative_root = posixpath.relpath(root_path, etc)
+                    if relative_root.startswith("../") or relative_root == "..":
+                        _error("fuzing roots must be under the definition ETC")
+                    paths = _sequence(fuzings["paths"], "fuzing native paths")
+                    if not paths or any(not isinstance(path, str) or path.startswith("/") or any(part in ("", ".", "..") for part in path.split("/")) or any(c in path for c in "\0\t\n\r") or any(c in posixpath.dirname(path) for c in "*?[") for path in paths):
+                        _error("fuzing paths require relative files or concrete-directory filename globs")
+                    normalized_input["fuzings"] = {"roots": root_path, "relative": relative_root, "paths": paths}
+                    if root_path not in dirs:
+                        dirs.append(root_path)
                 if directory not in dirs:
                     dirs.append(directory)
                 glob_indices.append(index)
@@ -313,7 +329,9 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", tra
         output_dir = posixpath.dirname(output)
         if output_dir and output_dir not in dirs:
             dirs.append(output_dir)
-        leaf = "internal/config/{}".format(name)
+        leaf = "internal/config/{}{}".format((identity + "/") if identity else "", name)
+        if bins_dir is not None:
+            normalized[name]["leaf"] = posixpath.join(bins_dir, leaf)
         if isinstance(processor, str):
             bins.append({
                 "name": leaf,
@@ -338,7 +356,7 @@ def compile_config(configs, etc, bins_dir=None, disabled_suffix=".disabled", tra
         bins.append(runtime_alias_bin("config-remote.mjs"))
 
     if configs and bins_dir is not None:
-        for path in ("config", "config/processors", "internal/config"):
+        for path in ("config", "config/processors", "internal/config" + (("/" + identity) if identity else "")):
             directory = _path(bins_dir, path, "config bin directory")
             if directory not in dirs:
                 dirs.append(directory)

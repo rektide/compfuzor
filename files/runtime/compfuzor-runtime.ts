@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { main as runConfig } from "../config/runtime.ts";
 import { main as runConfigRemote } from "../config-remote/runtime.ts";
+import { main as runConfigFuzings } from "../config/fuzings.ts";
 import { main as runCatalog } from "../catalog/runtime.ts";
 import { main as runFlow } from "../flow/runtime.ts";
 import { main as runLinks } from "../links/runtime.ts";
@@ -23,6 +24,7 @@ export type RuntimeDomain =
   | "catalog"
   | "config"
   | "config-remote"
+  | "config-fuzings"
   | "flow"
   | "links"
   | "zim"
@@ -93,6 +95,7 @@ async function selectedDomain(
     domain !== "registry" &&
     domain !== "config" &&
     domain !== "config-remote" &&
+    domain !== "config-fuzings" &&
     domain !== "flow" &&
     domain !== "links" &&
     domain !== "zim" &&
@@ -131,6 +134,7 @@ async function runDomain(
       return outcome.code;
     }
     if (domain === "config") return await runConfig(argv, deploymentDir, invokedAs);
+    if (domain === "config-fuzings") return await runConfigFuzings(argv);
     if (domain === "links") return await runLinks(argv, deploymentDir);
     if (domain === "zim") return await runZim(argv, deploymentDir);
     if (domain === "keybindings") {

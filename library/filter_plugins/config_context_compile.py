@@ -7,6 +7,7 @@ import copy
 import json
 import posixpath
 import re
+import shlex
 
 from ansible.errors import AnsibleFilterError
 from ansible.template import accept_args_markers
@@ -157,7 +158,7 @@ def _canonical_context(configs):
 
 
 @accept_args_markers
-def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config", audience_policy=None, action_contexts=None):
+def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_context="user", install_owner="config", audience_policy=None, action_contexts=None, identity=None, spec_path=None):
     """Compile the v2 context schema and one fixed multicall command surface."""
     compiled = copy.deepcopy(_mapping(raw_copy_template_data(compiled), "compiled config"))
     contexts = _mapping(raw_copy_template_data(contexts), "CONFIG_CONTEXTS")
@@ -262,7 +263,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
     action_bindings = bind_action_contexts(normalized_contexts, raw_copy_template_data(action_contexts), "CONFIG_ACTION_CONTEXTS", participating_audiences(audience_policy, public_operations)) if audience_policy is not None else {}
 
     for action in _ACTIONS:
-        command_name = "config-{}.sh".format(action)
+        command_name = "config-{}{}.sh".format((identity + "-") if identity else "", action)
         if command_name in occupied_bins:
             _error("generated command collision: {}".format(command_name))
         descriptor = {
@@ -272,6 +273,14 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
             "compose": False,
             "basedir": False,
         }
+        spec_relative = "etc/config/{}/spec.json".format(identity) if identity else "etc/config.spec.json"
+        if identity:
+            descriptor.pop("dest")
+            descriptor.pop("link")
+            descriptor["helpers"] = False
+            descriptor["content"] = 'exec {} config --action {} --spec {} "$@"'.format(
+                shlex.quote(posixpath.join(bins_dir, "compfuzor-runtime.mjs")), action,
+                shlex.quote(spec_path or posixpath.join(etc, spec_relative.removeprefix("etc/"))))
         if action == "install" and normalized_contexts and selected_default != _CANONICAL and install_owner == "config":
             descriptor["action"] = "install"
             descriptor.pop("compose")
@@ -281,7 +290,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
                 descriptor["action_operations"] = [{
                     "action": action, "subsystem": "config",
                     "audiences": {audience: {"kind": "domain", "domain": "config", "operation": action, "context": name,
-                        "envelope": "bin/" + command_name, "spec": "etc/config.spec.json"}
+                        "envelope": "bin/" + command_name, "spec": spec_relative}
                         for audience, name in action_bindings.items()},
                 }]
         bins.append(descriptor)
@@ -293,7 +302,7 @@ def compile_config_contexts(compiled, contexts, etc, bins_dir=None, default_cont
     spec["installOwner"] = install_owner
     compiled["spec"] = spec
     compiled["bins"] = bins
-    compiled["statuses"] = [{"name": "config-status.sh", "exit2": "error"}]
+    compiled["statuses"] = [{"name": "config-{}status.sh".format((identity + "-") if identity else ""), "exit2": "error"}]
     legacy_processors = posixpath.join(bins_dir, "processors")
     dirs = [directory for directory in compiled.get("dirs", []) if directory != legacy_processors]
     for module_dir in [posixpath.join(bins_dir, "config"), posixpath.join(bins_dir, "config/processors")]:

@@ -134,8 +134,14 @@ export async function admitConfigCommand(
   const canonicalAllowed =
     action === "assemble" ||
     action === "status" ||
+    (action === "sync-inputs" &&
+      selectRecipeNames(spec, contextName, options.args).some((name) =>
+        spec.configs[name].inputs.some((input) => input.fuzings),
+      )) ||
     (action === "inputs" &&
-      ["list", "status", "enable", "disable"].includes(canonicalInputAction ?? ""));
+      ["list", "status", "enable", "disable", "fuze", "fuzings"].includes(
+        canonicalInputAction ?? "",
+      ));
   if (context.canonical && !canonicalAllowed) {
     fail(
       `config ${action} is not meaningful for canonical source=destination context; use assemble, status, or explicit input list/status/enable/disable`,

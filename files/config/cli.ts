@@ -47,6 +47,11 @@ Fixed actions:
   config-inputs.sh        Inspect or mutate consumer inputs
   config-status.sh        Report input, assembly, and output health
 
+Binding options on every action:
+  --definition ID  Select one complete CONFIG definition
+  --spec PATH      Select an exact spec (instead of --definition)
+  --runner PATH    Override the shared candidate worker
+
 Run a fixed command with --help for its action-specific options.`;
 
 const ACTION_HELP: Record<ConfigAction, string> = {
@@ -100,6 +105,9 @@ Subactions:
   enable CONFIG/INPUT NAME
   disable CONFIG/INPUT NAME
   remove CONFIG/INPUT [NAME]
+  fuzings CONFIG/INPUT
+  fuze put CONFIG/INPUT MEMBER ROOT
+  fuze enable|disable CONFIG/INPUT MEMBER
 
 Use CONFIG/INPUT when an input name is ambiguous across recipes.`,
   status: `Usage: config-status.sh [--context NAME] [--json|--json-array] [CONFIG ...]
@@ -164,6 +172,7 @@ export function parseConfigCommandArgs(
       action: { type: "string" },
       context: { type: "string" },
       spec: { type: "string" },
+      definition: { type: "string" },
       runner: { type: "string" },
       strategy: { type: "string" },
       dropins: { type: "string" },
@@ -188,12 +197,20 @@ export function parseConfigCommandArgs(
   );
   const format: StatusFormat =
     formatToken?.name === "json-array" ? "array" : formatToken?.name === "json" ? "jsonl" : "human";
+  if (values.spec && values.definition) fail("--spec and --definition are mutually exclusive");
+  if (values.definition && !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(values.definition))
+    fail("invalid CONFIG definition");
   return {
     ...(values.help ? { help: true } : {}),
     action: values.action,
     context: values.context,
     invokedAs,
-    specPath: resolve(values.spec ?? join(deploymentDir, "etc", "config.spec.json")),
+    specPath: resolve(
+      values.spec ??
+        (values.definition
+          ? join(deploymentDir, "etc", "config", values.definition, "spec.json")
+          : join(deploymentDir, "etc", "config.spec.json")),
+    ),
     runner: resolve(values.runner ?? join(deploymentDir, "bin", "config", "run.sh")),
     strategy: values.strategy,
     dropins: values.dropins,

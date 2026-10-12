@@ -57,10 +57,10 @@
     _zim_env_prio_lookup: "{{ lookup('vars_dict', _zim_env_prio_list_names|map('upper')|list, default=_zim_env_missing) if _zim_env_prio_list_names|length > 0 else {} }}"
     _zim_env_missing: "__MISSING_COMPFUZOR__"
     _zim_env_effective: >-
-      {{ _zim_env_lookup
+      {{ _ENV_CONFIG.effective if _ENV_CONFIG is defined else (_zim_env_lookup
          | combine(ENV if ENV is mapping else {})
          | combine(_zim_env_prio_lookup)
-         | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {}) }}
+         | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {})) }}
     _zim_env_projection: >-
       {{ _zim_env_effective | dict2items
          | selectattr('key', 'in', _zim_env_keys)
@@ -121,10 +121,10 @@
     _zim_env_lookup: "{{ lookup('vars_dict', _zim_env_list_names|map('upper')|list, default=_zim_env_missing) if _zim_env_list_names|length > 0 else {} }}"
     _zim_env_prio_lookup: "{{ lookup('vars_dict', _zim_env_prio_list_names|map('upper')|list, default=_zim_env_missing) if _zim_env_prio_list_names|length > 0 else {} }}"
     _zim_env_effective: >-
-      {{ _zim_env_lookup
+      {{ _ENV_CONFIG.effective if _ENV_CONFIG is defined else (_zim_env_lookup
          | combine(ENV if ENV is mapping else {})
          | combine(_zim_env_prio_lookup)
-         | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {}) }}
+         | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {})) }}
 
 - name: "Compfuzor: generate contributor install-zimfw.sh"
   set_fact:
@@ -203,13 +203,14 @@
     _zim_install: >-
       {{ ZIM_CONTEXTS | default({}) | resolve |
          zim_context_compile(
-           SUBSYSTEM.config.spec,
+            SUBSYSTEM.config.instances[ZIM_CONFIG_DEFINITION].spec if ZIM_CONFIG_DEFINITION is defined else SUBSYSTEM.config.spec,
            ZIM_CONTEXT | default('user'),
            ETC,
            DIR,
            BINS_DIR,
            NAME,
-           BINS) }}
+            BINS,
+            DIR ~ '/' ~ SUBSYSTEM.config.instances[ZIM_CONFIG_DEFINITION].path if ZIM_CONFIG_DEFINITION is defined else None) }}
     _zim_host_bins:
       - name: install-zim-donor.sh
         src: ../install-zim-donor.sh

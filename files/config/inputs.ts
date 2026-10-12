@@ -4,6 +4,7 @@ import { rename, rm } from "node:fs/promises";
 import { basename, join, matchesGlob, resolve } from "node:path";
 
 import { runAssembly } from "./assembly.ts";
+import { mutateFuzing, resolveFuzings, installedFuzing } from "./fuzings.ts";
 import {
   bindContextConfigs,
   contextConfigNames,
@@ -303,6 +304,26 @@ export async function runInputAction(
     if (!selector || !source || args.length > 3)
       fail("usage: config-inputs.sh put INPUT SOURCE [NAME] [--strategy copy|link]");
     return putInput({ ...options, selector, source, name });
+  }
+  if (action === "fuze") {
+    const [mutation, selector, member, source] = args;
+    if (!mutation || !selector || !member || args.length > 4)
+      fail("usage: config-inputs.sh fuze put|enable|disable INPUT MEMBER [ROOT]");
+    const selected = selectInput(spec, options.contextName, selector);
+    await mutateFuzing(selected.consumer, mutation, member, source);
+    return 0;
+  }
+  if (action === "fuzings") {
+    const [selector] = args;
+    if (!selector || args.length !== 1) fail("usage: config-inputs.sh fuzings INPUT");
+    const selected = selectInput(spec, options.contextName, selector);
+    for (const relation of await resolveFuzings(selected.consumer)) {
+      const installed = await installedFuzing(relation);
+      console.log(
+        `${relation.member}/${relation.relative}\t${relation.source}\t${installed.path ?? "not-delivered"}\t${installed.disabled ? "disabled" : "enabled"}`,
+      );
+    }
+    return 0;
   }
   if (action === "enable" || action === "disable" || action === "remove")
     return inputMutation(options, action, args);

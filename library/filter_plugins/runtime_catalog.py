@@ -139,7 +139,12 @@ def _resource_records(etc_files, links_plan, subsystems):
             names.add(name)
     config = subsystems.get("config", {}) if isinstance(subsystems, collections.abc.Mapping) else {}
     if isinstance(config, collections.abc.Mapping) and config.get("spec"):
-        resources.append({"id": "config", "contract": "compfuzor.config/v2", "path": "etc/config.spec.json"})
+        instances = config.get("instances", {})
+        if instances:
+            for identity, instance in sorted(instances.items()):
+                resources.append({"id": "config:" + identity, "contract": "compfuzor.config/v2", "path": instance["path"]})
+        else:
+            resources.append({"id": "config", "contract": "compfuzor.config/v2", "path": "etc/config.spec.json"})
     if "zim.spec.json" in names:
         resources.append({"id": "zim", "contract": "compfuzor.zim/v2", "path": "etc/zim.spec.json"})
     if "compfuzor-actions/spec.json" in names:

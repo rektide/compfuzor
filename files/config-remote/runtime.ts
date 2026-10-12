@@ -1,9 +1,10 @@
 /** Manage external symlinks declared by config.spec.json remote targets. */
 
-import { spawn } from "node:child_process";
 import { lstat, mkdir, readFile, readlink, realpath, rename, rm, symlink } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { runAssembly } from "../config/assembly.ts";
+import type { ConfigSpec } from "../config/context.ts";
 
 type Remote = {
   config: string;
@@ -53,18 +54,9 @@ async function atomicLink(source: string, destination: string): Promise<void> {
   });
 }
 
-async function rebuild(config: string, deploymentDir: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn(
-      join(deploymentDir, "bin", "config", "command.mjs"),
-      ["--action", "assemble", "--context", "canonical", config],
-      { cwd: deploymentDir, stdio: "inherit" },
-    );
-    child.once("error", reject);
-    child.once("exit", (code, signal) =>
-      code === 0 ? resolve() : reject(new Error(`config rebuild failed: ${signal ?? code}`)),
-    );
-  });
+async function rebuild(config: string, spec: ConfigSpec, runner: string): Promise<void> {
+  const code = await runAssembly({ spec, runner, contextName: "canonical", names: [config] });
+  if (code !== 0) throw new Error(`config rebuild failed (exit ${code})`);
 }
 
 async function inspect(
@@ -86,30 +78,145 @@ async function inspect(
   return { active, disabled };
 }
 
+async function putRemote(
+  remote: Remote,
+  target: string,
+  name: string,
+  source: string,
+  spec: ConfigSpec,
+  runner: string,
+  pair: Awaited<ReturnType<typeof inspect>>,
+): Promise<void> {
+  const { active, disabled } = pair;
+  const previous = active ?? disabled;
+  const destination = previous?.path ?? join(remote.directory, name);
+  await mkdir(remote.directory, { recursive: true });
+  await atomicLink(source, destination);
+  try {
+    await rebuild(remote.config, spec, runner);
+  } catch (error) {
+    if (previous) await atomicLink(previous.target, destination);
+    else await rm(destination, { force: true });
+    throw error;
+  }
+  console.log(`put: ${target}/${name}${disabled ? " (disabled)" : ""} -> ${source}`);
+}
+
+type Target = { id: string; name: string; remote: Remote; spec: ConfigSpec; specPath: string };
+
+async function targets(
+  deploymentDir: string,
+  specs?: string[],
+  definitions?: string[],
+): Promise<Target[]> {
+  if (specs && definitions) throw new Error("--spec and --definition are mutually exclusive");
+  let bindings: Array<{ id: string; path: string }>;
+  if (specs) bindings = specs.map((path) => ({ id: resolve(path), path: resolve(path) }));
+  else {
+    let index: { definitions: Record<string, { spec: string }> };
+    try {
+      index = JSON.parse(await readFile(join(deploymentDir, "etc/config/instances.json"), "utf8"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      index = { definitions: { default: { spec: "etc/config.spec.json" } } };
+    }
+    bindings = (definitions ?? Object.keys(index.definitions).sort()).map((id) => {
+      const binding = index.definitions[id];
+      if (!binding) throw new Error(`unknown CONFIG definition: ${id}`);
+      return { id, path: resolve(deploymentDir, binding.spec) };
+    });
+  }
+  const result: Target[] = [];
+  for (const binding of bindings) {
+    const spec = JSON.parse(await readFile(binding.path, "utf8")) as ConfigSpec;
+    for (const [name, remote] of Object.entries((spec.remotes ?? {}) as Record<string, Remote>))
+      result.push({ id: `${binding.id}/${name}`, name, remote, spec, specPath: binding.path });
+  }
+  return result;
+}
+
 export async function main(argv: string[], deploymentDir: string): Promise<void> {
   const parsed = parseArgs({
     args: argv,
     allowPositionals: true,
     strict: true,
-    options: { name: { type: "string", short: "n" } },
+    options: {
+      name: { type: "string", short: "n" },
+      spec: { type: "string", multiple: true },
+      definition: { type: "string", multiple: true },
+      runner: { type: "string" },
+      target: { type: "string", multiple: true },
+    },
   });
   const [rawAction, target, value, positionalName] = parsed.positionals;
   const action = rawAction === "link" ? "put" : rawAction;
-  const spec = JSON.parse(await readFile(join(deploymentDir, "etc", "config.spec.json"), "utf-8"));
-  const remotes = (spec.remotes ?? {}) as Record<string, Remote>;
+  const available = await targets(deploymentDir, parsed.values.spec, parsed.values.definition);
+  const runner = resolve(parsed.values.runner ?? join(deploymentDir, "bin/config/run.sh"));
 
   if (action === "list") {
     if (target) throw new Error("usage: config-remote.mjs list");
-    for (const name of Object.keys(remotes).sort()) {
-      const remote = remotes[name];
+    for (const entry of available) {
+      const remote = entry.remote;
       console.log(
-        `${name}\tconfig=${remote.config}\tdestination=${join(remote.directory, remote.pattern)}\tdisabled=${remote.disabled_suffix ?? "-"}`,
+        `${entry.id}\tconfig=${remote.config}\tdestination=${join(remote.directory, remote.pattern)}\tdisabled=${remote.disabled_suffix ?? "-"}`,
       );
     }
     return;
   }
-  if (!target || !remotes[target]) throw new Error(`unknown remote target: ${target ?? ""}`);
-  const remote = remotes[target];
+  if (action === "put-matching") {
+    for (const selector of parsed.values.target ?? []) {
+      if (!available.some((entry) => entry.id === selector || entry.name === selector))
+        throw new Error(`unknown selected remote target: ${selector}`);
+    }
+    if (!target || positionalName)
+      throw new Error(
+        "usage: config-remote.mjs put-matching SOURCE [NAME] [--definition ID ...] [--target ID/INPUT ...]",
+      );
+    if (parsed.values.name && value) throw new Error("filename specified twice");
+    const source = await realpath(target);
+    if (!(await lstat(source)).isFile()) throw new Error(`remote source is not a file: ${source}`);
+    const name = parsed.values.name ?? value ?? basename(source);
+    const selected = available.filter(
+      (entry) =>
+        matches(entry.remote.pattern, name) &&
+        (!parsed.values.target ||
+          parsed.values.target.includes(entry.id) ||
+          parsed.values.target.includes(entry.name)),
+    );
+    if (!selected.length)
+      throw new Error(`no matching remote input for ${name} in selected CONFIG definitions`);
+    // Resolve and admit EVERY match before the first mutation. Failures during
+    // delivery/rebuild are per-target and do not cancel later compatible targets.
+    const plans = [];
+    for (const entry of selected)
+      plans.push({ entry, pair: await inspect(entry.remote, entry.id, name) });
+    const errors: Error[] = [];
+    for (const { entry, pair } of plans) {
+      try {
+        await putRemote(entry.remote, entry.id, name, source, entry.spec, runner, pair);
+      } catch (error) {
+        console.error(
+          `failed: ${entry.id}/${name}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        errors.push(new Error(`${entry.id}: delivery or rebuild failed`, { cause: error }));
+      }
+    }
+    if (errors.length)
+      throw new AggregateError(
+        errors,
+        `${errors.length}/${selected.length} matching targets failed; successful targets remain installed`,
+      );
+    return;
+  }
+  if (parsed.values.target) throw new Error("--target requires put-matching");
+  const selected = available.filter((entry) => entry.id === target || entry.name === target);
+  if (selected.length !== 1)
+    throw new Error(
+      selected.length
+        ? `ambiguous remote target ${target}; use DEFINITION/INPUT or --spec`
+        : `unknown remote target: ${target ?? ""}`,
+    );
+  const { remote, spec } = selected[0];
 
   if (action === "status") {
     if (!value) throw new Error("usage: config-remote.mjs status <target> <name>");
@@ -131,19 +238,15 @@ export async function main(argv: string[], deploymentDir: string): Promise<void>
     });
     if (!(await lstat(source)).isFile()) throw new Error(`remote source is not a file: ${source}`);
     const name = parsed.values.name ?? positionalName ?? basename(source);
-    const { active, disabled } = await inspect(remote, target, name);
-    const previous = active ?? disabled;
-    const destination = previous?.path ?? join(remote.directory, name);
-    await mkdir(remote.directory, { recursive: true });
-    await atomicLink(source, destination);
-    try {
-      await rebuild(remote.config, deploymentDir);
-    } catch (error) {
-      if (previous) await atomicLink(previous.target, destination);
-      else await rm(destination, { force: true });
-      throw error;
-    }
-    console.log(`put: ${target}/${name}${disabled ? " (disabled)" : ""} -> ${source}`);
+    await putRemote(
+      remote,
+      target,
+      name,
+      source,
+      spec,
+      runner,
+      await inspect(remote, target, name),
+    );
     return;
   }
 
@@ -160,7 +263,7 @@ export async function main(argv: string[], deploymentDir: string): Promise<void>
     );
     await rename(existing.path, backup);
     try {
-      await rebuild(remote.config, deploymentDir);
+      await rebuild(remote.config, spec, runner);
       await rm(backup);
     } catch (error) {
       await rename(backup, existing.path);
@@ -178,7 +281,7 @@ export async function main(argv: string[], deploymentDir: string): Promise<void>
         : from.path.slice(0, -remote.disabled_suffix.length);
     await rename(from.path, destination);
     try {
-      await rebuild(remote.config, deploymentDir);
+      await rebuild(remote.config, spec, runner);
     } catch (error) {
       await rename(destination, from.path);
       throw error;

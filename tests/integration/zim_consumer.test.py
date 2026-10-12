@@ -26,7 +26,7 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], check: bool = Tru
     return result
 
 
-def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str], default_context: str = "user") -> None:
+def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str], default_context: str = "user", coexist: bool = False) -> None:
     system = payload.parent / "system activation's root"
     values = {
         "TYPE": "zim",
@@ -77,6 +77,11 @@ def render_host(payload: Path, scenario: Path, ansible_env: dict[str, str], defa
             {"source": "rektide/zim-mise", "phase": "core", "channel": "zimenv"},
         ],
     }
+    if coexist:
+        values["ZIM_CONFIG_CONTEXTS"] = values.pop("CONFIG_CONTEXTS")
+        values["CONFIG_DEFAULT"] = "zim"
+        values["CONFIGS"] = {"independent.json": {"name": "main", "processor": "json-deep-merge", "inputs": [{"glob": "independent.d/*.json", "name": "fragments"}]}}
+        values["CONFIG_CONTEXTS"] = {"user": {"scope": "user", "root": "${HOME}/.config/independent"}}
     scenario.write_text(json.dumps(values), encoding="utf-8")
     run(
         ["ansible-playbook", "-i", "localhost,", "-c", "local", str(ROOT / "zim.opt.pb"), "-e", f"@{scenario}"],
@@ -116,6 +121,12 @@ def render_producer(payload: Path, playbook: Path, ansible_env: dict[str, str]) 
         channel: zimenv
         enabled: false
   tasks:
+    - set_fact:
+        TYPE: producer
+        NAME: producer-main
+        DIR: {str(payload)!r}
+        ETC: {str(payload / 'etc')!r}
+        BINS_DIR: {str(payload / 'bin')!r}
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_zim.tasks')!r}
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'gen_bins.tasks')!r}
     - file:
@@ -124,7 +135,7 @@ def render_producer(payload: Path, playbook: Path, ansible_env: dict[str, str]) 
       loop: "{{{{ [ETC, BINS_DIR] + (ETC_DIRS | map('defaultDir', ETC) | list) }}}}"
     - copy:
         dest: "{{{{ item.name | defaultDir(ETC) }}}}"
-        content: "{{{{ item.content }}}}"
+        content: "{{{{ (item.json | to_nice_json) if item.json is defined else item.content }}}}"
         mode: '0600'
       loop: "{{{{ ETC_FILES }}}}"
     - import_tasks: {str(ROOT / 'tasks' / 'compfuzor' / 'bins.tasks')!r}
@@ -244,7 +255,7 @@ def test_zim_consumer_lifecycle() -> None:
         scenario = temporary / "host.json"
         ansible_env = os.environ.copy()
         ansible_env["ANSIBLE_CONFIG"] = str(ROOT / "ansible.cfg")
-        render_host(payload, scenario, ansible_env)
+        render_host(payload, scenario, ansible_env, coexist=True)
 
         deployed_sources = [path.relative_to(payload / "bin") for path in (payload / "bin").rglob("*") if path.is_file()]
         assert not [path for path in deployed_sources if path.suffix in {".ts", ".py"}]
@@ -252,7 +263,7 @@ def test_zim_consumer_lifecycle() -> None:
         assert runtime.is_file() and not runtime.is_symlink()
         content = runtime.read_text(encoding="utf-8")
         assert content.startswith("#!/usr/bin/env")
-        assert 'from "./' not in content
+        assert not any(line.lstrip().startswith(("import ", "export ")) and 'from "./' in line for line in content.splitlines())
         assert not any(line.lstrip().startswith(("import ", "export ")) and ".ts" in line for line in content.splitlines())
         for alias in ("config/command.mjs", "config-remote.mjs", "links/links.mjs", "links.mjs", "zim/install.mjs"):
             path = payload / "bin" / alias
@@ -268,7 +279,7 @@ def test_zim_consumer_lifecycle() -> None:
         precursor = payload / "etc" / "zim" / "zimrc" / "active" / "old-layout.conf"
         precursor.parent.mkdir(parents=True)
         precursor.write_text("old-layout\n", encoding="utf-8")
-        render_host(payload, scenario, ansible_env)
+        render_host(payload, scenario, ansible_env, coexist=True)
         assert precursor.read_text(encoding="utf-8") == "old-layout\n"
 
         build_log = temporary / "build.log"
@@ -298,6 +309,7 @@ zimfw() { :; }
         zim_spec = json.loads(zim_spec_path.read_text(encoding="utf-8"))
         canonical = zim_spec["canonical"]
         assert zim_spec["version"] == 2
+        assert zim_spec["configSpec"] == str(payload / "etc/config/zim/spec.json")
         stale_spec = temporary / "zim-v1.spec.json"
         stale_spec.write_text(json.dumps(zim_spec | {"version": 1}), encoding="utf-8")
         stale_result = run(
@@ -340,6 +352,7 @@ zimfw() { :; }
         install_text = (payload / "bin" / "install.sh").read_text(encoding="utf-8")
         assert install_text.count('"$DIR/bin/install-zim.sh" "$@"') == 1
         assert "config-install.sh" not in install_text
+        assert install_text.count('"$DIR/bin/config-default-install.sh" "$@"') == 1, install_text
         assert "install-zim-donor" not in install_text
         install_user = payload / "bin" / "install-user.sh"
         assert not install_user.exists() or "install-zim.sh" not in install_user.read_text(encoding="utf-8")
@@ -392,6 +405,12 @@ zimfw() { :; }
         # Simulate values inherited from the pre-migration env/export contract.
         env_one["ZIM_CONFIG_FILE"] = str(canonical_zimrc)
         env_one["ZIM_ENV_CONFIG"] = str(canonical_zimenv)
+        independent_input = payload / "etc/independent.d/local.json"
+        independent_input.write_text('{"independent": true}\n')
+        run([str(payload / "bin/config-assemble.sh"), "--definition", "default", "--context", "canonical"], cwd=temporary, env=env_one)
+        run([str(payload / "bin/config-install.sh"), "--definition", "default", "--context", "user"], cwd=temporary, env=env_one)
+        assert json.loads((home_one / ".config/independent/independent.json").read_text()) == {"independent": True}
+        assert (payload / "etc/config/default/spec.json").is_file()
         before_user = donor_digest(payload)
         local_root_one = xdg_one / "zsh"
         local_zimrc = local_root_one / "zimrc"

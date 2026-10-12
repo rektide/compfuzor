@@ -238,10 +238,15 @@ export async function runZim(options: ZimCliOptions, deploymentDir: string): Pro
     console.error(`skipped Zim ${options.action}: COMPFUZOR_ZIM_BYPASS`);
     return 0;
   }
-  const [zimSpec, configSpec] = await Promise.all([
-    readFile(options.zimSpecPath, "utf8").then((text) => JSON.parse(text) as ZimSpec),
-    readFile(options.configSpecPath, "utf8").then((text) => JSON.parse(text) as ConfigSpec),
-  ]);
+  const zimSpec = JSON.parse(await readFile(options.zimSpecPath, "utf8")) as ZimSpec;
+  const configSpec = JSON.parse(
+    await readFile(
+      !options.configSpecExplicit && zimSpec.configSpec
+        ? zimSpec.configSpec
+        : options.configSpecPath,
+      "utf8",
+    ),
+  ) as ConfigSpec;
   if (zimSpec.version !== 2) {
     fail(
       `unsupported Zim spec version: ${String(zimSpec.version)}; rerender the deployment with the current playbook (expected version 2)`,

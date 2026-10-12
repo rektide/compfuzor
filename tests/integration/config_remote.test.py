@@ -30,15 +30,17 @@ def test_config_remote() -> None:
         sources.mkdir(parents=True)
         manager = host / "bin" / "config-remote.mjs"
         manager.write_text(
-            (ROOT / "build" / "runtime" / "compfuzor-runtime.mjs").read_text(), encoding="utf-8"
+            (ROOT / "runtime" / "compfuzor-runtime.mjs").read_text(), encoding="utf-8"
         )
         manager.chmod(0o770)
         (host / "etc").mkdir(exist_ok=True)
-        (host / "etc" / "config.spec.json").write_text(json.dumps({"remotes": {"servers": {
+        (host / "etc" / "config.spec.json").write_text(json.dumps({"version": 2, "defaultContext": "canonical",
+            "configs": {"app": {"output": str(host / "etc/app.json"), "inputs": []}},
+            "contexts": {"canonical": {"scope": "system", "canonical": True, "root": {"path": "/"}, "configs": {"app": {"output": {"path": str(host / "etc/app.json")}, "inputs": []}}}}, "remotes": {"servers": {
             "config": "app", "directory": str(target), "pattern": "*.json", "disabled_suffix": ".disabled"
         }}}), encoding="utf-8")
         rebuild_log = root / "rebuild.log"
-        command = host / "bin" / "config" / "command.mjs"
+        command = host / "bin" / "config" / "run.sh"
         command.parent.mkdir()
         command.write_text(f'#!/bin/sh\necho "$@" >> "{rebuild_log}"\nexit "${{REBUILD_FAIL:-0}}"\n', encoding="utf-8")
         command.chmod(0o770)
@@ -52,7 +54,7 @@ def test_config_remote() -> None:
         run([str(manager), "link", "servers", str(one), "example.json"])
         active = target / "example.json"
         assert active.is_symlink() and active.resolve() == one
-        assert rebuild_log.read_text().splitlines() == ["--action assemble --context canonical app"]
+        assert rebuild_log.read_text().splitlines() == ["app"]
 
         source_before = two.read_text()
         run([str(manager), "put", "servers", str(two), "example.json"])
@@ -113,6 +115,7 @@ def test_remote_symlink_assembly_and_toggle() -> None:
         source.write_text("remote=true\n", encoding="utf-8")
 
         spec = {
+            "version": 2, "defaultContext": "canonical",
             "configs": {
                 "app": {
                     "output": str(output),
@@ -140,12 +143,14 @@ def test_remote_symlink_assembly_and_toggle() -> None:
                 }
             },
         }
+        spec["contexts"] = {"canonical": {"scope": "system", "canonical": True, "root": {"path": "/"},
+            "configs": {"app": {"output": {"path": str(output)}, "inputs": [{"path": str(target)}]}}}}
         (host / "etc").mkdir(exist_ok=True)
         (host / "etc" / "config.spec.json").write_text(json.dumps(spec), encoding="utf-8")
 
         manager = host / "bin" / "config-remote.mjs"
         manager.write_text(
-            (ROOT / "build" / "runtime" / "compfuzor-runtime.mjs").read_text(),
+            (ROOT / "runtime" / "compfuzor-runtime.mjs").read_text(),
             encoding="utf-8",
         )
         manager.chmod(0o770)

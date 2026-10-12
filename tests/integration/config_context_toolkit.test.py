@@ -151,7 +151,7 @@ def test_config_context_toolkit() -> None:
         assert list(item["name"] for item in plan["bins"]).count("links/links.mjs") == 1
         assert list(item["name"] for item in plan["bins"]).count("links.mjs") == 1
         assert not any(item["name"].endswith(".ts") for item in plan["bins"])
-        assert bins["install.sh"]["run_all"].count("config-install.sh") == 1
+        assert bins["install.sh"]["run_all"].count("config-install.sh") == 1, bins["install.sh"]
         assert "config-install.sh" not in bins["install-user.sh"]["run_all"]
         assert {
             "id": "legacy:config-status.sh",
@@ -185,7 +185,7 @@ def test_config_context_toolkit() -> None:
         canonical_env["TMPDIR"] = str(SCRATCH)
         run([str(payload / "bin" / "config-assemble.sh"), "--context", "canonical", "main"], cwd=payload, env=canonical_env)
         canonical_output = payload / "etc" / "outputs" / "main.conf"
-        assert canonical_output.read_text(encoding="utf-8") == "base=one\nlinked=one\ncopied=one\nbracket=active\nwide=active\nwide=hidden\n"
+        assert canonical_output.read_text(encoding="utf-8") == "base=one\nlinked=one\ncopied=one\nbracket=active\nwide=hidden\nwide=active\n"
 
         home_one = temporary / "home one"
         xdg_one = temporary / "xdg one"

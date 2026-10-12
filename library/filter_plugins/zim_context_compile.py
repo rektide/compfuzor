@@ -32,7 +32,7 @@ def _mapping(value, label):
 
 
 @accept_args_markers
-def compile_zim_contexts(contexts, config_spec, default_context, etc, directory, bins_dir, name, existing_bins=None):
+def compile_zim_contexts(contexts, config_spec, default_context, etc, directory, bins_dir, name, existing_bins=None, config_spec_path=None):
     """Normalize ZIM_CONTEXTS and emit one generic install/status runtime."""
     contexts = _mapping(raw_copy_template_data(contexts), "ZIM_CONTEXTS")
     config_spec = _mapping(raw_copy_template_data(config_spec), "config spec")
@@ -134,6 +134,7 @@ def compile_zim_contexts(contexts, config_spec, default_context, etc, directory,
     ]
     spec = {
         "version": 2,
+        "configSpec": config_spec_path or posixpath.join(directory, "etc", "config.spec.json"),
         "defaultContext": default_context,
         "contexts": normalized,
         "canonical": {

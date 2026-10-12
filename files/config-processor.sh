@@ -1,6 +1,8 @@
 #!/bin/bash
 # Internal config leaf protocol and shared processor implementations.
 
+set -euo pipefail
+
 processor=${1:?processor identity is required}; shift
 spec=${CONFIG_SPEC:-"$DIR/etc/config.spec.json"}
 : "${CONFIG_TRANSACTION:?config processors are internal; use config-assemble.sh}"
@@ -22,6 +24,9 @@ expected=$(jq -r --arg config "$config" '.configs[$config].processor // empty' "
 [ "$expected" = "$processor" ] || { printf '%s does not use processor %s\n' "$config" "$processor" >&2; exit 2; }
 
 case "$processor" in
+  env|env-export|env-zsh)
+    exec python3 "$DIR/bin/config/env.py" "$processor"
+    ;;
   concat)
     : > "$CONFIG_CANDIDATE"
     while IFS=$'\t' read -r _kind _identity path _block; do cat "$path" >> "$CONFIG_CANDIDATE"; done < "$CONFIG_INPUTS_FILE"

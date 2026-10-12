@@ -1,4 +1,11 @@
 {% if item.env is not defined or item.env != False -%}
+{% if _ENV_CONFIG is defined -%}
+# Application contributions do not supply the command's execution identity.
+export DIR={{ DIR | quote }}
+[ -n "${ENV_BYPASS:-}" ] || [ ! -f "$DIR/env.export" ] || source "$DIR/env.export"
+source {{ (DIR ~ '/env.context') | quote }}
+{% else -%}
 [ -z "$DIR" ] && export DIR="{{DIR}}"
 [ -n "${ENV_BYPASS:-}" ] || [ ! -f "$DIR/env.export" ] || { command -v envdefault >/dev/null 2>&1 && source "$(command -v envdefault)" "$DIR/env.export" >/dev/null || source "$DIR/env.export"; }
+{% endif -%}
 {% endif -%}
