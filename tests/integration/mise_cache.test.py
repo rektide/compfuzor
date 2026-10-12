@@ -268,6 +268,23 @@ def test_mise_cache_bin() -> None:
         text = (payload2 / "bin" / "mise-cache.ts").read_text(encoding="utf-8")
         assert 'MISE2_CONFIG_DEFAULT = "' in text
         assert "MISE2_CONFIG_DEFAULT" in (payload2 / "bin" / "config-mise-cache.ts").read_text(encoding="utf-8")
+        # Shells must select the same config BEFORE zim-mise activates, not
+        # merely the maintenance bins. Exercise rendered nested Jinja + shell
+        # expansion, including spaces and explicit caller overrides.
+        module = payload2 / "etc" / "zim-modules" / "mise2-config" / "init.zsh"
+        fragment = payload2 / "etc" / "zim" / "zimenv" / "active" / "10-mise2-config.conf"
+        assert str(module.parent) in fragment.read_text()
+        assert "{{" not in module.read_text()
+        shell_env = {"HOME": str(temporary / "shell home"), "PATH": "/usr/bin:/bin"}
+        probe = 'source "$1"; print -r -- "$MISE_CONFIG_DIR"'
+        selected = run(["zsh", "-dfc", probe, "probe", str(module)], cwd=temporary, env=shell_env)
+        assert selected.stdout.strip() == f"{shell_env['HOME']}/.config/mise2/config"
+        for overrides, expected in (
+            ({"MISE2_CONFIG_DIR": "/custom mise2"}, "/custom mise2"),
+            ({"MISE_CONFIG_DIR": "/explicit mise", "MISE2_CONFIG_DIR": "/other"}, "/explicit mise"),
+        ):
+            selected = run(["zsh", "-dfc", probe, "probe", str(module)], cwd=temporary, env=shell_env | overrides)
+            assert selected.stdout.strip() == expected
         # Leave rendered files only when requested, for a separate tsgo pass.
         if os.environ.get("MISE_CACHE_RENDER_DIR"):
             import shutil

@@ -21,21 +21,31 @@
     #  ExecStart: "{{DIR}}/bin/mise-systemd-env.sh{{ ' --path' if mise_user_env_path|default(False)|bool else '' }}"
     #SYSTEMD_INSTALLS:
     #  WantedBy: default.target
-    # Zsh activation is owned by zim.opt.pb's zimenv channel. rektide/zim-mise
+    # Zsh activation is owned by zim2.opt.pb's zimenv channel. rektide/zim-mise
     # loads exactly once from ~/.zshenv: full activation for interactive shells,
     # shims only for non-interactive shells. Bash has no framework loader, so
     # its independent activation blocks remain here.
     ETC_FILES:
       - name: mise.bashrc
         content: |
+          export MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-${MISE2_CONFIG_DIR:-{{mise2_config_dir}}}}"
           eval "$(mise activate bash)"
       - name: mise.bash_profile
         content: |
+          export MISE_CONFIG_DIR="${MISE_CONFIG_DIR:-${MISE2_CONFIG_DIR:-{{mise2_config_dir}}}}"
           eval "$(mise activate bash --shims)"
     bash_rc: "$HOME/.config/mise2/bashrc"
     bash_profile: "$HOME/.config/mise2/bash_profile"
     mise2_zdotdir: "$HOME/.config/mise2/zdot"
     mise2_config_dir: "$HOME/.config/mise2/config"
+    # Import into the chosen Zim host before zim-mise (phase 20) activates.
+    # Without this contribution only the maintenance bins use mise2's config;
+    # a fresh interactive shell silently reads the ordinary mise config instead.
+    ZIM_MODULES:
+      - name: mise2-config
+        source: mise2-config.zsh
+        channel: zimenv
+        phase: 10
     # Literal (not ${VAR:-default}): this lands in the systemd EnvironmentFile
     # via ENV_LIST, and systemd does no shell expansion -- deferred syntax
     # reaches mise as a literal string and panics its settings parser.
