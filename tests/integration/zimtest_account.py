@@ -22,7 +22,7 @@ import time
 import urllib.request
 
 
-def shell_probe(home: Path, env: dict[str, str], interactive: bool, origin: str, proxy: str | None) -> None:
+def shell_probe(home: Path, env: dict[str, str], interactive: bool, origin: str, proxy: str, http: bool) -> None:
     probe = r'''
       [[ $MISE_CONFIG_DIR == $HOME/.config/mise2/config ]] || exit 21
       [[ $(mise settings get npm.package_manager) == pnpm ]] || exit 22
@@ -30,12 +30,15 @@ def shell_probe(home: Path, env: dict[str, str], interactive: bool, origin: str,
         (( ${+functions[_mise_hook]} )) || exit 23
         [[ $OPENCODE_SERVER_URL == $1 ]] || exit 24
         [[ $OPENCODE_SERVER_PORT == ${1##*:} ]] || exit 24
+        [[ $OPENCODE_PROXY_URL == $2 && $OPENCODE_ARGS == "--server $2" ]] || exit 32
         [[ -r $OPENCODE_PASSWORD_FILE && -n $OPENCODE_PASSWORD ]] || exit 25
         [[ $OPENCODE_PASSWORD == "$(<$OPENCODE_PASSWORD_FILE)" ]] || exit 26
         (( ! ${+functions[opencode]} )) || exit 27
         [[ -s $HOME/.cache/zim2/modules/zim-opencode/functions/_opencode ]] || exit 28
-        if [[ -n $2 ]]; then
-          opencode api --server "$2" get /api/info >/dev/null || exit 31
+        if [[ $3 == http ]]; then
+          # This endpoint exists only on the proxy: a plain client reaching it
+          # proves native environment routing, not merely origin reachability.
+          [[ $(opencode api get /_bus/health) == '{"ready":true}' ]] || exit 31
         fi
       else
         [[ :$PATH: == *:$HOME/.local/share/mise/shims:* ]] || exit 29
@@ -45,7 +48,7 @@ def shell_probe(home: Path, env: dict[str, str], interactive: bool, origin: str,
     '''
     master, slave = pty.openpty()
     process = subprocess.Popen(
-        ["zsh", "-lic" if interactive else "-lc", probe, "account-probe", origin, proxy or ""],
+        ["zsh", "-lic" if interactive else "-lc", probe, "account-probe", origin, proxy, "http" if http else ""],
         cwd=home, env=env, stdin=slave, stdout=slave, stderr=slave,
     )
     os.close(slave)
@@ -95,7 +98,7 @@ def main() -> None:
         "PATH": "/usr/local/bin:/usr/bin:/bin", "TERM": "xterm-256color",
     }
     for interactive in (False, True):
-        shell_probe(home, env, interactive, args.origin_url, args.proxy_url if args.http else None)
+        shell_probe(home, env, interactive, args.origin_url, args.proxy_url, args.http)
     for deployment, command in (("zim2-main", "status-zim.sh"), ("mise2-main", "status.sh")):
         result = subprocess.run(
             [str(home / ".local/opt" / deployment / "bin" / command)],

@@ -43,12 +43,13 @@ def render(root: Path, playbook: str, extra: dict | None = None) -> str:
 
 
 def test_rendering() -> None:
-    with tempfile.TemporaryDirectory(prefix="compfuzor-proxy-discovery-", dir="/home/rektide/tmp-opencode") as temporary:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-proxy-discovery-", dir="/tmp/opencode") as temporary:
         root = Path(temporary)
         default = render(root / "off", "opencode-bus-proxy.src.pb")
         assert 'BUS_PROXY_UPSTREAM="http://127.0.0.1:49373"' in default
         assert 'BUS_PROXY_LISTEN="127.0.0.1:49372"' in default
         assert "BUS_PROXY_SERVICE_FILE=" not in default
+        assert_proxy_shell(root / "off", "http://127.0.0.1:49372")
         cooperative = render(root / "coop", "opencode-bus-proxy.src.pb", {"OPENCODE_BUS_PROXY_DISCOVERY": True})
         assert f'BUS_PROXY_SERVICE_FILE="{root}/coop/state/service-local.json"' in cooperative
         assert 'BUS_PROXY_SERVICE_MODE="cooperate"' in cooperative
@@ -65,11 +66,36 @@ def test_rendering() -> None:
         assert 'BUS_PROXY_SERVICE_MODE="stomp"' in stomp
         assert 'BUS_PROXY_SERVICE_METADATA="false"' in stomp
         assert "BUS_PROXY_SERVICE_WATCH_HELPER=" not in stomp
+        assert_proxy_shell(root / "stomp", "http://127.0.0.1:53172")
+
+
+def test_origin_rendering() -> None:
+    with tempfile.TemporaryDirectory(prefix="compfuzor-origin-discovery-", dir="/tmp/opencode") as temporary:
+        root = Path(temporary)
         origin = render(root / "origin", "opencode.src.pb", {"OPENCODE_BUS_PROXY_DISCOVERY": True})
         assert 'OPENCODE_PROXY_URL="http://127.0.0.1:49372"' in origin
         assert 'OPENCODE_SERVICE_METADATA="true"' in origin
-        zim_env = root / "origin" / "etc-opt" / "opencode" / "zim-modules"
+        zim_env = root / "origin" / "etc-opt" / "opencode-git" / "zim-modules"
+        assert (zim_env / "opencode-client-args" / "init.zsh").is_file()
         assert not any("OPENCODE_PROXY_URL=" in item.read_text() for item in zim_env.rglob("*.zsh"))
+
+
+def assert_proxy_shell(root: Path, url: str) -> None:
+    etc = root / "etc-opt" / "opencode-bus-proxy-git"
+    module = etc / "zim-modules" / "opencode-bus-proxy-client-env" / "init.zsh"
+    fragment = etc / "zim" / "zimrc" / "active" / "56-opencode-bus-proxy-client-env.conf"
+    assert str(module.parent) in fragment.read_text()
+    body = '''
+      unset OPENCODE_PROXY_URL OPENCODE_ARGS
+      source "$1"
+      [[ $OPENCODE_PROXY_URL == $2 && $OPENCODE_ARGS == "--server $2" ]] || exit 10
+      (( ! ${+functions[opencode]} )) || exit 11
+      export OPENCODE_ARGS='--server http://explicit:1234'
+      source "$1"
+      [[ $OPENCODE_ARGS == '--server http://explicit:1234' ]] || exit 12
+    '''
+    result = subprocess.run(["zsh", "-dfc", body, "probe", str(module), url], text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
 
 
 def test_client_module_does_not_route_or_erase_user_functions() -> None:
@@ -89,4 +115,5 @@ def test_client_module_does_not_route_or_erase_user_functions() -> None:
 if __name__ == "__main__":
     test_client_module_does_not_route_or_erase_user_functions()
     test_rendering()
-    print("ok: opt-in native publisher/proxy environment, stomp, metadata, reused watcher, no shell routing or activation")
+    test_origin_rendering()
+    print("ok: native discovery configuration and explicit Zim proxy defaults; no shell wrapper or activation")

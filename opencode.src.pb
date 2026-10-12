@@ -548,11 +548,14 @@
       The local `opencode-client-args` ZIM module exports the credential for
       interactive clients. The deployed CLI also reads the
       `OPENCODE_PASSWORD_FILE` pointer itself; the export keeps dated
-      snapshot binaries that predate pointer support working. Routing needs
-      no environment: with the `--publish` registration active, clients
-      discover the server natively from service-local.json. Interactive
-      shells opened before the OPENCODE_ARGS removal may still carry a
-      stale export — `unset OPENCODE_ARGS` in them.
+      snapshot binaries that predate pointer support working. With the
+      `--publish` registration active in the same account, clients discover
+      the server natively from service-local.json. Alternatively, importing
+      opencode-bus-proxy.src.pb's Zim contribution sets native OPENCODE_ARGS
+      defaults so that shell account uses the proxy without typing --server.
+      This also works across accounts without copying discovery state.
+      Existing nonempty OPENCODE_ARGS is preserved by that contribution;
+      inspect old shell defaults before importing it.
 
       Native proxy discovery is opt-in: run both this playbook and
       opencode-bus-proxy.src.pb with `-e OPENCODE_BUS_PROXY_DISCOVERY=true`.
@@ -562,7 +565,8 @@
       `-e OPENCODE_BUS_PROXY_SERVICE_MODE=stomp` on the proxy playbook to
       reapply its contact after every origin publication. Metadata is
       default-on (OPENCODE_DISCOVERY_METADATA); routing is never globally
-      enabled merely by that default. No shell URL projection is required.
+      enabled merely by that default. Native discovery and the explicitly
+      imported proxy Zim defaults are independent routing paths.
       Re-source the client-env module in an old shell to remove its former
       proxy wrapper. Source support is not proof that a deployed binary has
       the new flags; composition/build/activation remain operator-gated.

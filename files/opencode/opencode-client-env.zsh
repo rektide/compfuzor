@@ -6,8 +6,9 @@
 # snapshot binaries that predate pointer support working. The secret
 # never reaches env or env.export files.
 #
-# Client routing needs no environment: the server's --publish
-# registration is discovered natively from service-local.json.
+# Same-account clients can discover the server's --publish registration.
+# The separately imported bus-proxy producer supplies native OPENCODE_ARGS
+# defaults for shell accounts selecting the proxy, without a wrapper.
 if [[ -z ${OPENCODE_PASSWORD:-} && -r ${OPENCODE_PASSWORD_FILE:-} ]]; then
   IFS= read -r OPENCODE_PASSWORD < "$OPENCODE_PASSWORD_FILE"
   export OPENCODE_PASSWORD

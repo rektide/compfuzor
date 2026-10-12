@@ -20,6 +20,14 @@
     SYSTEMD_SCOPE: user
     SYSTEMD_INSTALL: user
     SYSTEMD_ROOTS: [busProxyService]
+    # Explicitly importing this producer into a Zim host selects the proxy for
+    # that account's clients, including accounts without the server's native
+    # discovery record. The CLI consumes OPENCODE_ARGS itself; no shell wrapper.
+    ZIM_MODULES:
+      - name: opencode-bus-proxy-client-env
+        source: opencode-proxy-env.zsh
+        phase: 56
+        comment: Default OpenCode clients to this proxy after the origin credential module.
     ENV:
       # The origin: the opencode.src.pb primary, whose port authority is
       # OPENCODE_PRIMARY_PORT in vars/opencode.yaml.
@@ -52,6 +60,20 @@
       upgrades tunneled). Selective delivery additionally needs the client
       setting `experimental.session_streaming: true`; without it clients
       broadcast exactly as before.
+
+      Import this deployment's Zim contribution to default that shell account's
+      clients to the proxy:
+
+          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
+
+      New interactive shells export OPENCODE_PROXY_URL and native
+      OPENCODE_ARGS="--server <proxy URL>". Plain `opencode` and
+      `opencode api get /_bus/health` then use the proxy, even when the account
+      has no native discovery registration. Import opencode.src.pb's credential
+      contribution too and provision the intended server's password. Existing
+      nonempty OPENCODE_ARGS is preserved; explicit CLI --server/--standalone
+      overrides the default in builds carrying the native args support.
+      No shell function, alias, or service lifecycle action is installed.
 
       Opt in to ordinary native discovery (not a shell wrapper) by running
       this and opencode.src.pb with `-e OPENCODE_BUS_PROXY_DISCOVERY=true`.
