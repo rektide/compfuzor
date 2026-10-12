@@ -97,13 +97,18 @@ def assemble(deployment, environment, *, check=False):
     return run(args, env={**environment, "DIR": "/foreign-deployment"})
 
 
-def check_build_prerequisite(deployment, environment):
+def check_operation_prerequisites(deployment, environment):
     build = (deployment / "bin/build.sh").read_text()
     assert build.index('"$DIR/bin/build-proxy-env.sh"') < build.index('"$DIR/bin/build-rust.sh"')
+    install = (deployment / "bin/install-user.sh").read_text()
+    assert install.index('"$DIR/bin/install-proxy-env-user.sh"') < install.index('"$DIR/bin/install-systemd-user.sh"')
     projection = deployment / "etc/env-projections/proxy-service.env"
-    projection.unlink()
-    run([deployment / "bin/build-proxy-env.sh"], env={**environment, "DIR": "/foreign-deployment"})
-    assert projection.is_file()
+    # Exercise only the prerequisite helpers, never the aggregate installers:
+    # no unit activation or daemon build is allowed in this fixture.
+    for helper in ("build-proxy-env.sh", "install-proxy-env-user.sh"):
+        projection.unlink()
+        run([deployment / "bin" / helper], env={**environment, "DIR": "/foreign-deployment"})
+        assert projection.is_file()
 
 
 def exported(path, environment):
@@ -278,7 +283,7 @@ def main():
         assert values["RUST_COPY"] == "" and values["APP_LOCAL"] == "local" and values["DIR"] == str(deployment), {key: values.get(key) for key in ("DIR", "RUST_COPY", "APP_LOCAL")}
         values = command_environment(deployment, {**environment, "RUST_COPY": "", "ENV_BYPASS": "true", "DIR": "/foreign"})
         assert values["RUST_COPY"] == "" and values["DIR"] == str(deployment) and "APP_LOCAL" not in values
-        check_build_prerequisite(deployment, environment)
+        check_operation_prerequisites(deployment, environment)
         check_shell(deployment, environment, 49372)
         normal_zim_import(temporary, deployment, environment)
         # A retired optional contribution remains on disk, but exact service

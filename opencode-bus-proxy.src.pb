@@ -42,7 +42,7 @@
           else {'BUS_PROXY_CREDENTIAL': 'OPENCODE_PASSWORD'}) }}"
       60-proxy-client.env:
         OPENCODE_PROXY_URL: "{{_bus_proxy_url}}"
-    # Concrete build/import operations own their source-order prerequisites.
+    # Concrete build/install/import operations own their source-order prerequisites.
     # CONFIG has no candidate dependency DAG; do not make Zim read ENV's
     # uncommitted candidate or assume a prior render assembled it.
     BINS:
@@ -55,6 +55,15 @@
         basedir: False
         bypass: False
         run: True
+        content: 'exec {{ (BINS_DIR ~ "/config-assemble.sh") | quote }} --definition env --context canonical'
+      - name: install-proxy-env-user.sh
+        # Fresh user installs need the required EnvironmentFile before the
+        # units phase, independently of the later Zim import prerequisite.
+        scope: [user]
+        phase: identity
+        helpers: False
+        basedir: False
+        bypass: False
         content: 'exec {{ (BINS_DIR ~ "/config-assemble.sh") | quote }} --definition env --context canonical'
       - name: install-zimfw.sh
         early: '"$DIR/bin/config-assemble.sh" --definition env --context canonical'
@@ -130,7 +139,8 @@
           {{DIR}}/bin/config-assemble.sh --definition env --context canonical
           ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
 
-      Build/render assembles ENV before Rust; the normal importer also supplies
+      Build/render assembles ENV before Rust; normal install-user.sh assembles
+      ENV before installing units, and the normal importer also supplies
       its own prerequisite. With BINS_RUN_BYPASS=true the
       importer supplies the same prerequisite without building the daemon.
       This deployment contributes Zim material; it is not another Zim host.
