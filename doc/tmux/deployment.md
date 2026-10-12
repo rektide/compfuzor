@@ -7,7 +7,7 @@ status: verified
 generated: {by: 'model:openai/gpt-6-astra', at: 2026-10-12}
 sources:
   - resource: opencode://ses_ed1c3f231ffec43Dwg4C35l77Z
-    title: User-authorized deployment, canonical assembly drift correction, live save validation, and isolated restore verification
+    title: User deployment, stable assembly correction, save/restore verification, and the deployed Ahiru activation entry point
   - resource: /doc/tmux/README.md
     title: Manager receiver and separate plugin contribution contract
   - resource: /tests/integration/tmux_plugins.test.py
@@ -69,6 +69,21 @@ From inside the target tmux server:
 ```sh
 ~/.config/tmux-resurrect-main/bin/restore-session.sh
 ```
+
+## Apply configuration changes
+
+The deployed Ahiru host now owns a complete activation command:
+
+```sh
+/usr/local/src/tpm-ahiru-git/bin/apply-user.sh
+```
+
+It rebuilds the named CONFIG, ensures user installation, sources its own installed
+aggregate into the running tmux server, installs missing plugins, and initializes
+Ahiru. This command was exercised on the live user server; canonical CONFIG status
+was clean afterward, with automatic restoration still off and persistence keys
+still unbound. The integration test also verifies that fresh fragment settings are
+loaded before plugin-manager installation/initialization on an isolated server.
 
 Inspect configuration health:
 

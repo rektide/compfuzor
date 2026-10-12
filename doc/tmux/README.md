@@ -7,7 +7,7 @@ status: active
 generated: {by: 'model:openai/gpt-6-astra', at: 2026-10-12}
 sources:
   - resource: opencode://ses_ed1c3f231ffec43Dwg4C35l77Z
-    title: Separate persistence, implement shared remote CONFIG receivers, verify behavior, and clarify upgrade cleanup
+    title: Separate persistence, deploy shared CONFIG receivers, and add verified owner-managed Ahiru activation
   - resource: opencode://ses_ed1bfc279ffeymOQ2ei8Svllmx
     title: Independent integration review and identification of duplicate-declaration upgrade cases
   - resource: /doc/config/definitions.md
@@ -83,10 +83,8 @@ host=/usr/local/src/tpm-ahiru-git
 ~/.config/tmux-resurrect-main/bin/install-tmux.sh "$host"
 ~/.config/tmux-continuum-main/bin/install-tmux.sh "$host"
 
-# Inside tmux, source the root chosen by install-user.sh:
-tmux source-file ~/.tmux.conf
-# Use ~/.config/tmux/tmux.conf instead if that is your root (honoring XDG_CONFIG_HOME).
-ahiru-tpm install
+# Apply Ahiru's configuration and plugins to the running tmux server:
+"$host/bin/apply-user.sh"
 
 # Restore only when wanted, from inside a tmux session:
 ~/.config/tmux-resurrect-main/bin/restore-session.sh
@@ -95,6 +93,12 @@ ahiru-tpm install
 For TPM, select its deployment as `host`, then use **prefix + I** after sourcing
 the root to install plugins. `install-tmux.sh` registers configuration; plugin
 downloads remain with the selected manager.
+
+Ahiru's `apply-user.sh` is the complete activation entry point: it checks for a
+running tmux server, rebuilds its named CONFIG, ensures user installation, sources
+the installed aggregate, installs missing plugins, and runs `ahiru-tpm init`.
+Run it after changing or registering fragments; callers need only the deployment
+path. `install-user.sh` remains available for configuration installation alone.
 
 Administrative examples:
 
@@ -105,8 +109,8 @@ Administrative examples:
 "$host/bin/config-status.sh" --definition tmux
 ```
 
-Reinstalling a contributed fragment preserves its disabled state. Source the root
-to apply configuration changes to a running server; stopping an already-loaded
+Reinstalling a contributed fragment preserves its disabled state. With Ahiru, run
+`"$host/bin/apply-user.sh"` to apply configuration changes; stopping an already-loaded
 Continuum saver can be done explicitly with `tmux set -g @continuum-save-interval 0`.
 
 ## Existing Ahiru installations

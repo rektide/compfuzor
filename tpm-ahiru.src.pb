@@ -21,5 +21,18 @@
       - name: install-user.sh
         basedir: False
         src: ../tmux/install-manager.sh
+      - name: apply-user.sh
+        deployment_rooted: True
+        basedir: False
+        content: |
+          set -eu
+          # Check the target server before changing configuration.
+          tmux display-message -p '#{pid}' >/dev/null
+          "$DIR/bin/config-assemble.sh" --definition tmux --context canonical
+          "$DIR/bin/install-user.sh"
+          # Apply settings before Ahiru discovers, installs and initializes plugins.
+          tmux source-file "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/compfuzor/{{NAME}}/tmux-plugins.conf"
+          ahiru-tpm install
+          exec ahiru-tpm init
   tasks:
     - import_tasks: tasks/compfuzor.includes

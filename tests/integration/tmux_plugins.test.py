@@ -102,6 +102,28 @@ def test_receivers():
             assert "source-file" in custom.read_text()
             assert config.read_text() == root_before
 
+            if manager == "tpm-ahiru":
+                # Exercise the owner's activation command against real isolated
+                # tmux; stub only plugin fetching/init, observing loaded options.
+                fakebin = home / "fakebin"
+                fakebin.mkdir()
+                ahiru = fakebin / "ahiru-tpm"
+                ahiru.write_text('#!/bin/sh\nprintf "%s:" "$1" >> "$HOME/activation.log"\ntmux show-option -gqv @tmux-apply-probe >> "$HOME/activation.log"\n')
+                ahiru.chmod(0o755)
+                fragment = continuum / "etc/99-continuum.conf"
+                fragment.write_text(fragment.read_text() + "set -g @tmux-apply-probe 'fresh'\n")
+                socket = home / "tmux.sock"
+                command = ["tmux", "-S", socket]
+                run([*command, "-f", "/dev/null", "new-session", "-d", "-s", "apply", "sh"], home)
+                try:
+                    tmux_env = run([*command, "display-message", "-p", "#{socket_path},#{pid},0"], home).stdout.strip()
+                    run([host / "bin/apply-user.sh"], host, env={**environment,
+                        "TMUX": tmux_env, "PATH": str(fakebin) + os.pathsep + os.environ["PATH"]})
+                    assert (home / "activation.log").read_text() == "install:fresh\ninit:fresh\n"
+                    assert "@tmux-apply-probe" in installed.read_text()
+                finally:
+                    run([*command, "kill-server"], home)
+
         # A missing active tmux session must not invoke any restoration.
         environment = {key: value for key, value in os.environ.items() if key != "TMUX"}
         result = run([resurrect / "bin/restore-session.sh"], resurrect, env=environment, check=False)
