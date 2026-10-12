@@ -1,3 +1,17 @@
+---
+type: Index
+title: Configuration
+description: Reading map for shared CONFIG operations, independent definitions, native consumers, and deployment evidence.
+resource: /doc/config/README.md
+status: active
+modified: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
+sources:
+  - resource: opencode://ses_ed21877fbffeK90YzBIZKC1jHb
+    title: Add the independent CONFIG/env.d baseline and packaging exception; retain prior guide
+  - resource: /doc/config/definitions.md
+    title: Implemented complete-definition and ENV contribution interface
+---
+
 # Configuration
 
 Compfuzor compiles configuration declarations on the Ansible controller, then
@@ -6,6 +20,9 @@ configuration for a selected consumer context.
 
 ## Start here
 
+- [Independent CONFIGs and env.d](/doc/config/definitions.md) — complete named
+  definitions, separate normal ZIM ownership, bound remote fanout, and opt-in
+  literal application ENV; no proxy adoption or live cutover.
 - [General action audiences](/doc/actions/README.md) — opt-in `.mjs` action
   families with typed CONFIG/keybinding context binding and pre-effects admission;
   material placement and broader domain adoption remain separate decisions.
@@ -54,7 +71,7 @@ There are three implementation environments:
 |---|---|---:|
 | Ansible controller | Python declaration compilers such as `config_compile.py` | No |
 | Source/build checkout | TypeScript source and `pnpm build` / Vite+ | No |
-| Managed deployment | One built multicall `.mjs`, shell transaction/processors, specs, and stable command symlinks | Yes |
+| Managed deployment | One built multicall `.mjs`, shell transaction/processors, optional shared ENV Python reducer, specs, and stable command symlinks | Yes |
 
 `config_compile.py` is not a bundler and does not run on the managed machine.
 It normalizes YAML/Jinja declarations into data. Vite+ bundles the TypeScript
@@ -77,6 +94,8 @@ config-status.sh
 All six are symlinks through the CONFIG alias to the shared built multicall
 dispatcher. CONFIG still chooses the action from `$0`, resolves a context, and
 calls a focused internal operation.
+Complete definitions support `--definition ID` and small definition-bound
+composition/status envelopes; see [the baseline](/doc/config/definitions.md).
 The context defaults to `user`; a playbook may change `CONTEXT_DEFAULT` or a
 domain-specific default. Copy/link/assembly remain runtime options.
 

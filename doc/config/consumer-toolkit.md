@@ -1,4 +1,23 @@
+---
+type: Reference
+title: Consumer configuration toolkit
+description: Shared CONFIG context, assembly, input delivery, publication, ZIM, and status operations, with pointers to complete-definition extensions.
+resource: /doc/config/consumer-toolkit.md
+status: active
+modified: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
+sources:
+  - resource: opencode://ses_ed21877fbffeK90YzBIZKC1jHb
+    title: Add complete-definition/env.d pointer; prior toolkit account retained
+  - resource: /doc/config/definitions.md
+    title: Named definitions and opt-in ENV packaging extensions
+---
+
 # Consumer configuration toolkit
+
+The [complete-definition baseline](/doc/config/definitions.md) adds `--definition ID`,
+independent CONFIG packaging, separate normal ZIM ownership, and opt-in env.d.
+Operations below remain the shared implementation; definition envelopes do not
+multiply recipes, contexts, or engines.
 
 Compfuzor exposes CONFIG through six fixed action commands. Context, recipe,
 and copy/link choices are runtime selections; they are not multiplied into
