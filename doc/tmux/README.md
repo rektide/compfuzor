@@ -31,8 +31,9 @@ CONFIG definitions can coexist in that deployment.
 Select one plugin manager for a user's tmux configuration: loading both manager
 blocks would declare and initialize the same plugins twice.
 
-Fragments in `etc/tmux-plugins.d/*.conf` assemble in filename order into attributed
-blocks in `etc/tmux-plugins.conf`. The manager's `install-user.sh` publishes a link
+Fragments in `etc/tmux-plugins.d/*.conf` concatenate in filename order into the
+fully generated `etc/tmux-plugins.conf`. Source membership and provenance remain
+in CONFIG's input inventory. The manager's `install-user.sh` publishes a link
 under `$XDG_CONFIG_HOME/tmux/compfuzor/<NAME>/` (default `~/.config`) and adds a
 `source-file` block before the manager initialization at the end of the user's
 tmux config. Both managers can discover declarations through that explicit source.

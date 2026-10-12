@@ -72,6 +72,11 @@ def test_receivers():
             assert "set -g @tpm-parallel 'false'" in assembled
             assert config.read_text() == root_before  # remote only touches its receiver
             assert not list((host / "etc/other.d").iterdir())
+            # Whole generated aggregates must be stable on a fresh assembly;
+            # block-in-file used here previously accumulated blank separators.
+            run([host / "bin/config-status.sh", "--definition", "tmux", "--context", "canonical"], host)
+            run([host / "bin/config-assemble.sh", "--definition", "tmux", "--context", "canonical"], host)
+            assert installed.read_text() == assembled
 
             # Durable disabled membership survives producer reinstallation.
             remote = host / "bin/config-remote.mjs"

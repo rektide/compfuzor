@@ -7,8 +7,10 @@ CONFIG_DEFINITIONS:
     configs:
       tmux-plugins.conf:
         name: plugins
-        processor: block-in-file
-        block: {after: EOF}
+        # This aggregate is entirely generated; root tmux.conf blocks are
+        # managed separately. Rebuilding via block-in-file retains separator
+        # whitespace after removing old blocks, causing perpetual status drift.
+        processor: concat
         inputs:
           - glob: tmux-plugins.d/*.conf
             name: plugins
