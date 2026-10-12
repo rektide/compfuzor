@@ -39,7 +39,7 @@ def to_gid(arg):
     if isinstance(arg, NumberTypes):
         return arg
     try:
-        grp.getgrnam(arg).gr_gid
+        return grp.getgrnam(arg).gr_gid
     except:
         pass
     return -1
