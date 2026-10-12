@@ -91,6 +91,11 @@
     # explicit donor-admin or consumer-local import. `phase` is a name (core/prompt/tools/
     # completion/late) or a number 00-99 for fine placement between bands.
     ZIM_MODULES:
+      - name: user-bin
+        source: user-bin.zsh
+        channel: zimenv
+        phase: 25
+        comment: After mise activation (including its cached PATH), prefer the account's user-mode binaries in both shell modes.
       - name: emergency
         source: emergency.zsh
         phase: 99

@@ -3,7 +3,7 @@ type: Verification
 title: Fresh-account Zim2, Mise2 and OpenCode rehearsal
 description: Live zimtest results, reproducible activation, proxy-owned Zim routing defaults and remaining bootstrap gaps before deck.
 resource: /doc/config/zimtest-rehearsal.md
-status: verified-with-boundaries
+status: historical
 generated: {by: "model:openai/gpt-6-astra", at: "2026-10-12"}
 sources:
   - resource: "opencode://ses_ed2784f73ffeAAzhSikmZhbXAr"
@@ -28,6 +28,13 @@ verification:
 ---
 
 # Fresh-account rehearsal
+
+**Historical rehearsal, superseded by [zimtest's own native stack](/doc/config/zimtest-native-stack.md).**
+The shared-endpoint credential and OPENCODE_ARGS trial below have been replaced
+by ports 49473/49472, an independent account credential, two LoadCredential user
+units and native discovery. The earlier `disabled=true` interpretation was wrong
+and that setting has been unset. The sections below preserve the earlier work
+and its bootstrap findings rather than describe the current routing.
 
 `zimtest` (UID/GID **61019**, private home `/home/zimtest`, Zsh) is usable for
 shell testing. Both clean login modes pass; interactive shells load the OpenCode
