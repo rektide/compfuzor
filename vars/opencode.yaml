@@ -15,6 +15,8 @@
 # service's port.
 OPENCODE_PRIMARY_PORT: 49373
 OPENCODE_BUS_PROXY_PORT: 49372
+# Per-account source shared by the origin and proxy LoadCredential directives.
+OPENCODE_PRIMARY_PASSWORDS_DIR: "{{ansible_user_dir}}/.config/opencode/secrets"
 # Opt-in affects generated configuration only; neither playbook activates it.
 # New server-reg publishers use OPENCODE_PROXY_URL natively. On an older
 # publisher explicitly select stomp to reapply proxy routing after each write.

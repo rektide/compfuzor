@@ -33,11 +33,13 @@
           files: [60-proxy-client.env]
           format: env-export
     ENV_CONTRIBUTIONS:
-      50-proxy-service.env:
-        BUS_PROXY_UPSTREAM: "http://127.0.0.1:{{OPENCODE_PRIMARY_PORT}}"
-        BUS_PROXY_LISTEN: "{{_bus_proxy_listen}}"
-        # shared origin password: the opencode deployment's home-file view
-        BUS_PROXY_PASSWORD_FILE: "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"
+      # An explicit file override replaces the credential flag, rather than
+      # giving the daemon two mutually exclusive password sources.
+      50-proxy-service.env: "{{ {
+        'BUS_PROXY_UPSTREAM': 'http://127.0.0.1:' ~ OPENCODE_PRIMARY_PORT,
+        'BUS_PROXY_LISTEN': _bus_proxy_listen
+        } | combine({} if 'BUS_PROXY_PASSWORD_FILE' in (ENV_PRIO | default({}))
+          else {'BUS_PROXY_CREDENTIAL': 'OPENCODE_PASSWORD'}) }}"
       60-proxy-client.env:
         OPENCODE_PROXY_URL: "{{_bus_proxy_url}}"
     # Concrete build/import operations own their source-order prerequisites.
@@ -56,14 +58,13 @@
         content: 'exec {{ (BINS_DIR ~ "/config-assemble.sh") | quote }} --definition env --context canonical'
       - name: install-zimfw.sh
         early: '"$DIR/bin/config-assemble.sh" --definition env --context canonical'
-    # Explicitly importing this producer into a Zim host selects the proxy for
-    # that account's clients, including accounts without the server's native
-    # discovery record. The CLI consumes OPENCODE_ARGS itself; no shell wrapper.
+    # Endpoint metadata only. Native publication/discovery owns client routing.
+    # Keep the module identity so importing updates an older installed module.
     ZIM_MODULES:
       - name: opencode-bus-proxy-client-env
         source: opencode-proxy-env.zsh
         phase: 56
-        comment: Default OpenCode clients to this proxy after the origin credential module.
+        comment: Publish proxy endpoint metadata after the origin credential module.
     busProxyService:
       SYSTEMD_SERVICE: opencode-bus-proxy
       SYSTEMD_UNITS:
@@ -75,9 +76,10 @@
         # Required service-only CONFIG output, not the whole deployment ENV
         # or SYSTEMD_ENV (which publishes to the manager).
         EnvironmentFile: "{{ ETC }}/env-projections/proxy-service.env"
+        LoadCredential: "OPENCODE_PASSWORD:{{OPENCODE_PRIMARY_PASSWORDS_DIR}}/OPENCODE_PASSWORD"
         ExecStart: "{{GLOBAL_BINS_DIR}}/opencode-bus-proxy"
-        # missing credential = deployment prerequisite; fail loudly, no crash-loop
-        ExecStartPre: /bin/sh -c 'test -r "{{ansible_user_dir}}/.config/opencode/secrets/OPENCODE_PASSWORD"'
+        # Verify systemd's runtime copy without printing the credential.
+        ExecStartPre: /bin/sh -c 'test -r "$${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD"'
         Restart: always
     README: |
       # OpenCode bus proxy (user service)
@@ -91,19 +93,22 @@
       setting `experimental.session_streaming: true`; without it clients
       broadcast exactly as before.
 
-      Import this deployment's Zim contribution to default that shell account's
-      clients to the proxy:
+      Import this deployment's Zim contribution for endpoint metadata:
 
           ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
 
-      New interactive shells export OPENCODE_PROXY_URL and native
-      OPENCODE_ARGS="--server <proxy URL>". Plain `opencode` and
-      `opencode api get /_bus/health` then use the proxy, even when the account
-      has no native discovery registration. Import opencode.src.pb's credential
-      contribution too and provision the intended server's password. Existing
-      nonempty OPENCODE_ARGS is preserved; explicit CLI --server/--standalone
-      overrides the default in builds carrying the native args support.
-      No shell function, alias, or service lifecycle action is installed.
+      New interactive shells export OPENCODE_PROXY_URL as metadata only.
+      This module neither synthesizes nor clears OPENCODE_ARGS; deliberate
+      user settings remain untouched. Its stable module identity updates old
+      installed contributions in place on import. Native service discovery
+      supplies client routing. No shell function, alias, or service lifecycle
+      action is installed.
+
+      Both services load the account's shared password source at
+      `{{OPENCODE_PRIMARY_PASSWORDS_DIR}}/OPENCODE_PASSWORD` through systemd
+      LoadCredential. The proxy uses BUS_PROXY_CREDENTIAL=OPENCODE_PASSWORD
+      to read its private runtime copy under CREDENTIALS_DIRECTORY. An explicit
+      ENV_PRIO BUS_PROXY_PASSWORD_FILE replaces that default credential flag.
 
       ENV CONFIG assembles `etc/env.d/50-proxy-service.env` and the existing
       `99-local-priority.env` into `etc/env-projections/proxy-service.env`,
@@ -115,9 +120,9 @@
 
       The client module sources only the literal projection of
       `etc/env.d/60-proxy-client.env` when OPENCODE_PROXY_URL is empty/unset;
-      it then derives OPENCODE_ARGS from that effective runtime URL when args
-      are empty/unset. Neither daemon settings nor the full env.export are
-      sourced into the account. Both projections use the same authored
+      it does not turn that metadata into CLI arguments. Neither daemon
+      settings nor the full env.export are sourced into the account.
+      Both projections use the same authored
       listener/port defaults, not independently maintained endpoint copies.
       The normal Zim importer reassembles ENV before importing/rebuilding its
       host cache. Standalone assembly remains available for service config:
@@ -134,7 +139,12 @@
       Opt in to ordinary native discovery (not a shell wrapper) by running
       this and opencode.src.pb with `-e OPENCODE_BUS_PROXY_DISCOVERY=true`.
       Only the configured OPENCODE_DISCOVERY_FILE is contributed; no file
-      is written by the playbook. The daemon validates forwarded /api/info
+      is written by the playbook. The account's own origin started with
+      `--publish` creates its native record; no record-init command or separate
+      record maintainer is needed for an own-stack account. Use the same port
+      overrides on both playbooks: zimtest owns origin 49473 / proxy 49472,
+      while operator defaults remain origin 49373 / proxy 49372.
+      The daemon validates forwarded /api/info
       plus source health first, retains the origin PID/version/id/password,
       and adds public endpoint markup and its own contribution PID.
       Default mode is cooperate: the new server-reg publisher chooses its

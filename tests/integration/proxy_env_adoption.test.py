@@ -113,7 +113,7 @@ def exported(path, environment):
 
 def client(module, environment, setup="", *, check=True):
     # Start Zsh without startup profiles and inspect exported process ENV,
-    # proving native OPENCODE_ARGS rather than a shell alias/function wrapper.
+    # proving endpoint metadata does not synthesize CLI routing arguments.
     script = setup + '\nsource "$1" || exit $?\npython3 -c "import json,os;print(json.dumps(dict(os.environ)))"'
     result = run(["zsh", "-dfc", script, "zsh", module], env=environment, check=check)
     return json.loads(result.stdout) if check else result
@@ -129,7 +129,7 @@ def command_environment(deployment, environment):
     return json.loads(result.stdout)
 
 
-def check_projection(deployment, environment, primary, proxy, discovery, watcher):
+def check_projection(deployment, environment, primary, proxy, discovery, watcher, *, passwords_dir=None, password_file=None):
     etc = deployment / "etc"
     service = etc / "env-projections/proxy-service.env"
     client_export = etc / "env-projections/proxy-client.env.export"
@@ -141,9 +141,17 @@ def check_projection(deployment, environment, primary, proxy, discovery, watcher
     assert f"EnvironmentFile={service}" in unit and unit.count("EnvironmentFile=") == 1
     assert "Wants=opencode.service" in unit and "After=opencode.service" in unit
     assert "Restart=always" in unit and "ExecStartPre=/bin/sh" in unit
+    passwords_dir = passwords_dir or environment["HOME"] + "/.config/opencode/secrets"
+    assert f"LoadCredential=OPENCODE_PASSWORD:{passwords_dir}/OPENCODE_PASSWORD" in unit
+    assert 'test -r "$${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD"' in unit
     assert daemon["BUS_PROXY_UPSTREAM"] == f"http://127.0.0.1:{primary}"
     assert daemon["BUS_PROXY_LISTEN"] == f"127.0.0.1:{proxy}"
-    assert daemon["BUS_PROXY_PASSWORD_FILE"] == environment["HOME"] + "/.config/opencode/secrets/OPENCODE_PASSWORD"
+    if password_file is None:
+        assert daemon["BUS_PROXY_CREDENTIAL"] == "OPENCODE_PASSWORD"
+        assert "BUS_PROXY_PASSWORD_FILE" not in daemon
+    else:
+        assert daemon["BUS_PROXY_PASSWORD_FILE"] == password_file
+        assert "BUS_PROXY_CREDENTIAL" not in daemon
     assert daemon["KEEP"] == "seed"
     assert ("BUS_PROXY_SERVICE_FILE" in daemon) == discovery, (discovery, watcher, {key: value for key, value in daemon.items() if key.startswith("BUS_PROXY_")})
     assert ("BUS_PROXY_SERVICE_WATCH_HELPER" in daemon) == (discovery and watcher)
@@ -172,19 +180,19 @@ def check_shell(deployment, environment, proxy):
     run(["zsh", "-dfn", deployment / "etc/env-projections/proxy-client.env.export"], env=environment)
     default = f"http://127.0.0.1:{proxy}"
     for setup, url, args in (
-        ("", default, "--server " + default),
-        ('OPENCODE_PROXY_URL=""; OPENCODE_ARGS=""', default, "--server " + default),
-        ('OPENCODE_PROXY_URL=http://operator.test:8080', "http://operator.test:8080", "--server http://operator.test:8080"),
+        ("", default, None),
+        ('OPENCODE_PROXY_URL=""; export OPENCODE_ARGS=""', default, ""),
+        ('OPENCODE_PROXY_URL=http://operator.test:8080', "http://operator.test:8080", None),
         ('OPENCODE_PROXY_URL=http://operator.test:8080; export OPENCODE_ARGS="--standalone --continue"', "http://operator.test:8080", "--standalone --continue"),
         ('export OPENCODE_ARGS="--server http://explicit.test:9090"', default, "--server http://explicit.test:9090"),
     ):
         values = client(module, environment, setup)
-        assert values["OPENCODE_PROXY_URL"] == url and values["OPENCODE_ARGS"] == args
+        assert values["OPENCODE_PROXY_URL"] == url and values.get("OPENCODE_ARGS") == args
         assert not any(key.startswith("BUS_PROXY_") for key in values)
         assert "DIR" not in values and "NAME" not in values
     # Source-time defaults are not a managed existing-shell refresh.
     values = client(module, environment, f'source {shlex.quote(str(module))}; OPENCODE_PROXY_URL=http://later.test:8080')
-    assert values["OPENCODE_PROXY_URL"] == "http://later.test:8080" and values["OPENCODE_ARGS"] == "--server " + default
+    assert values["OPENCODE_PROXY_URL"] == "http://later.test:8080" and "OPENCODE_ARGS" not in values
     projection = deployment / "etc/env-projections/proxy-client.env.export"
     retained = projection.read_bytes()
     projection.unlink()
@@ -192,7 +200,7 @@ def check_shell(deployment, environment, proxy):
     assert missing.returncode and "no such file" in missing.stderr.lower()
     # A deliberate URL override needs no default, so absent projection is inert.
     values = client(module, environment, "OPENCODE_PROXY_URL=http://operator.test:8080")
-    assert values["OPENCODE_ARGS"] == "--server http://operator.test:8080"
+    assert values["OPENCODE_PROXY_URL"] == "http://operator.test:8080" and "OPENCODE_ARGS" not in values
     projection.write_bytes(retained)
     return module
 
@@ -222,6 +230,15 @@ def normal_zim_import(temporary, producer, environment):
     runtime_env = {**environment, "CONFIG_BLOCK_IN_FILE": str(wrapper)}
     run([host / "bin/config-assemble.sh", "--definition", "zim", "--context", "canonical"], env=runtime_env)
     run([host / "bin/install-zim.sh"], env=runtime_env)
+    # Reproduce an already-imported old contribution, then replace it under
+    # the same module/fragment identity with the current metadata-only source.
+    module = producer / "etc/zim-modules/opencode-bus-proxy-client-env/init.zsh"
+    current_module = module.read_bytes()
+    module.write_text('export OPENCODE_ARGS="--server http://old-proxy.test:49372"\n')
+    run([producer / "bin/install-zimfw.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host)})
+    cache = Path(environment["HOME"]) / ".cache/zim/init.zsh"
+    assert client(cache, runtime_env)["OPENCODE_ARGS"] == "--server http://old-proxy.test:49372"
+    module.write_bytes(current_module)
     # The producer's authored ordinary ENV contains a deliberately wrong host.
     # Its generated helper must preserve this explicit invocation override.
     projection = producer / "etc/env-projections/proxy-client.env.export"
@@ -230,10 +247,9 @@ def normal_zim_import(temporary, producer, environment):
     assert projection.is_file()
     imported = Path(environment["XDG_CONFIG_HOME"]) / "zsh/zimrc.d/56-opencode-bus-proxy-client-env.conf"
     assert imported.is_symlink() and imported.resolve().is_relative_to(producer)
-    cache = Path(environment["HOME"]) / ".cache/zim/init.zsh"
     assert str(producer / "etc/zim-modules/opencode-bus-proxy-client-env/init.zsh") in cache.read_text()
     values = client(cache, runtime_env)
-    assert values["OPENCODE_ARGS"] == "--server http://127.0.0.1:49372"
+    assert values["OPENCODE_PROXY_URL"] == "http://127.0.0.1:49372" and "OPENCODE_ARGS" not in values
     assert not any(key.startswith("BUS_PROXY_") for key in values)
     run([producer / "bin/install-zimfw.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host)})
     assert imported.is_symlink()
@@ -269,18 +285,28 @@ def main():
         # and client membership never pulls it back into either consumer.
         stale = deployment / "etc/env.d/70-retired-watch.env"
         stale.write_text('BUS_PROXY_STALE="retained"\nBUS_PROXY_SERVICE_WATCH_HELPER="/obsolete"\n')
-        custom = {**overrides, "OPENCODE_PRIMARY_PORT": 51001, "OPENCODE_BUS_PROXY_PORT": 51000,
+        custom = {**overrides, "OPENCODE_PRIMARY_PORT": 49473, "OPENCODE_BUS_PROXY_PORT": 49472,
                   "OPENCODE_BUS_PROXY_DISCOVERY": False, "OPENCODE_BUS_PROXY_EFFECT_WATCH": False}
         render(temporary, deployment, ROOT / "opencode-bus-proxy.src.pb", environment, custom)
         assemble(deployment, environment)
-        service, projection = check_projection(deployment, environment, 51001, 51000, False, False)
-        check_shell(deployment, environment, 51000)
+        service, projection = check_projection(deployment, environment, 49473, 49472, False, False)
+        check_shell(deployment, environment, 49472)
         assert stale.exists() and "BUS_PROXY_STALE" in (deployment / "env.export").read_text()
         before = (service.read_bytes(), projection.read_bytes())
         render(temporary, deployment, ROOT / "opencode-bus-proxy.src.pb", environment, custom)
         assemble(deployment, environment)
         assemble(deployment, environment, check=True)
         assert before == (service.read_bytes(), projection.read_bytes())
+        # Deliberate file overrides keep arbitrary priority extras and suppress
+        # the mutually exclusive credential flag. The shared source is tunable.
+        passwords_dir = str(temporary / "account-secrets")
+        password_file = str(temporary / "explicit-password")
+        render(temporary, deployment, ROOT / "opencode-bus-proxy.src.pb", environment,
+               {**custom, "OPENCODE_PRIMARY_PASSWORDS_DIR": passwords_dir,
+                "ENV_PRIO": {"KEEP": "seed", "BUS_PROXY_PASSWORD_FILE": password_file}})
+        assemble(deployment, environment)
+        check_projection(deployment, environment, 49473, 49472, False, False,
+                         passwords_dir=passwords_dir, password_file=password_file)
     print("ok: real proxy ENV adoption, separated projections, shell policy, and normal Zim import")
 
 
