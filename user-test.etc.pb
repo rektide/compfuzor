@@ -29,8 +29,8 @@
           # Create throwaway shell users in a high UID/GID band (default
           # 61000-61199, above login.defs UID_MAX/GID_MAX=60000) with a
           # matching per-user group, plus a passwordless operator->user sudo
-          # grant. Idempotent: existing users are left untouched, grants
-          # refresh to the current operator.
+          # grant. Existing users must have matching UID/GID in the test band;
+          # their account settings stay untouched and grants refresh.
           set -euo pipefail
 
           users=("$@")
@@ -47,17 +47,46 @@
           shell=${USER_TEST_SHELL:-/usr/bin/zsh}
           operator=${USER_TEST_OPERATOR:-${SUDO_USER:-rektide}}
 
-          for name in "${users[@]}"; do
-            # Stable per-name uid inside the band; walk forward on collisions.
-            uid=$(( base + ($(printf '%s' "$name" | cksum | cut -d' ' -f1) % span) ))
-            while getent passwd "$uid" >/dev/null 2>&1 || getent group "$uid" >/dev/null 2>&1; do
-              uid=$(( uid + 1 ))
-            done
+          if ! [[ "$base" =~ ^[1-9][0-9]{0,9}$ && "$span" =~ ^[1-9][0-9]{0,9}$ ]] ||
+             (( base <= 60000 || base + span > 4294967295 )); then
+            echo "user-test: invalid test UID band (must be above 60000)" >&2
+            exit 1
+          fi
+          for name in "$operator" "${users[@]}"; do
+            if ! [[ "$name" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+              echo "user-test: unsafe account name: $name" >&2
+              exit 1
+            fi
+          done
 
-            if getent passwd "$name" >/dev/null; then
+          for name in "${users[@]}"; do
+            if ent=$(getent passwd "$name"); then
+              IFS=: read -r _ _ uid gid _ _ _ <<<"$ent"
+              group_gid=$(getent group "$name" | cut -d: -f3) || group_gid=
+              if (( uid < base || uid >= base + span )) ||
+                 [ "$uid" != "$gid" ] || [ "$gid" != "$group_gid" ]; then
+                echo "user-test: refusing existing non-test account $name" >&2
+                exit 1
+              fi
               echo "user-test: $name exists ($(id "$name"))"
             else
-              getent group "$name" >/dev/null || groupadd -g "$uid" "$name"
+              if getent group "$name" >/dev/null; then
+                echo "user-test: refusing existing group $name without a matching test user" >&2
+                exit 1
+              fi
+              # Stable start, wrapping within the band; visit each slot once.
+              start=$(( $(printf '%s' "$name" | cksum | cut -d' ' -f1) % span ))
+              for (( attempt=0; attempt<span; attempt++ )); do
+                uid=$(( base + (start + attempt) % span ))
+                if ! getent passwd "$uid" >/dev/null 2>&1 && ! getent group "$uid" >/dev/null 2>&1; then
+                  break
+                fi
+              done
+              if (( attempt == span )); then
+                echo "user-test: test UID/GID band exhausted" >&2
+                exit 1
+              fi
+              groupadd -g "$uid" "$name"
               useradd -m -u "$uid" -g "$name" -s "$shell" "$name"
               echo "user-test: created $name (uid/gid $uid, shell $shell)"
             fi
@@ -68,9 +97,14 @@
             if [ -f "$sudoers" ] && [ "$(cat "$sudoers")" = "$entry" ]; then
               echo "user-test: sudo grant $operator -> $name already current"
             else
-              printf '%s\n' "$entry" >"$sudoers"
-              chmod 0440 "$sudoers"
-              visudo -cf "$sudoers" >/dev/null
+              # Dot keeps the temporary file out of sudoers.d's include set.
+              pending=$(mktemp /etc/sudoers.d/.61-user-test-XXXXXX)
+              trap 'rm -f -- "$pending"' EXIT
+              printf '%s\n' "$entry" >"$pending"
+              chmod 0440 "$pending"
+              visudo -cf "$pending" >/dev/null
+              mv -f -- "$pending" "$sudoers"
+              trap - EXIT
               echo "user-test: granted $operator passwordless sudo to $name"
             fi
           done
@@ -92,6 +126,10 @@
           fi
 
           for name in "${users[@]}"; do
+            if ! [[ "$name" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+              echo "user-test: unsafe account name: $name" >&2
+              exit 1
+            fi
             echo "== $name =="
             if ! ent=$(getent passwd "$name"); then
               echo "user: absent"
@@ -112,7 +150,7 @@
             fi
           done
       - name: user-remove.sh
-        vars: [USER_TEST_USERS]
+        vars: [USER_TEST_BASE_UID, USER_TEST_UID_SPAN, USER_TEST_USERS]
         content: |
           # Remove test users (home + mail spool) and their sudo grants.
           # Manual-only counterpart to user-add.sh.
@@ -127,14 +165,40 @@
             exit 0
           fi
 
+          base=${USER_TEST_BASE_UID:-61000}
+          span=${USER_TEST_UID_SPAN:-200}
+          if ! [[ "$base" =~ ^[1-9][0-9]{0,9}$ && "$span" =~ ^[1-9][0-9]{0,9}$ ]] ||
+             (( base <= 60000 || base + span > 4294967295 )); then
+            echo "user-test: invalid test UID band (must be above 60000)" >&2
+            exit 1
+          fi
           for name in "${users[@]}"; do
-            if getent passwd "$name" >/dev/null; then
+            if ! [[ "$name" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]; then
+              echo "user-test: unsafe account name: $name" >&2
+              exit 1
+            fi
+          done
+
+          for name in "${users[@]}"; do
+            if ent=$(getent passwd "$name"); then
+              IFS=: read -r _ _ uid gid _ _ _ <<<"$ent"
+              group_gid=$(getent group "$name" | cut -d: -f3) || group_gid=
+              if (( uid < base || uid >= base + span )) ||
+                 [ "$uid" != "$gid" ] || [ "$gid" != "$group_gid" ]; then
+                echo "user-test: refusing existing non-test account $name" >&2
+                exit 1
+              fi
               userdel -r "$name"
-              groupdel "$name" 2>/dev/null || true
+              # userdel may already have removed the private group.
+              if ent=$(getent group "$name"); then
+                group_gid=$(cut -d: -f3 <<<"$ent")
+                if [ "$group_gid" = "$gid" ]; then
+                  groupdel "$name"
+                fi
+              fi
               echo "user-test: removed user $name"
             else
               echo "user-test: user $name absent"
-              groupdel "$name" 2>/dev/null && echo "user-test: removed leftover group $name" || true
             fi
             sudoers=/etc/sudoers.d/61-user-test-$name
             if [ -f "$sudoers" ]; then
