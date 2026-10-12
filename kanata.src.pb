@@ -14,6 +14,18 @@
     # BlueTurn run this binary -- cutover0.glm53.md. The checkout (a
     # worktree of ~/archive/jtroo/kanata) doubles as local documentation
     # for the built release -- docs/ + cfg tests live in the tree.
+    #
+    # PATCHED AHEAD OF UPSTREAM (2026-10-13): the deployed binary
+    # carries files/kanata/event-order-total-order.patch -- upstream's
+    # event-reorder sort (introduced by #1931) used a comparator that
+    # is not a total order, and Rust's sort panicked on a real typing
+    # burst, killing the service (see kanata.srv.pb's Restart note).
+    # The patch reorders within same-press-status runs only; all 9
+    # upstream collect_and_sort_events tests pass. ansible's git lane
+    # resets this checkout to origin/HEAD on update, silently dropping
+    # local commits -- reapply the patch and rebuild after any
+    # kanata.src.pb run until upstream merges a fix (then reference
+    # it via PR_PATCHES instead).
     RUST: True
     RUST_BIN: kanata
     # explicit tcp_server (also in default features): Debian 1.9.0+ds-1

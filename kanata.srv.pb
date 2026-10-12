@@ -63,10 +63,13 @@
     # mirrors the retired /usr/lib/systemd/system/kanata.service
     # (same hardening schema as the helpers), with the static user/
     # group + input access spelled out and ExecStart swapped to the
-    # source binary. Restart: "no" is quoted so the unit carries an
-    # explicit Restart=no (a bare YAML no is False, which the unit
-    # template drops); CapabilityBoundingSet: "" renders the packaged
-    # unit's empty bounding set (only literal False is skipped).
+    # source binary. Restart departed from the packaged unit on
+    # 2026-10-13: kanata's event-reorder sort (upstream #1931 code,
+    # see files/kanata/) panicked on a real typing burst and, with
+    # the packaged Restart=no, left caps remapping dead for two
+    # days. on-failure turns that class of crash into a ~5s gap.
+    # CapabilityBoundingSet: "" renders the packaged unit's empty
+    # bounding set (only literal False is skipped).
     SYSTEMD_UNITS:
       Description: Kanata keyboard remapper
       Documentation: https://github.com/jtroo/kanata
@@ -85,7 +88,8 @@
       # old service is still running must not authorize the scoped dial grab.
       RuntimeDirectory: "{{ 'kanata-dial-publisher' if KANATA_DIAL_ENABLED | bool else false }}"
       RuntimeDirectoryMode: "{{ '0755' if KANATA_DIAL_ENABLED | bool else false }}"
-      Restart: "no"
+      Restart: on-failure
+      RestartSec: 5
       CapabilityBoundingSet: ""
       DeviceAllow:
         - /dev/uinput rw

@@ -1,0 +1,66 @@
+diff --git a/src/kanata/mod.rs b/src/kanata/mod.rs
+index 39d311f..d410d53 100644
+--- a/src/kanata/mod.rs
++++ b/src/kanata/mod.rs
+@@ -21,37 +21,33 @@ fn collect_and_sort_events(
+     }
+     if events.len() > 1 {
+         log::debug!("collected {} events, reordering", events.len());
+-        events.sort_by(|a, b| {
+-            let a_is_mod = a.code.is_modifier();
+-            let b_is_mod = b.code.is_modifier();
+-            // Same modifier status: preserve original order
+-            if a_is_mod == b_is_mod {
+-                return std::cmp::Ordering::Equal;
+-            }
+-            let a_is_press = matches!(a.value, KeyValue::Press | KeyValue::Repeat);
+-            let b_is_press = matches!(b.value, KeyValue::Press | KeyValue::Repeat);
+-            // Different event types (press vs release): preserve original order
+-            // to maintain valid total ordering
+-            if a_is_press != b_is_press {
+-                return std::cmp::Ordering::Equal;
+-            }
+-            // Same event type, different modifier status: reorder
+-            if a_is_press {
+-                // Press/Repeat: modifiers first
+-                if a_is_mod {
+-                    std::cmp::Ordering::Less
++        // Reorder only within maximal runs of equal press/release status;
++        // never move events across a press/release boundary (the
++        // interleaving tests document that as intended behavior).
++        // Within a run, modifier presses go first and modifier releases
++        // go last. This replaces a whole-batch sort_by whose comparator
++        // returned Equal for cross-boundary pairs while ordering within
++        // class -- not a total order, so Rust's sort panicked on some
++        // batches with "user-provided comparison function does not
++        // correctly implement a total order". Per-run bool keys are
++        // trivially consistent; the stable sort keeps arrival order
++        // within each class.
++        let is_press = |ev: &KeyEvent| matches!(ev.value, KeyValue::Press | KeyValue::Repeat);
++        let mut start = 0;
++        while start < events.len() {
++            let mut end = start + 1;
++            while end < events.len() && is_press(&events[end]) == is_press(&events[start]) {
++                end += 1;
++            }
++            if end - start > 1 {
++                if is_press(&events[start]) {
++                    events[start..end].sort_by_key(|ev| !ev.code.is_modifier());
+                 } else {
+-                    std::cmp::Ordering::Greater
+-                }
+-            } else {
+-                // Release: modifiers last
+-                if a_is_mod {
+-                    std::cmp::Ordering::Greater
+-                } else {
+-                    std::cmp::Ordering::Less
++                    events[start..end].sort_by_key(|ev| ev.code.is_modifier());
+                 }
+             }
+-        });
++            start = end;
++        }
+         log::debug!("reordered: {:?}", events);
+     }
+ }
