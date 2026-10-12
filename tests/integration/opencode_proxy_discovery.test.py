@@ -27,7 +27,8 @@ def render(root: Path, playbook: str, extra: dict | None = None) -> str:
         **(extra or {}),
     }
     HARNESS["render"](root, deployment, ROOT / playbook, environment, settings)
-    HARNESS["assemble"](deployment, environment)
+    if "bus-proxy" in playbook:
+        HARNESS["assemble"](deployment, environment)
     assert not (root / "state" / "service-local.json").exists(), "playbook must not publish runtime state"
     output = deployment / "etc/env-projections/proxy-service.env" if "bus-proxy" in playbook else deployment / "env"
     return output.read_text(encoding="utf-8")
@@ -107,7 +108,7 @@ def test_client_module_does_not_route_or_erase_user_functions() -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--proxy-only", action="store_true", help="omit the independent origin render (currently blocked by NPM lazy-subsystem evaluation)")
+    parser.add_argument("--proxy-only", action="store_true", help="omit the independent origin render")
     args = parser.parse_args()
     test_client_module_does_not_route_or_erase_user_functions()
     test_rendering()
