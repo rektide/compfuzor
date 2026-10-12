@@ -16,6 +16,10 @@ sources:
 - [FX's recovered-docs survey](/design/runtime-direction/docs-survey0.glm53fx.md):
   chronology, adoption meanings, prior limits, implementation evidence, and open
   decisions. Start here to navigate the broader design corpus.
+- [FX's reset-recovery report](/design/runtime-direction/recovery0.glm53fx.md):
+  the ambitious CFR reset reconstructed through Oct 12 — human direction vs
+  agent proposals, experiments and rejections, built-since mapping, unresolved
+  questions, and the prioritized handoff for a fresh assessment.
 
 ## Latest direction and constraints
 
