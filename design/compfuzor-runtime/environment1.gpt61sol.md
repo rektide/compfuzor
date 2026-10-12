@@ -12,6 +12,10 @@ sources:
     title: Parent's direction and recorded human intent; proposal, not accepted schema
   - resource: /design/fuzings/proxy0.gpt61sol.md
     title: Completed selective service/client adoption and source-time-default limitations
+  - resource: /design/fuzings/contract1.gpt6a.md#zim-consumes-env-it-does-not-own-all-env
+    title: Earlier native ENV/Zim relationship and shell-refresh requirement, read at its managed-default discussion
+  - resource: /doc/config/zimtest-rehearsal.md
+    title: Separate reported fresh-account source-time routing proof, not evidence of managed refresh
   - resource: /doc/config/definitions.md
     title: Actual complete CONFIG bindings, exact projections, literal grammar, and context boundary
   - resource: /design/runtime-direction/index.md
@@ -24,10 +28,12 @@ sources:
     title: Actual assignments parser and ordered dictionary reduction imported by the probe
   - resource: /library/filter_plugins/env_compile.py
     title: Exact-file projection authoring and independent ENV CONFIG generation
+  - resource: /library/filter_plugins/config_compile.py
+    title: Derived recipe-name function checked against the proxy export output
   - resource: /files/config/context.ts
     title: Existing named-recipe and context-path binding to reuse rather than replace
   - resource: /files/config-run.sh
-    title: Existing ordered input manifest, processor boundary, and publication-only worker semantics
+    title: Existing input manifest, processor boundary, and prepare/check/stdout versus publication semantics
   - resource: /opencode-bus-proxy.src.pb
     title: Actual separate service/client files and native Zim module binding
   - resource: /files/opencode-bus-proxy/opencode-proxy-env.zsh
@@ -125,6 +131,12 @@ ordered `dict.update` reduction. Dollar expressions remain literal data. No seco
 dotenv grammar, shell eval, new ENV_CONFIG format or assembly transaction is needed.
 Production should expose a read-only structured reducer from that same module;
 only the first exact-file path is required, not a new general glob enumerator.
+
+This is a **current selected-input observation**, not proof of publication of the
+existing env-export artifact or its native validation hooks. Invalid/missing input
+fails without mutating the shell. For the first apply slice, reject recipes with
+custom validation/transaction hooks rather than silently bypass them. Multiple
+files are observed in order, not claimed as one filesystem-atomic source revision.
 
 An applied managed record retains the relevant literal value, winning source
 path/digest, and last applied value. A derived record retains its domain identity
@@ -252,8 +264,10 @@ parent shell's receipt merely because a child was started or exited successfully
 | **Selected view + pure resolver + explicit proxy refresh** | Proves the user's retained-default case without broad runtime migration; recommended |
 
 In the desired shared init, load an `EnvironmentView(binding)` snapshot into run
-data, allow declared init adjustments, then resolve an immutable view at the
-consuming operation's revision. Native services/children receive explicit values;
+data. Keep authored defaults immutable; declared init adjustments change scoped
+observations/intents/candidates with writer provenance, not those retained source
+facts. Resolve an immutable effective view at the consuming operation's revision.
+Native services/children receive explicit values;
 do not overwrite global process.env or make all operations use one universal
 merged Environment field. A later workflow can record snapshot/plan results and
 update run data outside cached Activity bodies, as draft2 requires. No new Effect
@@ -266,6 +280,7 @@ environment module and one explicit proxy refresh adapter, with these bounds:
    recipe*. Extend `files/config-env.py` with a structured read-only snapshot
    function/mode sharing its reducer. Reject unsupported recipes; no whole-env
    fallback, new authored selection map or installation/publication side effects.
+   Limit first apply to literal exact-file recipes without custom validation hooks.
 2. Implement the pure TypeScript decision/plan/ack contract with boundary validation
    and cloned/immutable snapshots. Keep the OpenCode URL→args function domain-owned.
    Support pin/reset, held-untracked state, missing-source errors and removed-retained
@@ -308,6 +323,11 @@ explicit-env Node child plus isolated `zsh -f`. The shell exercises A→B, unexp
 URL edits, literal quoting, no receipt export, stale args rejection and readonly
 preflight. Expected stale/unsupported diagnostics are test outcomes, not failures.
 
+The existing Zim module is still a separate writer: re-sourcing it can re-default
+an empty/unset value. Explicit refresh is not continuous protection against later
+legacy sourcing or arbitrary shell edits. Eventual adoption must replace that
+defaulting path, not double-run it and claim coordinated ownership.
+
 Not proven: generated-spec admission/deployment delivery, source line-level loser
 history, generic shell attributes, multi-owner arbitration, signal-safe rollback,
 secret persistence, automatic startup adoption, or durable Effect replay. Prior
@@ -320,6 +340,12 @@ systemd state, client/pane, daemon build, ticket or live deployment changed.
   narrows storage, removal policy and first adoption order with concrete evidence.
 - [Completed proxy adoption](../fuzings/proxy0.gpt61sol.md): implemented native
   contribution separation; this wave targets its explicitly unimplemented refresh.
+- [Fresh-account rehearsal](../../doc/config/zimtest-rehearsal.md#what-the-port-proof-establishes):
+  reports actual new-shell/native routing; useful adoption evidence, but neither
+  a retained-default receipt nor proof of existing-shell refresh. Not rerun here.
+- [Native ENV/Zim relationship](../fuzings/contract1.gpt6a.md): earlier managed
+  refresh requirement survives; its shell-activation responsibility is split here
+  into CFR decisions and a native shell application adapter, without fuze enrollment.
 - [CONFIG definitions](../../doc/config/definitions.md#literal-grammar-and-projections):
   owns actual selection/grammar; this proposal adds a view, not another assembly owner.
 - [Shared init/run data](effect-draft2.gpt6a.md#4-shared-init-is-an-extensible-pipeline):
