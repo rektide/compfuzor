@@ -1,3 +1,14 @@
+---
+type: Index
+title: Runtime direction and resumption
+resource: /design/runtime-direction/index.md
+status: draft
+generated: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
+sources:
+  - resource: opencode://ses_ed1977ea9ffeC1qwSdlWJr88V4
+    title: tidy-cabin — connect independent selected-environment findings and prototype to the runtime reading map
+---
+
 # Runtime direction and resumption
 
 ## Reading guide
@@ -12,6 +23,10 @@
   post-proxy direction for cfr: exact env selection, findable defaults, and
   managed/local-change comparison; distinguishes implemented projections from
   proposed live-shell refresh.
+- [Selected view and live-shell receipt probe](/design/compfuzor-runtime/environment1.gpt61sol.md):
+  independent follow-up with executable proxy cases; narrows the first CFR slice
+  to selected-default inspection, pure resolution, and explicit nonregistered
+  shell apply, without machine-wide history or broad runtime migration.
 - [Native contributions and collaborative pipelines — draft2](/design/compfuzor-runtime/effect-draft2.gpt6a.md):
   latest synthesis: annotated native exports, default directory discovery,
   extensible init, mutable typed run data, stage ordering and durable history.
