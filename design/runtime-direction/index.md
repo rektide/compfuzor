@@ -4,7 +4,10 @@ title: Runtime direction and resumption
 resource: /design/runtime-direction/index.md
 status: draft
 generated: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
+modified: {by: 'model:openai/gpt-6-astra#medium', at: 2026-10-12}
 sources:
+  - resource: opencode://ses_ed178679dffeCgFbocaRLfqrm2
+    title: sunny-moon — connect source-grounded broad assessment and new coherent CFR reset draft
   - resource: opencode://ses_ed1977ea9ffeC1qwSdlWJr88V4
     title: tidy-cabin — connect independent selected-environment findings and prototype to the runtime reading map
 ---
@@ -23,6 +26,14 @@ sources:
 
 ## Latest direction and constraints
 
+- [CFR reset draft — native composition, bound domains, shared implementation](/design/compfuzor-runtime/reset-draft0.gpt6a.md):
+  new broad proposal after recovery: native authoring and occurrence identity,
+  honest plans, shared init, domain admission, provider/bootstrap/package delivery,
+  selected ENV/proxy, material/confext, history and explicit replacement checkpoints.
+  Proposed direction, not an accepted spec or shipped runtime.
+- [Reset assessment against current capabilities](/design/compfuzor-runtime/reset-assessment0.gpt6a.md):
+  source-grounded comparison of substantial options, current CONFIG/action/registry
+  boundaries, installed Effect API hazards, changes from draft2, and deletion criteria.
 - [Selected environment and retained defaults](/design/compfuzor-runtime/environment0.gpt6a.md):
   post-proxy direction for cfr: exact env selection, findable defaults, and
   managed/local-change comparison; distinguishes implemented projections from
@@ -32,7 +43,7 @@ sources:
   to selected-default inspection, pure resolution, and explicit nonregistered
   shell apply, without machine-wide history or broad runtime migration.
 - [Native contributions and collaborative pipelines — draft2](/design/compfuzor-runtime/effect-draft2.gpt6a.md):
-  latest synthesis: annotated native exports, default directory discovery,
+  predecessor synthesis: annotated native exports, default directory discovery,
   extensible init, mutable typed run data, stage ordering and durable history.
 - [BINS-first Workflow/Activity draft](/design/compfuzor-runtime/effect-draft1.gpt61sol.md):
   conservative script admission, recursive collection, native TS modules and
