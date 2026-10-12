@@ -28,6 +28,8 @@ configuration for a selected consumer context.
   and cross-plane execution policy.
 - [Deployment log](/doc/config/log.md) — exact live render, activation, status,
   Vite+ packaging, and retained migration residue.
+- [Fresh-account Zim2/Mise2/OpenCode rehearsal](/doc/config/zimtest-rehearsal.md) —
+  usable zimtest account, repeatable shell/proxy checks, bootstrap gaps and deck prerequisites.
 
 ## Mental model
 
