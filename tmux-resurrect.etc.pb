@@ -2,28 +2,38 @@
 - hosts: all
   vars:
     ETC_FILES:
-      - name: resurrect.conf
+      - name: 80-resurrect.conf
         content: |
-          # TPM: prefix + I installs the plugin after sourcing this config.
           set -g @plugin 'tmux-plugins/tmux-resurrect'
-          # Manual controls: prefix + Ctrl-s saves; prefix + Ctrl-r restores.
+          # A space disables bindings; an empty string re-enables defaults.
+          set -g @resurrect-save ' '
+          set -g @resurrect-restore ' '
           set -g @resurrect-capture-pane-contents 'on'
           set -g @resurrect-dir '~/.local/share/tmux/resurrect'
     BINS:
-      - name: install-user.sh
+      - name: install-tmux.sh
+        compose: False
         basedir: False
         content: |
-          if [ -z "${TMUX_CONF:-}" ]; then
-            if [ -f "$HOME/.tmux.conf" ]; then
-              TMUX_CONF="$HOME/.tmux.conf"
-            elif [ -d "${XDG_CONFIG_HOME:-$HOME/.config}/tmux" ]; then
-              TMUX_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf"
-            else
-              TMUX_CONF="$HOME/.tmux.conf"
-            fi
+          # Explicit host deployment: either tpm-ahiru or tmux-tpm.
+          set -eu
+          HOST=${1:?usage: install-tmux.sh HOST_DEPLOYMENT_DIR}
+          exec "$HOST/bin/config-remote.mjs" put tmux/plugins "$DIR/etc/80-resurrect.conf"
+      - name: restore-session.sh
+        basedir: False
+        content: |
+          set -eu
+          if [ -z "${TMUX:-}" ]; then
+            echo "restore-session.sh: run from inside a tmux session" >&2
+            exit 1
           fi
-          # Load after ordinary config, before Continuum (20) and TPM init (100).
-          block-in-file -n "${NAME:-{{NAME}}}" -i "${DIR}/etc/resurrect.conf" -o "$TMUX_CONF" --create true --anchor eof:10
-          # Source TMUX_CONF in tmux, then press prefix + I to install via TPM.
+          RESTORE_SCRIPT=$(tmux show-option -gqv @resurrect-restore-script-path)
+          if [ -z "$RESTORE_SCRIPT" ] || [ ! -f "$RESTORE_SCRIPT" ]; then
+            echo "restore-session.sh: install and initialize tmux-resurrect with your plugin manager first" >&2
+            exit 1
+          fi
+          # Quote for tmux run-shell's shell, including paths with spaces/quotes.
+          printf -v RESTORE_COMMAND '%q' "$RESTORE_SCRIPT"
+          tmux run-shell "$RESTORE_COMMAND"
   tasks:
     - import_tasks: tasks/compfuzor.includes

@@ -6,6 +6,8 @@ resource: /doc/config/README.md
 status: active
 modified: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
 sources:
+  - resource: opencode://ses_ed1c3f231ffec43Dwg4C35l77Z
+    title: Link the Ahiru and TPM remote plugin receiver adoption
   - resource: opencode://ses_ed21877fbffeK90YzBIZKC1jHb
     title: Add the independent CONFIG/env.d baseline and packaging exception; retain prior guide
   - resource: /doc/config/definitions.md
@@ -23,6 +25,9 @@ configuration for a selected consumer context.
 - [Independent CONFIGs and env.d](/doc/config/definitions.md) — complete named
   definitions, separate normal ZIM ownership, bound remote fanout, and opt-in
   literal application ENV; no proxy adoption or live cutover.
+- [Tmux plugin receivers](/doc/tmux/README.md) — Ahiru and TPM share a named
+  remote CONFIG input; separate Resurrect and Continuum playbooks contribute
+  persistence settings with explicit manual restoration.
 - [General action audiences](/doc/actions/README.md) — opt-in `.mjs` action
   families with typed CONFIG/keybinding context binding and pre-effects admission;
   material placement and broader domain adoption remain separate decisions.

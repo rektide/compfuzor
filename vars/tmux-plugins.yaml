@@ -1,0 +1,21 @@
+---
+# Shared receiver contract for TPM-compatible managers. Other CONFIG definitions
+# can coexist; producers address this one explicitly as tmux/plugins.
+CONFIG_DEFINITIONS:
+  tmux:
+    install_owner: tmux
+    configs:
+      tmux-plugins.conf:
+        name: plugins
+        processor: block-in-file
+        block: {after: EOF}
+        inputs:
+          - glob: tmux-plugins.d/*.conf
+            name: plugins
+            remote: true
+    contexts:
+      user:
+        scope: user
+        root: config
+        subpath: "tmux/compfuzor/{{NAME}}"
+        install: link
