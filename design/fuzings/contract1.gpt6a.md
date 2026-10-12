@@ -1,9 +1,13 @@
 ---
 type: DesignProposal
 title: Fuzings as native configuration contributions — ENV, ZIM, and OpenCode
+description: Draft native contribution and multiple-CONFIG contract grounded in current ENV, ZIM, and OpenCode assembly.
+resource: /design/fuzings/contract1.gpt6a.md
 status: draft
 generated: {by: 'model:openai/gpt-6-astra', at: 2026-10-11}
 sources:
+  - resource: opencode://ses_ed3f4aaaaffePYlWeomteOWlbg
+    title: brave-meadow — complete CONFIG instances, native fuzing delivery, and bounded implementation route
   - resource: urn:opencode:session:ses_ed3f4aaaaffePYlWeomteOWlbg
     title: brave-meadow — reduce descriptor machinery, revisit ENV and ZIM, use etc/env.d/
   - resource: /design/fuzings/contract0.gpt6a.md
@@ -25,6 +29,10 @@ sources:
 ---
 
 # Contract direction
+
+Implementation route: [make CONFIG instantiable, then connect fuzings](implementation0.gpt6a.md).
+It includes an isolated worker-level proof and separates the packaging changes
+from native delivery, ENV serialization, and existing-shell activation.
 
 **A fuzing is an explicitly installed contribution to a consumer's native
 configuration. The consumer's existing assembly owns how contributions combine.**
