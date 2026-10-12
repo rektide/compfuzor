@@ -75,7 +75,7 @@
     # The primary stores its credential under ~/.config/opencode/secrets
     # (which is the symlink to the primary ETC dir); secondaries get their
     # own suffixed directory because ~/.config/opencode stays primary-owned.
-    PASSWORDS_DIR: "{{ansible_user_dir}}/.config/opencode{{OPENCODE_SUFFIX}}/secrets"
+    PASSWORDS_DIR: "{{ OPENCODE_PRIMARY_PASSWORDS_DIR if OPENCODE_PRIMARY else ansible_user_dir ~ '/.config/opencode' ~ OPENCODE_SUFFIX ~ '/secrets' }}"
     PASSWORDS:
       - name: OPENCODE_PASSWORD
         format: "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'"
@@ -248,6 +248,8 @@
     # invoking shell against the managed deployment and is also globally
     # linked as opencode-status-ok for quick checks from shells without ZIM env.
     STATUSES:
+      - name: credential.sh
+        args: [status]
       - status-cleanup.sh
       - status-opencode-ok.sh
     # Proc-backed status checks are typed rows. The provider emits one reporter
@@ -406,6 +408,24 @@
       the working workspace since 2026-09); restarting the unit onto an
       older binary boots the server with an ephemeral random password.
 
+      `bin/credential.sh ensure` provisions or secures this account's source
+      without rotating an existing password; `bin/credential.sh status` checks
+      it without writing. `install-credential-user.sh` exposes ensure in the
+      user install lane. Run these as the service account. The primary's
+      `OPENCODE_PRIMARY_PASSWORDS_DIR` is shared with the proxy playbook;
+      separate accounts get separate source files. Both services use
+      `LoadCredential=OPENCODE_PASSWORD:<source>` and receive their own runtime
+      copies. After a deliberate source replacement, restart both units so
+      their snapshots agree. The tools never print password contents.
+
+      For a separate test account, set both playbooks' shared port inputs,
+      for example `OPENCODE_PRIMARY_PORT=49473 OPENCODE_BUS_PROXY_PORT=49472`,
+      and use `USERMODE=True` with a loopback origin bind. Its own foreground
+      `--publish` initializes its native registration. A proxy using explicit
+      `OPENCODE_BUS_PROXY_SERVICE_MODE=stomp` supports an older origin publisher
+      until native proxy publication is composed. Client service `disabled`
+      must be unset/false: true selects standalone mode and bypasses discovery.
+
       The user unit gets ordinary runtime settings from its generated
       `EnvironmentFile={{DIR}}/env`: the password-file pointer, Watchman
       socket, logging, and the instance binary. The serve arguments
@@ -550,12 +570,11 @@
       `OPENCODE_PASSWORD_FILE` pointer itself; the export keeps dated
       snapshot binaries that predate pointer support working. With the
       `--publish` registration active in the same account, clients discover
-      the server natively from service-local.json. Alternatively, importing
-      opencode-bus-proxy.src.pb's Zim contribution sets native OPENCODE_ARGS
-      defaults so that shell account uses the proxy without typing --server.
-      This also works across accounts without copying discovery state.
-      Existing nonempty OPENCODE_ARGS is preserved by that contribution;
-      inspect old shell defaults before importing it.
+      the server natively from service-local.json. The proxy contributes its
+      contact URL to that record. Neither producer installs OPENCODE_ARGS
+      defaults or a shell wrapper; Zim supplies credentials and endpoint
+      metadata only. Each account's own server/proxy pair publishes into its
+      own native discovery slot.
 
       Native proxy discovery is opt-in: run both this playbook and
       opencode-bus-proxy.src.pb with `-e OPENCODE_BUS_PROXY_DISCOVERY=true`.
@@ -565,8 +584,8 @@
       `-e OPENCODE_BUS_PROXY_SERVICE_MODE=stomp` on the proxy playbook to
       reapply its contact after every origin publication. Metadata is
       default-on (OPENCODE_DISCOVERY_METADATA); routing is never globally
-      enabled merely by that default. Native discovery and the explicitly
-      imported proxy Zim defaults are independent routing paths.
+      enabled merely by that default. The proxy Zim endpoint metadata is not
+      a client routing mechanism; routing uses the native discovery record.
       Re-source the client-env module in an old shell to remove its former
       proxy wrapper. Source support is not proof that a deployed binary has
       the new flags; composition/build/activation remain operator-gated.
@@ -912,6 +931,13 @@
     # primary deployment; secondaries reach clients through the launcher),
     # but only the primary links them globally.
     BINS:
+      - name: credential.sh
+        basedir: False
+        compose: False
+      - name: install-credential-user.sh
+        phase: identity
+        basedir: False
+        content: 'exec {{ (BINS_DIR ~ "/credential.sh") | quote }} ensure'
       - name: build.sh
         basedir: False
         content: |
