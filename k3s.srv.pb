@@ -223,6 +223,10 @@
     ETCD_SNAPSHOT_SINK_CREDS: "{{k3s_etcd_snapshot_sink_creds|default('false')}}"
     SECRETS_ENCRYPTION: true
     SECRETS_ENCRYPTION_PROVIDER: secretbox
+    # Recovery headroom above eviction-hard thresholds. k3s 1.37 defaults to
+    # 10%, which demands hundreds of GiB on large shared host filesystems.
+    # Inventory can override either signal with a percentage or fixed quantity.
+    KUBELET_EVICTION_MINIMUM_RECLAIM: "{{k3s_kubelet_eviction_minimum_reclaim|default('nodefs.available=3%,imagefs.available=3%')}}"
     # Kubelet pass-through arguments. Accepts either one string (backwards
     # compatible) or a list; every item becomes its own repeated
     # `--kubelet-arg <item>`. Keep host/storage-specific policy in inventory.
@@ -285,6 +289,8 @@
     - "{{ '--node-ip $NODE_IP' if NODE_IP|default(False) else '' }}"
     - "{{ '--node-external-ip $NODE_EXTERNAL_IP' + NODE_EXTERNAL_IP if NODE_EXTERNAL_IP|default(False) else '' }}"
     - "{{ '--private-registry $PRIVATE_REGISTRY' if PRIVATE_REGISTRY|default(False) else '' }}"
+    # ExecStart needs %% to pass a literal percent through systemd specifiers.
+    - "--kubelet-arg eviction-minimum-reclaim={{KUBELET_EVICTION_MINIMUM_RECLAIM|replace('%', '%%')}}"
     - "{{ _KUBELET_ARGS | map('regex_replace', '^(.*)$', '--kubelet-arg \\1') | join(' ') }}"
     agentArgs: {}
     serverArgs:
