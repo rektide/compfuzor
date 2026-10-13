@@ -20,6 +20,8 @@ sources:
     title: Automatic-save interval, explicit restore enablement, and status-line ordering
   - resource: https://github.com/x3rAx/ahiru-tpm/blob/main/src/plugins/load.rs
     title: Parallel loading requires explicit sequencing for Continuum
+  - resource: opencode://ses_ecbd2301bffe21vvbU1PZOwny2
+    title: Add the Continuum live status helper, its coverage, and usage
 ---
 
 # Tmux plugins
@@ -49,6 +51,7 @@ selected-definition delivery, disabled inputs, and transaction semantics.
   snapshots under `~/.local/share/tmux/resurrect`, and `bin/restore-session.sh`.
 - [`tmux-continuum.etc.pb`](/tmux-continuum.etc.pb): automatic saving every 15 minutes;
   **automatic restoration is off**. Requires Resurrect to be contributed too.
+  `bin/status.sh` reports live saving health against the running server.
 
 Resurrect's save/restore binding options contain a single space. Upstream treats
 an empty string as “use defaults”; whitespace gives its binding loop zero keys.
@@ -59,6 +62,15 @@ directories.
 Continuum is numbered `99`, after Resurrect at `80`; keep themes before it.
 Its fragment sets `@tpm-parallel false` so Ahiru preserves load order. Automatic
 saves require an enabled status line and Continuum's status hook to remain intact.
+
+The Continuum contribution's `status.sh` inspects the default-socket tmux server:
+whether the `continuum_save.sh` hook is attached to `status-right`, the effective
+interval, last and next auto-save timing (flagging overdue saves), the published
+Resurrect save script, the latest snapshot, and restore-on-start. It is read-only
+and works inside or outside tmux; exit `0` means the saving machinery is healthy,
+`1` reports why it is not saving, `2` means there is no server to inspect.
+This reports live behavior; `config-status.sh` reports generated-config assembly
+health.
 
 ## Install and use
 
@@ -88,6 +100,9 @@ host=/usr/local/src/tpm-ahiru-git
 
 # Restore only when wanted, from inside a tmux session:
 ~/.config/tmux-resurrect-main/bin/restore-session.sh
+
+# Check live Continuum saving health (inside or outside tmux):
+~/.config/tmux-continuum-main/bin/status.sh
 ```
 
 For TPM, select its deployment as `host`, then use **prefix + I** after sourcing
@@ -164,7 +179,8 @@ the maintained helper now belongs to the Resurrect deployment.
 [`tests/integration/tmux_plugins.test.py`](/tests/integration/tmux_plugins.test.py)
 renders real CONFIG runtimes in isolation and exercises both receivers, reverse
 delivery order, root preservation, linked publication, disabled-state retention,
-coexistence with another CONFIG using the same local input name, and the manual
-restore session guard. An isolated upstream initialization probe also confirmed
+coexistence with another CONFIG using the same local input name, the manual
+restore session guard, and the Continuum status helper against a fresh server,
+an initialized Continuum, and the no-server case. An isolated upstream initialization probe also confirmed
 that the whitespace binding options preserve existing keys and the helper can
 invoke a published restore path containing spaces and an apostrophe.

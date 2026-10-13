@@ -12,6 +12,8 @@ sources:
     title: Manager receiver and separate plugin contribution contract
   - resource: /tests/integration/tmux_plugins.test.py
     title: Regression checks for receiver composition, disabled membership, and stable canonical assembly
+  - resource: opencode://ses_ecbd2301bffe21vvbU1PZOwny2
+    title: Render and verify the Continuum status helper on the live server
 ---
 
 # Deployed user setup — 2026-10-12
@@ -69,6 +71,22 @@ From inside the target tmux server:
 ```sh
 ~/.config/tmux-resurrect-main/bin/restore-session.sh
 ```
+
+## Check Continuum status
+
+Inside or outside tmux, against the default-socket server:
+
+```sh
+~/.config/tmux-continuum-main/bin/status.sh
+```
+
+The helper reports the save hook's attachment to `status-right`, the effective
+interval, last and next auto-save timing with overdue detection, the published
+Resurrect save script, the latest snapshot, and restore-on-start. Verified live
+on 2026-10-13: hook attached, 15-minute interval, last auto-save five minutes
+prior with the next due in nine, engine resolving to the installed Resurrect
+`save.sh`, snapshot `tmux_resurrect_20261013T034109.txt`, exit `0`. The same
+render left `99-continuum.conf` byte-identical.
 
 ## Apply configuration changes
 
