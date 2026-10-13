@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import runpy
 import tempfile
+import time
 
 import yaml
 
@@ -128,6 +129,50 @@ def test_receivers():
         environment = {key: value for key, value in os.environ.items() if key != "TMUX"}
         result = run([resurrect / "bin/restore-session.sh"], resurrect, env=environment, check=False)
         assert result.returncode != 0 and "inside a tmux session" in result.stderr
+
+        # Continuum status helper reports on an isolated default-socket server
+        # (a private TMUX_TMPDIR keeps plain `tmux` off any real server).
+        sockets = temporary / "tmux-sockets"
+        sockets.mkdir()
+        status_env = {**environment, "HOME": str(home), "TMUX_TMPDIR": str(sockets)}
+        missing = run([continuum / "bin/status.sh"], continuum, env=status_env, check=False)
+        assert missing.returncode == 2 and "no running tmux server" in missing.stderr
+        run(["tmux", "-f", "/dev/null", "new-session", "-d", "-s", "status", "sh"], continuum, env=status_env)
+        try:
+            # Fresh server: continuum never loaded, so no hook and no engine.
+            unloaded = run([continuum / "bin/status.sh"], continuum, env=status_env, check=False)
+            assert unloaded.returncode == 1
+            assert "save hook: MISSING from status-right" in unloaded.stderr
+            assert "initialize tmux-resurrect" in unloaded.stderr
+
+            # Simulate an initialized continuum: options, hook, engine, snapshot.
+            engine = temporary / "fake-resurrect-save.sh"
+            engine.write_text("#!/bin/sh\n")
+            engine.chmod(0o755)
+            snapshots = temporary / "resurrect-snapshots"
+            snapshots.mkdir()
+            snapshot = snapshots / "tmux_resurrect_20990101T000000.txt"
+            snapshot.write_text("pane\n")
+            (snapshots / "last").symlink_to(snapshot)
+            settings = [
+                ("@continuum-save-interval", "15"),
+                ("@continuum-save-last-timestamp", str(int(time.time()) - 300)),
+                ("@resurrect-save-script-path", str(engine)),
+                ("@resurrect-dir", str(snapshots)),
+                # The real plugin prepends #(...continuum_save.sh) to status-right.
+                ("status-right", "#(/nonexistent/scripts/continuum_save.sh)status"),
+            ]
+            for option, value in settings:
+                run(["tmux", "set-option", "-g", option, value], continuum, env=status_env)
+            healthy = run([continuum / "bin/status.sh"], continuum, env=status_env, check=False)
+            assert healthy.returncode == 0
+            assert "save hook: attached" in healthy.stdout
+            assert "auto-save: every 15m" in healthy.stdout
+            assert "last auto-save: 5m ago" in healthy.stdout
+            assert "tmux_resurrect_20990101T000000.txt" in healthy.stdout
+            assert "continuum: saving every 15m" in healthy.stdout
+        finally:
+            run(["tmux", "kill-server"], continuum, env=status_env, check=False)
 
 
 if __name__ == "__main__":
