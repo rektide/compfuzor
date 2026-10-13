@@ -59,7 +59,7 @@
             cp -a -- "$src/$f" "$pkg/"
           done
           cp -a -- "$src/src" "$pkg/src"
-          cp -a -- LICENSE "$pkg/LICENSE"
+          cp -a -- LICENSE.md "$pkg/LICENSE.md"
           cp -a -- "$src/index-standalone.js" "$pkg/index.js"
           git rev-parse HEAD > "$pkg/UPSTREAM"
           printf ' https://github.com/oven-sh/bun (packages/bun-inspector-protocol)\n' >> "$pkg/UPSTREAM"
@@ -96,7 +96,7 @@
         bundling ws in (~101KB `index-standalone.js`).
       - `bin/install-bun.sh` -- copy-mode install (RUST_COPY pattern):
         materializes the package as real files under `{{DIR}}/pkg` (sources,
-        lockfile, upstream LICENSE, UPSTREAM provenance) with the standalone
+        lockfile, upstream LICENSE.md, UPSTREAM provenance) with the standalone
         bundle as `index.js` (package main), then `bun link` from there.
         `pkg/` is self-contained -- no node_modules needed -- so the bun
         monorepo archive and `repo/` workspace can be deleted afterwards;
