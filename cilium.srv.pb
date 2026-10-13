@@ -20,13 +20,14 @@
           bpf:
             # linux 6.7 required https://isovalent.com/blog/post/cilium-netkit-a-new-container-networking-paradigm-for-the-ai-era/
             datapathMode: netkit
-            distributedLRU.enabled: true
+            distributedLRU:
+              enabled: true
             # https://docs.cilium.io/en/latest/operations/performance/tuning/#ebpf-host-routing
             events:
-              monitorInterval: "10s"
               default:
                 rateLimit: 10000
                 burstLimit: 50000
+            monitorInterval: "10s"
             lbAlgorithmAnnotation: true
             lbExternalClusterIP: true
             lbModeAnnotation: true
@@ -39,6 +40,12 @@
           cluster:
             name: "{{cluster}}"
             id: "{{cluster_id|default(99)}}"
+          # Observe unapplied ConfigMap changes without automatically restarting
+          # networking. Restart agents deliberately after reviewing the delta.
+          configDriftDetection:
+            enabled: true
+            driftChecker: true
+          rollOutCiliumPods: false
           #clusterMesh:
           #  mcsapi:
           #    corednsAutoConfigure:
@@ -67,7 +74,6 @@
                   - NET_BIND_SERVICE
                   - NET_ADMIN
                   - BPF
-          externalEnvoyProxy: false
           externalIPs:
             enabled: true
           gatewayAPI:
@@ -95,6 +101,12 @@
               enabled: true
             ui:
               enabled: true
+              # New chart exposure option; do not publish UI without an explicit
+              # Gateway parentRefs/hostnames decision.
+              httpRoute:
+                enabled: false
+          # 1.20 operator identities omit named-port labels (#47214).
+          # Fixed in 1.21.0-pre.3; keep agent/operator versions matched.
           identityManagementMode: operator
           # https://docs.cilium.io/en/latest/network/node-ipam/
           # https://github.com/cilium/cilium/issues/38227
@@ -138,7 +150,7 @@
             mode: dsr
           l2NeighDiscovery:
             enabled: true
-          l2annoucements:
+          l2announcements:
             # requires: --devices to be set
             enabled: true
             #leaseDuration: 15s
@@ -174,7 +186,11 @@
           routingMode: native
           securityContext:
             capabilities:
-              ciliumAgents:
+              # These lists replace chart defaults, rather than extending them.
+              # Retain module loading and syslog access, plus explicit BPF for
+              # the modern-kernel netkit datapath.
+              ciliumAgent:
+                - BPF
                 - CHOWN
                 - DAC_OVERRIDE
                 - FOWNER
@@ -186,10 +202,13 @@
                 - SETGID
                 - SETUID
                 - SYS_ADMIN
+                - SYS_MODULE
                 - SYS_RESOURCE
-              clearCiliumState:
+                - SYSLOG
+              cleanCiliumState:
                 - NET_ADMIN
                 - SYS_ADMIN
+                - SYS_MODULE
                 - SYS_RESOURCE
           scheduling:
             mode: kube-scheduler
@@ -199,11 +218,15 @@
             #hostNamespaceOnly: true
           #devices: ____
     CRDS:
-      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/standard/gateway.networking.k8s.io_gatewayclasses.yaml
-      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/standard/gateway.networking.k8s.io_gateways.yaml
-      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/standard/gateway.networking.k8s.io_httproutes.yaml
-      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/standard/gateway.networking.k8s.io_referencegrants.yaml
-      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml
-      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.3.0/config/crd/experimental/gateway.networking.k8s.io_tlsroutes.yaml
+      # Required set from Cilium 1.21.0-pre.3's Gateway API installation guide.
+      # TLSRoute is now standard; BackendTLSPolicy is required too. Installation
+      # ownership must be coordinated with k3s's bundled Gateway API CRD chart.
+      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_gatewayclasses.yaml
+      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_gateways.yaml
+      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_httproutes.yaml
+      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_referencegrants.yaml
+      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_grpcroutes.yaml
+      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_backendtlspolicies.yaml
+      - https://raw.githubusercontent.com/kubernetes-sigs/gateway-api/v1.6.1/config/crd/standard/gateway.networking.k8s.io_tlsroutes.yaml
   tasks:
     - import_tasks: tasks/compfuzor.includes
