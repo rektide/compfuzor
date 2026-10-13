@@ -35,18 +35,40 @@
           cd packages/bun-inspector-protocol
           bun install
           bun run build
+          # Standalone one-bin build: same invocation minus --external=ws,
+          # so ws (the only runtime dep) is bundled in (~101KB). Upstream
+          # externalizes ws because bun itself provides it; standalone
+          # consumers do not. install-bun.sh ships this as pkg/index.js.
+          bun build --target=node --outfile=index-standalone.js --minify-syntax ./index.ts
       - name: install-bun.sh
         bypass: [LINK, BUN]
         run: "{{ INSTALL_RUN_BYPASS is not deftruthy and BINS_RUN_BYPASS is not deftruthy }}"
         basedir: repo
         content: |
+          # Copy-mode install (RUST_COPY pattern): materialize the package
+          # as real files under DIR/pkg instead of linking into the
+          # monorepo workspace, with the standalone bundle as main. After
+          # this, pkg/ is self-contained (sources + lockfile + bundled
+          # index.js; no node_modules needed) and the bun monorepo archive
+          # can be deleted -- only a rebuild re-clones it.
+          pkg="$DIR/pkg"
+          src=packages/bun-inspector-protocol
+          rm -rf -- "$pkg"
+          mkdir -p -- "$pkg"
+          for f in package.json bun.lock index.ts tsconfig.json README.md; do
+            cp -a -- "$src/$f" "$pkg/"
+          done
+          cp -a -- "$src/src" "$pkg/src"
+          cp -a -- LICENSE "$pkg/LICENSE"
+          cp -a -- "$src/index-standalone.js" "$pkg/index.js"
+          git rev-parse HEAD > "$pkg/UPSTREAM"
+          printf ' https://github.com/oven-sh/bun (packages/bun-inspector-protocol)\n' >> "$pkg/UPSTREAM"
           # Global registration for consumers: `bun link` (no -g; bun >= 1.4
           # misreads `bun link -g` as registering a package literally named
-          # "global"). Registers into ~/.bun/install/global pointing at this
-          # deployment's package dir. Consumers opt in per-project with
+          # "global"). Consumers opt in per-project with
           # `bun link bun-inspector-protocol` or a
           # "bun-inspector-protocol": "link:bun-inspector-protocol" dep.
-          cd packages/bun-inspector-protocol
+          cd "$pkg"
           bun link
     README: |
       # bun-inspector-protocol
@@ -68,16 +90,22 @@
       ## Bins
 
       - `bin/build-bun.sh` -- inside packages/bun-inspector-protocol only:
-        `bun install` (just `ws`; verified no hoist to the monorepo root) then
-        `bun run build` (bundled `index.js`, node target, `ws` external).
-      - `bin/install-bun.sh` -- `bun link` from the package dir: global
-        registration under `~/.bun/install/global`. Consume per-project with
-        `bun link bun-inspector-protocol`, or add
+        `bun install` (just `ws`; verified no hoist to the monorepo root),
+        the upstream build (external-ws `index.js`, repo-local parity), plus
+        the standalone one-bin build: same `bun build` minus `--external=ws`,
+        bundling ws in (~101KB `index-standalone.js`).
+      - `bin/install-bun.sh` -- copy-mode install (RUST_COPY pattern):
+        materializes the package as real files under `{{DIR}}/pkg` (sources,
+        lockfile, upstream LICENSE, UPSTREAM provenance) with the standalone
+        bundle as `index.js` (package main), then `bun link` from there.
+        `pkg/` is self-contained -- no node_modules needed -- so the bun
+        monorepo archive and `repo/` workspace can be deleted afterwards;
+        only a rebuild (`bin/build.sh`, playbook rerun) re-clones it.
+        Consume per-project with `bun link bun-inspector-protocol`, or add
         `"bun-inspector-protocol": "link:bun-inspector-protocol"` to the
         consumer's dependencies.
 
-      Rebuild after archive refreshes via `bin/build.sh`; both stock BUN
-      bins are suppressed (`BUN_BINS: False`) because they are monorepo-root
-      shaped.
+      Both stock BUN bins are suppressed (`BUN_BINS: False`) because they
+      are monorepo-root shaped.
   tasks:
     - import_tasks: tasks/compfuzor.includes
