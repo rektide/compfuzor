@@ -260,6 +260,12 @@
           Output=mkosi-disk
           [Content]
           Bootable=yes
+          # Console login: rendered from ENV password (-e password=… at the
+          # playbook). Lives HERE because subimages are separate mkosi
+          # invocations -- main-config/CLI settings don't reach them; without
+          # this, Debian's package-default root is locked and the image has
+          # no console login at all.
+          RootPassword={{ENV.password}}
           # Runtime for the embedded /opt/repart-main/bin/repart TypeScript CLI.
           Packages=nodejs
           # Bootable=yes wants a bootloader binary; Debian splits systemd-boot
