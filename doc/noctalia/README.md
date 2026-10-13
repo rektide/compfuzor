@@ -12,6 +12,7 @@ sources:
   - { id: compositor, resource: "https://github.com/noctalia-dev/umbriel", title: Umbriel source and session units }
   - { id: shell, resource: "https://github.com/noctalia-dev/noctalia/blob/main/PACKAGING.md", title: Noctalia packaging and runtime contract }
   - { id: greeter, resource: "https://github.com/noctalia-dev/noctalia-greeter/blob/main/PACKAGING.md", title: Greeter packaging and system setup }
+  - { id: waybar-policy, resource: "opencode://ses_ecc5f40bbffe1SETAJFRHF5jzL", title: "Waybar default-off site policy (waybar.etc.pb), live gate verification on workhorse, guide revision" }
 ---
 
 # Noctalia desktop: architecture and operations
@@ -183,6 +184,47 @@ for `org.kde.StatusNotifierWatcher`. A StatusNotifier *item* (an app's icon) or
 disabled merely because it has a tray icon. Inspect the owner of the exact
 watcher name. On Plasma, Noctalia follows different integration paths; this
 guide's startup unit targets Umbriel, not every graphical session.
+
+### Retire the legacy bar: waybar site policy
+
+The fleet keeps **waybar installed but off by default for every user**; the
+session bar and tray host is the Noctalia shell. [`waybar.etc.pb`](/waybar.etc.pb)
+owns the `/etc` state:
+
+- `/etc/systemd/user/waybar.service.d/50-site-default-off.conf` adds
+  `ConditionPathExists=%h/.config/waybar/enabled`, which keeps **every** start
+  vector (global enablement, per-user enable, manual start) inert until the
+  user opts in.
+- The Debian-created global enablement symlink
+  (`/etc/systemd/user/graphical-session.target.wants/waybar.service`) is
+  removed, and `deb-systemd-helper`'s statefile is flipped so waybar package
+  upgrades do not re-run global enablement (`was-enabled` defaults to true
+  when no statefile exists).
+
+Two mechanism lessons, verified live on workhorse 2026-10-13: a drop-in
+setting an **empty `[Install] WantedBy=` clears nothing** — drop-in
+`[Install]` lists only add to the vendor unit's, and `[Install]` is not
+consulted at runtime anyway — and the enablement symlink is packaging-owned
+(`deb-systemd-helper --user enable` from waybar's postinst can recreate it on
+upgrade), so deleting it alone is not durable. A `[Unit]` condition in `/etc`
+is the durable gate: conditions from all drop-in levels AND together, and a
+user-level drop-in cannot cancel an administrator condition. Per-user opt-in,
+no root needed:
+
+```sh
+mkdir -p ~/.config/waybar && touch ~/.config/waybar/enabled
+systemctl --user enable --now waybar.service
+```
+
+While waybar runs it owns `org.kde.StatusNotifierWatcher`, so retiring it also
+frees the tray-host name Noctalia claims. Beyond D-Bus name conflicts,
+Noctalia takes over surfaces other session services may still occupy
+behaviorally — OSD feeders (wob), clipboard-history managers (GPaste), idle
+dimmers, lock-screen keybinds (swaylock), alternate launchers. Retire those
+per surface as you adopt the corresponding Noctalia feature; none of them
+block the shell from starting. The same condition-drop-in pattern can gate
+other packaging-enabled legacy services if upgrades re-enable them after
+retirement.
 
 ### Enter a session
 
@@ -447,6 +489,9 @@ unrelated desktop services.
 - [Greeter setup](https://github.com/noctalia-dev/noctalia-greeter/blob/main/scripts/setup_greeter_system.sh)
   and [setup library](https://github.com/noctalia-dev/noctalia-greeter/blob/main/scripts/greetd_setup_lib.sh):
   distinguish changes made by setup from commands merely printed for the operator.
+- [`waybar.etc.pb`](/waybar.etc.pb): the legacy-bar default-off site policy
+  described above; its header records the enablement/drop-in mechanics and
+  the live gate verification.
 - [`steamos-umbriel.opt.pb`](/steamos-umbriel.opt.pb) and
   [`steamos-umbriel.srv.pb`](/steamos-umbriel.srv.pb): separate SteamOS compositor
   installation/session-switch routes. Do not apply the `/usr/local` source-host
