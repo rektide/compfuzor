@@ -44,7 +44,7 @@ MIXED_VARS = """    SYSTEMD_SERVICES:
 """
 
 
-def render(extra_vars: str) -> dict:
+def render(extra_vars: str, overrides: dict | None = None) -> dict:
     with tempfile.TemporaryDirectory(prefix="compfuzor-systemd-detect-") as temporary:
         output = Path(temporary) / "out.json"
         playbook = ROOT / ".test-agent-systemd-detection.pb"
@@ -56,7 +56,8 @@ def render(extra_vars: str) -> dict:
         )
         try:
             result = subprocess.run(
-                ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook)],
+                ["ansible-playbook", "-i", "localhost,", "-c", "local", str(playbook),
+                 "-e", json.dumps(overrides or {})],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,
@@ -110,9 +111,104 @@ def test_no_units_yields_empty_detection():
         raise AssertionError(f"unexpected units: {rendered['files']}")
 
 
+def test_defaults_and_shared_sections_do_not_declare_units():
+    rendered = render("""    SYSTEMD_UNITS: {}
+    SYSTEMD_INSTALLS: {}
+    SYSTEMD_SERVICES_DEFAULT:
+      Restart: always
+""")
+    assert rendered["types"] == []
+    assert rendered["has_units"] is False
+    assert rendered["files"] == []
+
+
+def test_service_defaults_require_sections_and_do_not_create_install_alias():
+    rendered = render("""    INSTANCE: main
+    SYSTEMD_SERVICE: probe-main
+    SYSTEMD_SERVICES:
+      ExecStart: /bin/true
+""")
+    content = rendered["files"][0]["content"]
+    for directive in ("[Service]", "Type=simple", "Restart=on-failure", "RestartSec=5"):
+        assert directive in content, content
+    for absent in ("[Unit]", "[Install]", "WantedBy=", "Alias="):
+        assert absent not in content, content
+
+
+def test_empty_sections_opt_in_and_explicit_values_override_defaults():
+    rendered = render("""    SYSTEMD_UNITS: {}
+    SYSTEMD_SERVICES:
+      ExecStart: /bin/true
+      Type: exec
+      Restart: "no"
+      RestartSec: false
+    SYSTEMD_INSTALLS: {}
+""", {"SYSTEMD_SCOPE": "user", "SYSTEMD_INSTALL": "user"})
+    content = rendered["files"][0]["content"]
+    for directive in ("Description=tl", "DefaultDependencies=True", "Type=exec",
+                      "Restart=no", "[Install]", "WantedBy=default.target"):
+        assert directive in content, content
+    assert "RestartSec=" not in content, content
+
+
+def test_root_sections_gate_defaults_and_suppress_global_inheritance():
+    rendered = render("""    SYSTEMD_UNITS: {}
+    SYSTEMD_INSTALLS: {}
+    SYSTEMD_ROOTS: [inherited, suppressed, namedOnly]
+    inherited:
+      SYSTEMD_SERVICE: inherited
+      SYSTEMD_SERVICES:
+        ExecStart: /bin/true
+    suppressed:
+      SYSTEMD_SERVICE: suppressed
+      SYSTEMD_ALIAS: suppressed-alias
+      SYSTEMD_UNITS: null
+      SYSTEMD_SERVICES:
+        ExecStart: /bin/true
+      SYSTEMD_INSTALLS: false
+    namedOnly:
+      SYSTEMD_SERVICE: named-only
+""")
+    files = {entry["name"]: entry["content"] for entry in rendered["files"]}
+    assert set(files) == {"inherited.service", "suppressed.service", "named-only.service"}
+    for directive in ("Description=tl", "Restart=on-failure", "WantedBy=multi-user.target"):
+        assert directive in files["inherited.service"]
+    for absent in ("[Unit]", "[Install]", "Alias="):
+        assert absent not in files["suppressed.service"]
+    assert "Restart=on-failure" in files["suppressed.service"]
+    assert "[Service]" not in files["named-only.service"]
+
+
+def test_root_local_sections_receive_defaults_without_inventing_other_sections():
+    rendered = render("""    SYSTEMD_SERVICE: top
+    SYSTEMD_VARS_ROOT: topData
+    topData:
+      SYSTEMD_SERVICES:
+        ExecStart: /bin/true
+    SYSTEMD_ROOTS: [localData]
+    localData:
+      SYSTEMD_SERVICE: local
+      SYSTEMD_ALIAS: local-alias
+      SYSTEMD_SERVICES:
+        ExecStart: /bin/true
+""")
+    files = {entry["name"]: entry["content"] for entry in rendered["files"]}
+    assert set(files) == {"top.service", "local.service"}
+    for content in files.values():
+        assert "Restart=on-failure" in content, content
+        assert "ExecStart=/bin/true" in content, content
+        for absent in ("[Unit]", "[Install]", "Alias="):
+            assert absent not in content, content
+
+
 if __name__ == "__main__":
     test_top_level_timer_is_detected_and_rendered()
     test_top_level_dnssd_no_longer_masquerades_as_timer()
     test_service_and_timer_detect_together_in_config_order()
     test_no_units_yields_empty_detection()
+    test_defaults_and_shared_sections_do_not_declare_units()
+    test_service_defaults_require_sections_and_do_not_create_install_alias()
+    test_empty_sections_opt_in_and_explicit_values_override_defaults()
+    test_root_sections_gate_defaults_and_suppress_global_inheritance()
+    test_root_local_sections_receive_defaults_without_inventing_other_sections()
     print("ok: top-level systemd unit-type detection")

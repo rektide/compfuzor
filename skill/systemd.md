@@ -1,3 +1,21 @@
+---
+type: Guide
+title: "compfuzor: systemd unit generation"
+description: Systemd section declarations, defaults, rendering, and installation controls.
+resource: /skill/systemd.md
+status: maintained
+generated:
+  by: model:openai/gpt-6-astra
+  at: 2026-10-13
+sources:
+  - resource: /tasks/compfuzor/vars_systemd_unit.tasks
+    title: Section merging and unit/install artifact generation
+  - resource: /vars/systemd.yaml
+    title: Section defaults and unit-type configuration
+  - resource: "opencode://ses_ecc9500dfffeES0H5Jlh9Ku2DP"
+    title: Diagnose Kanata's restart override and gate defaults on declared systemd sections
+---
+
 # compfuzor: systemd unit generation
 
 ## How it works
@@ -7,7 +25,7 @@ Compfuzor generates systemd unit files from playbook variables and manages their
 The pipeline (in `tasks/compfuzor/vars_systemd_unit.tasks`) runs during the VARIABLES phase and:
 
 1. Detects which unit types are needed by checking for `SYSTEMD_SERVICES`, `SYSTEMD_SOCKETS`, `SYSTEMD_MOUNTS`, etc.
-2. Merges playbook values with defaults from `vars/systemd.yaml`
+2. Merges declared section dicts with defaults from `vars/systemd.yaml`
 3. Generates unit file content via `files/systemd.unit` template
 4. Adds unit files to `ETC_FILES`
 5. Adds `install-unit.sh` + `install-<type>[-user].sh` scripts to `BINS`
@@ -59,7 +77,21 @@ SYSTEMD_INSTALLS_DEFAULT:
   WantedBy: multi-user.target  # or default.target for user scope
 ```
 
-You get these automatically. Override any key by setting it in your playbook's dict.
+Defaults apply **only when the corresponding section dict is declared**:
+`SYSTEMD_SERVICES` receives service defaults; `SYSTEMD_INSTALLS` receives install
+defaults. An empty dict (`{}`) explicitly requests the section's defaults.
+Absent sections stay absent, including `[Unit]` and `[Install]`; an automatic
+alias does not create an absent `[Install]` section. Defaults and shared
+`SYSTEMD_UNITS` / `SYSTEMD_INSTALLS` alone do not select any unit type.
+
+Override any key in the section dict. For example, `Restart: "no"` overrides
+`on-failure`, while `RestartSec: false` suppresses that directive entirely.
+Quote `"no"` so YAML does not treat it as boolean false.
+
+For `SYSTEMD_ROOTS` (and `SYSTEMD_VARS_ROOT`), section values merge in order:
+defaults → top-level section → root section. A root can suppress an inherited
+section with `false` or `null`. Drop-ins receive only their authored directives,
+without section defaults.
 
 ## Minimal example
 
@@ -69,7 +101,18 @@ SYSTEMD_SERVICES:
   ExecStart: lact daemon
 ```
 
-This produces a service with Description from NAME, Type=simple, Restart=on-failure, RestartSec=5, WantedBy=multi-user.target.
+This produces `[Service]` with `Type=simple`, `Restart=on-failure`, and
+`RestartSec=5`. To also request default description/dependencies and boot-target
+membership, add:
+
+```yaml
+SYSTEMD_UNITS: {}
+SYSTEMD_INSTALLS: {}
+```
+
+Section presence governs unit-file content. Installation controls remain
+`SYSTEMD_INSTALL`, `SYSTEMD_ENABLE`, and `SYSTEMD_START` below; for an on-demand
+service without `[Install]`, use `SYSTEMD_ENABLE: false` for link-only publication.
 
 ## Full service example
 

@@ -243,6 +243,8 @@ SYSTEMD_TYPE_CONFIG:
 # must update vars_systemd_unit.tasks in sequence too
 SYSTEMD_UNITTYPES_ALL: "{{ SYSTEMD_TYPE_CONFIG.keys() | list }}"
 
+# These enrich explicitly declared section dicts, including empty {} opt-ins.
+# They must not declare sections or select unit types on their own.
 SYSTEMD_UNITS_DEFAULT:
   Description: "{{ NAME }}"
   DefaultDependencies: true

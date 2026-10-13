@@ -338,9 +338,7 @@ def test_end_to_end_top_level_and_roots_rendering():
         "Type=notify\n"
         "Restart=on-failure\n"
         "RestartSec=5\n"
-        "ExecStart=/usr/bin/foo\n"
-        "[Install]\n"
-        "WantedBy=multi-user.target\n",
+        "ExecStart=/usr/bin/foo\n",
     )
     check(
         "SYSTEMD_ROOTS per-root section comments render",

@@ -108,13 +108,19 @@
       {%- for section_name in _type_config.sections -%}
         {%- set section_var = 'SYSTEMD_' ~ section_name | upper ~ 'S' -%}
         {%- set default_var = section_var ~ '_DEFAULT' -%}
-        {%- set defaults = lookup('vars', default_var, default={}) -%}
-        {%- set global_vals = lookup('vars', section_var, default={}) -%}
-        {%- set root_vals = _raw_vars.get(section_var, {}) -%}
-        {%- set user_vals = global_vals | combine(root_vals, recursive=True) -%}
-        {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
+        {%- set global_vals = lookup('vars', section_var, default=false) -%}
+        {%- set root_vals = _raw_vars.get(section_var, global_vals) -%}
+        {#- Defaults enrich declared sections; they never declare one. An
+           empty dict opts in, while false/null suppress inherited data. -#}
+        {%- if root_vals is not none and root_vals is not sameas false -%}
+          {%- set defaults = lookup('vars', default_var, default={}) -%}
+          {%- set user_vals = (global_vals if global_vals is mapping else {}) | combine(root_vals, recursive=True) -%}
+          {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
+        {%- else -%}
+          {%- set _ = merged.update({section_var: {}}) -%}
+        {%- endif -%}
       {%- endfor -%}
-      {%- if _alias_name and 'SYSTEMD_INSTALLS' in merged -%}
+      {%- if _alias_name and merged.get('SYSTEMD_INSTALLS') -%}
         {%- set install = merged['SYSTEMD_INSTALLS'] -%}
         {%- set existing = install.get('Alias') -%}
         {%- if existing is sameas false -%}
@@ -148,7 +154,7 @@
         {%- for unit_type in SYSTEMD_UNITTYPES_ALL -%}
           {%- set type_config = SYSTEMD_TYPE_CONFIG[unit_type] -%}
           {%- set var_key = 'SYSTEMD_' ~ type_config.var_suffix -%}
-          {%- if root_data[var_key] is defined or root_data['SYSTEMD_' ~ unit_type.upper] is defined -%}
+          {%- if root_data[var_key] is defined or root_data['SYSTEMD_' ~ (unit_type | upper)] is defined -%}
             {%- set _ = pairs.append({'root': root_name, 'type': unit_type}) -%}
           {%- endif -%}
         {%- endfor -%}
@@ -184,13 +190,19 @@
       {%- for section_name in _type_config.sections -%}
         {%- set section_var = 'SYSTEMD_' ~ section_name | upper ~ 'S' -%}
         {%- set default_var = section_var ~ '_DEFAULT' -%}
-        {%- set defaults = lookup('vars', default_var, default={}) -%}
-        {%- set global_vals = lookup('vars', section_var, default={}) -%}
-        {%- set root_vals = _root_data.get(section_var, {}) -%}
-        {%- set user_vals = global_vals | combine(root_vals, recursive=True) -%}
-        {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
+        {%- set global_vals = lookup('vars', section_var, default=false) -%}
+        {%- set root_vals = _root_data.get(section_var, global_vals) -%}
+        {#- Match top-level section-presence gating, including explicit
+           suppression of inherited global sections by this root. -#}
+        {%- if root_vals is not none and root_vals is not sameas false -%}
+          {%- set defaults = lookup('vars', default_var, default={}) -%}
+          {%- set user_vals = (global_vals if global_vals is mapping else {}) | combine(root_vals, recursive=True) -%}
+          {%- set _ = merged.update({section_var: defaults | combine(user_vals, recursive=True)}) -%}
+        {%- else -%}
+          {%- set _ = merged.update({section_var: {}}) -%}
+        {%- endif -%}
       {%- endfor -%}
-      {%- if _alias_name and 'SYSTEMD_INSTALLS' in merged -%}
+      {%- if _alias_name and merged.get('SYSTEMD_INSTALLS') -%}
         {%- set install = merged['SYSTEMD_INSTALLS'] -%}
         {%- set existing = install.get('Alias') -%}
         {%- if existing is sameas false -%}
