@@ -6,9 +6,11 @@ Run: python3 tests/integration/nfs.test.py
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -52,6 +54,50 @@ def render(
 
 def require_success(result: subprocess.CompletedProcess[str]) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def stage_mock_install(
+    payload: Path,
+) -> tuple[Callable[[], subprocess.CompletedProcess[str]], Callable[[], str]]:
+    """Shim sudo/exportfs/systemctl/links.mjs over a rendered payload.
+
+    Nothing live runs: the shims record every privileged command to a
+    payload-local log instead of touching /etc, systemd, or the kernel
+    export table. Returns (install, commands) — run the generated
+    bin/install-nfs-export.sh with the shims first on PATH, and read the
+    recorded command log.
+    """
+    shims = payload / "shims"
+    shims.mkdir()
+    sudo = shims / "sudo"
+    sudo.write_text('#!/bin/sh\nexec "$@"\n')
+    sudo.chmod(0o755)
+    logger = (
+        '#!/bin/sh\n'
+        'printf "%s %s\\n" "${0##*/}" "$*" >> "$NFS_TEST_LOG"\n'
+    )
+    for command in (shims / "systemctl", shims / "exportfs",
+                    payload / "bin/links.mjs"):
+        command.unlink(missing_ok=True)
+        command.write_text(logger)
+        command.chmod(0o755)
+    log = payload / "commands.log"
+    environment = {
+        **os.environ, "DIR": str(payload), "ENV_BYPASS": "1",
+        "PATH": f"{shims}:{os.environ['PATH']}", "NFS_TEST_LOG": str(log),
+    }
+    installer = payload / "bin/install-nfs-export.sh"
+
+    def install() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(installer)], env=environment, capture_output=True, text=True,
+            check=False,
+        )
+
+    def commands() -> str:
+        return log.read_text()
+
+    return install, commands
 
 
 def test_default_export(payload: Path) -> None:
@@ -111,35 +157,10 @@ def test_custom_export_installer(payload: Path) -> None:
     # Force a glob collision: client wildcard names must never become local
     # filenames, including under the generated helper's nullglob setting.
     (payload / "matched.example.test").touch()
-    shims = payload / "shims"
-    shims.mkdir()
-    sudo = shims / "sudo"
-    sudo.write_text('#!/bin/sh\nexec "$@"\n')
-    sudo.chmod(0o755)
-    logger = (
-        '#!/bin/sh\n'
-        'printf "%s %s\\n" "${0##*/}" "$*" >> "$NFS_TEST_LOG"\n'
-    )
-    for command in (shims / "systemctl", shims / "exportfs",
-                    payload / "bin/links.mjs"):
-        command.unlink(missing_ok=True)
-        command.write_text(logger)
-        command.chmod(0o755)
-    log = payload / "commands.log"
-    environment = {
-        **os.environ, "DIR": str(payload), "ENV_BYPASS": "1",
-        "PATH": f"{shims}:{os.environ['PATH']}", "NFS_TEST_LOG": str(log),
-    }
-    installer = payload / "bin/install-nfs-export.sh"
-
-    def install() -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [str(installer)], env=environment, capture_output=True, text=True,
-            check=False,
-        )
+    install, commands_log = stage_mock_install(payload)
 
     require_success(install())
-    commands = log.read_text()
+    commands = commands_log()
     assert commands.index("links.mjs apply") < commands.index("systemctl")
     assert f"*.example.test:{source}" in commands
     assert "matched.example.test" not in commands
@@ -152,11 +173,116 @@ def test_custom_export_installer(payload: Path) -> None:
     require_success(install())
     assert source.stat().st_mode & 0o777 == 0o700
     assert marker.read_text() == "existing data\n"
-    before = log.read_text()
+    before = commands_log()
     (payload / "bin/links.mjs").unlink()
     rejected = install()
     assert rejected.returncode != 0 and "no links runtime" in rejected.stderr
-    assert log.read_text() == before
+    assert commands_log() == before
+
+
+def test_two_instances_coexist(payload: Path) -> None:
+    """Two nfs-export deployments render and install side by side.
+
+    Alpha and beta render into separate scratch payloads with distinct
+    fragments and /etc/exports.d destinations. Mock-installing beta after
+    alpha must leave alpha's staged fragment and command log untouched:
+    each install converges only its own (client, path) entries with
+    scoped `exportfs -i`, and never issues an unexport/global re-export
+    or an nfs-server restart. The shared distro nfs-server start (and the
+    manager daemon-reload that publishes new exports.d fragments) is the
+    expected cross-deployment action.
+    """
+    declarations = {
+        "alpha": {
+            "export_path": str(payload / "export-alpha"),
+            "clients": ["10.0.0.0/24"],
+        },
+        "beta": {
+            "export_path": str(payload / "export-beta"),
+            "clients": ["192.168.0.0/24", "filer.example.test"],
+        },
+    }
+    opts = "rw,sync,no_subtree_check,root_squash"
+    payloads = {}
+    fragments = {}
+    dests = {}
+    for instance, declared in declarations.items():
+        target = payload / instance
+        require_success(render("nfs-export.srv.pb", target, {
+            "INSTANCE": instance, **declared,
+        }))
+        payloads[instance] = target
+        dests[instance] = f"/etc/exports.d/nfs-export-{instance}.exports"
+        staged = target / "etc" / f"nfs-export-{instance}.exports"
+        text = staged.read_text()
+        fragments[instance] = (staged, text)
+        assert list((target / "etc").rglob("*.exports")) == [staged]
+        expected = declared["export_path"] + "".join(
+            f" {client}({opts})" for client in declared["clients"]
+        )
+        assert expected in text
+        plan = json.loads((target / "links.json").read_text())
+        export_rows = [
+            (row["src"], row["dest"]) for row in plan["links"]
+            if row["dest"].startswith("/etc/exports.d/")
+        ]
+        assert export_rows == [(str(staged), dests[instance])]
+    assert fragments["alpha"][1] != fragments["beta"][1]
+    alpha_path = declarations["alpha"]["export_path"]
+    beta_path = declarations["beta"]["export_path"]
+    assert alpha_path not in fragments["beta"][1]
+    assert beta_path not in fragments["alpha"][1]
+
+    installers = {}
+    logs = {}
+    for instance in ("alpha", "beta"):
+        installers[instance], logs[instance] = stage_mock_install(
+            payloads[instance]
+        )
+    for instance in ("alpha", "beta"):
+        require_success(installers[instance]())
+    first_pass = {i: logs[i]() for i in ("alpha", "beta")}
+
+    # Every logged command stays scoped: each exportfs invocation is
+    # exactly `-i -o <opts> <client>:<path>` (no -r/-a/-u reconciliation,
+    # and no room for an option token to leak out of a client spec), and
+    # the only systemctl actions are the manager daemon-reload and the
+    # shared distro enable --now. Publication precedes both.
+    for instance, logged in first_pass.items():
+        for line in logged.splitlines():
+            if line.startswith("exportfs "):
+                assert re.fullmatch(rf"exportfs -i -o {opts} \S+:\S+", line), (
+                    line
+                )
+            if line.startswith("systemctl ") and "daemon-reload" not in line:
+                assert line == "systemctl enable --now nfs-server.service", (
+                    line
+                )
+        assert f"links.mjs apply --id system:{dests[instance]}" in logged
+        published = logged.index("links.mjs apply")
+        assert published < logged.index("enable --now")
+        assert logged.index("enable --now") < logged.index("exportfs -i")
+        if "daemon-reload" in logged:
+            assert published < logged.index("daemon-reload")
+    assert f"exportfs -i -o {opts} 10.0.0.0/24:{alpha_path}" in (
+        first_pass["alpha"]
+    )
+    assert f"exportfs -i -o {opts} 192.168.0.0/24:{beta_path}" in (
+        first_pass["beta"]
+    )
+    assert "filer.example.test:" in first_pass["beta"]
+    assert "alpha" not in first_pass["beta"]
+    assert "nfs-export-beta" not in first_pass["alpha"]
+
+    # Beta left alpha exactly as alpha left it, and alpha re-converges
+    # afterwards with the same scoped commands and fragment.
+    staged_alpha, alpha_text = fragments["alpha"]
+    assert staged_alpha.read_text() == alpha_text
+    assert logs["alpha"]() == first_pass["alpha"]
+    require_success(installers["alpha"]())
+    assert staged_alpha.read_text() == alpha_text
+    assert logs["alpha"]().count(f"10.0.0.0/24:{alpha_path}") == 2
+    assert fragments["beta"][0].read_text() == fragments["beta"][1]
 
 
 def test_custom_mount(payload: Path) -> None:
@@ -223,6 +349,7 @@ def main() -> None:
         test_default_mount(root / "mount")
         test_custom_mount(root / "custom")
         test_custom_export_installer(root / "custom-export")
+        test_two_instances_coexist(root / "coexist")
         test_reject_usermode(root / "rejected")
         test_reject_root_paths(root / "rejected-root")
         test_reject_unsafe_declarations(root / "rejected-unsafe")
