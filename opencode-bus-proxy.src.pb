@@ -46,6 +46,9 @@
     # CONFIG has no candidate dependency DAG; do not make Zim read ENV's
     # uncommitted candidate or assume a prior render assembled it.
     BINS:
+      - name: status-usage.sh
+        helpers: False
+        basedir: False
       - name: build-proxy-env.sh
         # Both the render run lane (this bin precedes generated Rust bins)
         # and ordinary build.sh (identity/prepare before main) need ENV before Rust's
@@ -187,6 +190,21 @@
       exposes Prometheus counters. No replay / exactly-once: source loss
       invalidates subscriptions and clients reconnect through their
       existing logic.
+
+      Check this account's actual client connections (Linux /proc, Python 3):
+
+          {{DIR}}/bin/status-usage.sh
+
+      Lists OpenCode clients without an established TCP connection to
+      {{_bus_proxy_listen}}, including PID, working directory, and tmux
+      session/window/pane when discoverable. Server-only `serve` processes
+      are excluded. Reports proxy usage/total and its ratio (ideal 1.000);
+      no clients gives n/a. This is a live snapshot, not configured intent:
+      disconnected/starting clients count as not using the proxy. Multiple
+      sockets count once per process. No credentials or arguments are printed.
+      tmux lookup uses the invoking shell's server (including TMUX); other
+      tmux servers may be unavailable. Exit 0 means all clients use the proxy
+      (or none exist), 1 means non-proxy clients, 2 means incomplete inspection.
 
       New build: `jj -R ~/src/opencode-bus-proxy bookmark set main -r <rev>`
       then rerun this playbook (it builds; installs are operator-run, the
