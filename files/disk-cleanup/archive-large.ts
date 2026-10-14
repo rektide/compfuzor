@@ -28,6 +28,13 @@
  * Usage:
  *   archive-large.ts [--root <dir>] [--threshold 2G] [--top N]
  *
+ * The default report is the plain hit list plus org subtotals; the
+ * per-hit drill-down (largest entries inside each hit) is OPT-IN via
+ * --top N — operator preference 2026-10-14: the detail was noise. The
+ * drill-down also floors entries at 50M (--min-child; operator
+ * 2026-10-14: anything smaller is irrelevant next to multi-GiB hits)
+ * and takes its top N only from entries clearing that floor.
+ *
  * Exit: 0 ok (hits or not — this is a report, not a check), 1 runtime
  * failure, 2 usage error.
  */
@@ -41,7 +48,10 @@ import { UsageError, duBytes, human, isErrnoError, isRealDir } from "./lib.ts";
 
 const PROG = "archive-large.ts";
 const DEFAULT_THRESHOLD = "2G";
-const DEFAULT_TOP = 5;
+/** 0 = no per-hit drill-down (operator preference 2026-10-14). */
+const DEFAULT_TOP = 0;
+/** Drill-down floor: children below this are irrelevant (2026-10-14). */
+const DEFAULT_MIN_CHILD = "50M";
 const ORG_TOTALS_SHOWN = 10;
 
 interface Repo {
@@ -80,8 +90,10 @@ options:
   --root <dir>        archive root (default: $HOME/archive)
   --threshold <size>  report repos at or above this size
                       (default: ${DEFAULT_THRESHOLD}; syntax below)
-  --top <n>           largest immediate entries shown per hit
-                      (default ${DEFAULT_TOP}, 0 disables)
+  --top <n>           OPT-IN drill-down: n largest immediate entries per
+                      hit (default 0 = off)
+  --min-child <size>  drill-down floor: entries below this size are not
+                      listed (default 50M; 0 disables the floor)
   --help              this help
 
 threshold syntax: a number plus optional binary unit suffix —
@@ -100,17 +112,17 @@ as a lower bound and are counted in the skipped line.`;
 }
 
 /** Parse "2G"/"1.5GiB"/"512M"/plain-bytes into bytes; throws UsageError. */
-function parseSize(raw: string): bigint {
+function parseSize(raw: string, flag = "--threshold"): bigint {
 	const match = /^(\d+(?:\.\d+)?)\s*([kKmMgGtT])?[iI]?[bB]?$/.exec(raw);
 	if (match === null) {
-		throw new UsageError(`--threshold cannot parse "${raw}" (try 2G, 1.5GiB, 512M, or plain bytes)`);
+		throw new UsageError(`${flag} cannot parse "${raw}" (try 2G, 1.5GiB, 512M, or plain bytes)`);
 	}
 	const value = Number(match[1]);
 	const unit = (match[2] ?? "").toLowerCase();
 	const multiplier = unit === "" ? 1 : unit === "k" ? 1024 : unit === "m" ? 1024 ** 2 : unit === "g" ? 1024 ** 3 : 1024 ** 4;
 	const bytes = Math.round(value * multiplier);
 	if (!Number.isFinite(bytes) || bytes <= 0 || bytes > Number.MAX_SAFE_INTEGER) {
-		throw new UsageError(`--threshold out of range: "${raw}"`);
+		throw new UsageError(`${flag} out of range: "${raw}"`);
 	}
 	return BigInt(bytes);
 }
@@ -159,8 +171,11 @@ async function scan(root: string): Promise<ScanResult> {
 	return { repos, nonDirs: scan.nonDirs, unreadable: scan.unreadable };
 }
 
-/** Largest immediate entries of a hit: duBytes per entry, sorted desc. */
-async function largestChildren(path: string, top: number): Promise<readonly Child[]> {
+/**
+ * Largest immediate entries of a hit clearing minBytes: duBytes per
+ * entry, filtered, sorted desc, capped at top.
+ */
+async function largestChildren(path: string, top: number, minBytes: bigint): Promise<readonly Child[]> {
 	let entries: Dirent[];
 	try {
 		entries = await readdir(path, { withFileTypes: true });
@@ -177,11 +192,18 @@ async function largestChildren(path: string, top: number): Promise<readonly Chil
 			return { name: entry.name, isDir: entry.isDirectory(), bytes } satisfies Child;
 		}),
 	);
-	const sorted = measured.sort((a, b) => (a.bytes < b.bytes ? 1 : a.bytes > b.bytes ? -1 : 0));
+	const relevant = measured.filter((child) => child.bytes >= minBytes);
+	const sorted = relevant.sort((a, b) => (a.bytes < b.bytes ? 1 : a.bytes > b.bytes ? -1 : 0));
 	return sorted.slice(0, top);
 }
 
-async function report(root: string, result: ScanResult, threshold: bigint, top: number): Promise<string> {
+async function report(
+	root: string,
+	result: ScanResult,
+	threshold: bigint,
+	top: number,
+	minChild: bigint,
+): Promise<string> {
 	const lines: string[] = [];
 	const hits = [...result.repos].filter((repo) => repo.bytes >= threshold).sort((a, b) => (a.bytes < b.bytes ? 1 : a.bytes > b.bytes ? -1 : 0));
 	const hitsTotal = hits.reduce((sum, repo) => sum + repo.bytes, 0n);
@@ -210,12 +232,13 @@ async function report(root: string, result: ScanResult, threshold: bigint, top: 
 	}
 	if (top > 0 && hits.length > 0) {
 		lines.push("");
-		lines.push(`largest entries inside each hit (top ${top}; children can sum past the hit — hardlinks):`);
+		const floorNote = minChild > 0n ? `, entries under ${human(minChild)} omitted` : "";
+		lines.push(`largest entries inside each hit (top ${top}${floorNote}; children can sum past the hit — hardlinks):`);
 		for (const hit of hits) {
 			lines.push(`  ${hit.org}/${hit.name}`);
-			const children = await largestChildren(hit.path, top);
+			const children = await largestChildren(hit.path, top, minChild);
 			if (children.length === 0) {
-				lines.push("    (unreadable)");
+				lines.push(minChild > 0n ? `    (no entries at/over ${human(minChild)})` : "    (unreadable)");
 			}
 			for (const child of children) {
 				lines.push(`${human(child.bytes).padStart(12)}  ${child.name}${child.isDir ? "/" : ""}`);
@@ -240,6 +263,7 @@ async function main(argv: string[]): Promise<number> {
 			root: { type: "string" },
 			threshold: { type: "string" },
 			top: { type: "string" },
+			"min-child": { type: "string" },
 			help: { type: "boolean", default: false },
 		},
 	});
@@ -248,6 +272,9 @@ async function main(argv: string[]): Promise<number> {
 		return 0;
 	}
 	const threshold = parseSize(values.threshold ?? DEFAULT_THRESHOLD);
+	// "0" disables the drill-down floor; parseSize proper rejects ≤ 0
+	// (correct for --threshold, where 0 would report everything).
+	const minChild = values["min-child"] === "0" ? 0n : parseSize(values["min-child"] ?? DEFAULT_MIN_CHILD, "--min-child");
 	const topRaw = values.top ?? String(DEFAULT_TOP);
 	const top = Number.parseInt(topRaw, 10);
 	if (!Number.isInteger(top) || top < 0 || top > 50) {
@@ -265,7 +292,7 @@ async function main(argv: string[]): Promise<number> {
 	}
 
 	const result = await scan(rootPath);
-	console.log(await report(rootPath, result, threshold, top));
+	console.log(await report(rootPath, result, threshold, top, minChild));
 	return 0;
 }
 
