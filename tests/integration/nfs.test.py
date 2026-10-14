@@ -68,6 +68,8 @@ def test_default_export(payload: Path) -> None:
         for row in plan["links"]
     )
     installer = (payload / "bin/install-nfs-export.sh").read_text()
+    assert f"EXPORT_OWNER_DEFAULT={os.getuid()}" in installer
+    assert f"EXPORT_GROUP_DEFAULT={os.getgid()}" in installer
     assert "nfs-server" in installer and "exportfs" in installer
     assert "exportfs -ra" not in installer and "exportfs -u" not in installer
     aggregate = (payload / "bin/install.sh").read_text()
@@ -133,6 +135,22 @@ def test_reject_root_paths(payload: Path) -> None:
         assert not (payload / "bin/install.sh").exists()
 
 
+def test_reject_unsafe_declarations(payload: Path) -> None:
+    for playbook, overrides in (
+        ("nfs-export.srv.pb", {"export_path": "/srv/has space"}),
+        ("nfs-export.srv.pb", {"export_path": "/srv/quote'path"}),
+        ("nfs-export.srv.pb", {"export_path": "/srv/trailing\n"}),
+        ("nfs-export.srv.pb", {"export_path": "/srv/../"}),
+        ("nfs-export.srv.pb", {"clients": []}),
+        ("nfs-export.srv.pb", {"clients": ["127.0.0.1\n"]}),
+        ("nfs.etc.pb", {"where": "/mnt/has space"}),
+        ("nfs.etc.pb", {"export_path": "/srv/trailing\n"}),
+    ):
+        result = render(playbook, payload, overrides)
+        assert result.returncode != 0, (playbook, overrides, result.stdout)
+        assert not (payload / "bin").exists()
+
+
 def main() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     (SCRATCH / "README.md").write_text(
@@ -148,6 +166,7 @@ def main() -> None:
         test_custom_mount(root / "custom")
         test_reject_usermode(root / "rejected")
         test_reject_root_paths(root / "rejected-root")
+        test_reject_unsafe_declarations(root / "rejected-unsafe")
     print("ok: NFS export, automount, overrides, and system-scope boundary")
 
 

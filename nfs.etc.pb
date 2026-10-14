@@ -33,7 +33,7 @@
     WHERE: "{{where|default('/mnt/nfs-' + INSTANCE)}}"
     UNIT: "{{ lookup('pipe', 'systemd-escape --path ' ~ (WHERE|quote)) }}"
     # vers=4.2 pins the negotiation; tcp avoids UDP fragility, hard retries
-    # instead of surfacing EIO, and _netdef.. _netdev defers the mount until
+    # instead of surfacing EIO, and _netdev defers the mount until
     # the network is up. Append knobs with mount_opts.
     MOUNT_OPTS: "vers=4.2,proto=tcp,hard,_netdev{{ (',' ~ mount_opts) if mount_opts|default('')|length else '' }}"
     SYSTEMD_ALIAS: false
@@ -77,14 +77,13 @@
     - name: "Compfuzor: validate the mount declaration"
       ansible.builtin.assert:
         that:
-          - WHERE is match('^/')
-          - WHERE | length > 1
-          - WHERE is not match('[\s]')
-          - EXPORT_PATH is match('^/')
-          - EXPORT_PATH | length > 1
-          - EXPORT_PATH is not match('[\s]')
-          - SRV is match('^[A-Za-z0-9.\[\]:-]+$')
-          - MOUNT_OPTS is match('^[A-Za-z0-9_.=,:@+-]+$')
+          - NAME | default(TYPE ~ '-' ~ INSTANCE) is match('^[A-Za-z0-9_-][A-Za-z0-9_.-]*\Z')
+          - WHERE is match('^/[A-Za-z0-9_./+-]+\Z')
+          - WHERE is not search('(^|/)\.{1,2}(/|$)|//|/$')
+          - EXPORT_PATH is match('^/[A-Za-z0-9_./+-]+\Z')
+          - EXPORT_PATH is not search('(^|/)\.{1,2}(/|$)|//|/$')
+          - SRV is match('^[A-Za-z0-9.\[\]:-]+\Z')
+          - MOUNT_OPTS is match('^[A-Za-z0-9_.=,:@+-]+\Z')
         fail_msg: >-
           nfs: invalid declaration (srv={{ SRV }} export_path={{ EXPORT_PATH }}
           where={{ WHERE }} mount_opts={{ MOUNT_OPTS|default('') }}): paths

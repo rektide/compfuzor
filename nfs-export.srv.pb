@@ -10,9 +10,9 @@
 # (exactly like the systemd unit installers publish their unit), creates
 # the export root only when missing, enables/starts the distro
 # nfs-server.service, then converges kernel state for exactly the declared
-# clients with `exportfs -i -o <opts> <client>:<path>`. Other declarations
-# on the host are never touched: refreshing or pruning them stays a
-# deliberate manual operation.
+# clients with `exportfs -i -o <opts> <client>:<path>`. These updates do not
+# reconcile other declarations; the distro unit still owns host-wide startup
+# and shutdown semantics.
 #
 #   ansible-playbook -i 'localhost,' -c local nfs-export.srv.pb
 #   sudo bash /srv/nfs-export-test/bin/install.sh
@@ -23,7 +23,7 @@
 # Vars (optional, -e overrides):
 #   export_path   exported directory (default /srv/nfs-<INSTANCE>). Must be
 #                 absolute and not /; created by the installer only when
-#                 missing, owned by the invoking uid/gid so a nonroot
+#                 missing, owned by the rendering user's uid/gid so a nonroot
 #                 install can stage content without sudo afterwards.
 #   clients       client specs, list of strings (default 127.0.0.1). IPv4
 #                 addresses/CIDRs, hostnames, wildcards, @netgroups only:
@@ -81,9 +81,12 @@
           EXPORT_OPTS='{{EXPORT_OPTS}}'
           CLIENTS='{{CLIENTS|join(' ')}}'
           NFS_SERVICE='{{NFS_SERVICE}}'
-          EXPORT_OWNER="${NFS_EXPORT_OWNER:-{{export_owner|default('')}}}"
-          EXPORT_GROUP="${NFS_EXPORT_GROUP:-{{export_group|default('')}}}"
-          EXPORT_MODE="${NFS_EXPORT_MODE:-{{export_mode|default('0770')}}}"
+          EXPORT_OWNER_DEFAULT={{ export_owner|default(ansible_user_uid)|string|quote }}
+          EXPORT_GROUP_DEFAULT={{ export_group|default(ansible_user_gid)|string|quote }}
+          EXPORT_MODE_DEFAULT={{ export_mode|default('0770')|string|quote }}
+          EXPORT_OWNER="${NFS_EXPORT_OWNER:-$EXPORT_OWNER_DEFAULT}"
+          EXPORT_GROUP="${NFS_EXPORT_GROUP:-$EXPORT_GROUP_DEFAULT}"
+          EXPORT_MODE="${NFS_EXPORT_MODE:-$EXPORT_MODE_DEFAULT}"
           SUDO_CMD="sudo"
           if [ ! -f "${DIR}/etc/{{NAME}}.exports" ]; then
               echo "nfs-export: missing staged fragment ${DIR}/etc/{{NAME}}.exports" >&2
@@ -100,11 +103,10 @@
               esac
           else
               echo "nfs-export: no links runtime (LINKS_BYPASS render?); /etc/exports.d/{{NAME}}.exports not published" >&2
+              exit 1
           fi
           # The export root is ours to create, never to restomp: mkdir only
           # when missing, and chown/chmod only the directory we created.
-          [ -n "$EXPORT_OWNER" ] || EXPORT_OWNER="$(id -u)"
-          [ -n "$EXPORT_GROUP" ] || EXPORT_GROUP="$(id -g)"
           if [ ! -d "$EXPORT_PATH" ]; then
               $SUDO_CMD mkdir -p "$EXPORT_PATH"
               $SUDO_CMD chown "$EXPORT_OWNER:$EXPORT_GROUP" "$EXPORT_PATH"
@@ -132,12 +134,12 @@
     - name: "Compfuzor: validate the export declaration"
       ansible.builtin.assert:
         that:
-          - EXPORT_PATH is match('^/')
-          - EXPORT_PATH | length > 1
-          - EXPORT_PATH is not match('[\s]')
-          - EXPORT_OPTS is not match('[\s]')
-          - EXPORT_OPTS is match('^[A-Za-z0-9_]+(=[A-Za-z0-9_./@+-]*)?(,[A-Za-z0-9_]+(=[A-Za-z0-9_./@+-]*)?)*$')
-          - NFS_SERVICE is match('^[A-Za-z0-9_.@-]+[.]service$')
+          - NAME | default(TYPE ~ '-' ~ INSTANCE) is match('^[A-Za-z0-9_-][A-Za-z0-9_.-]*\Z')
+          - EXPORT_PATH is match('^/[A-Za-z0-9_./+-]+\Z')
+          - EXPORT_PATH is not search('(^|/)\.{1,2}(/|$)|//|/$')
+          - CLIENTS | length > 0
+          - EXPORT_OPTS is match('^[A-Za-z0-9_]+(=[A-Za-z0-9_./@+-]*)?(,[A-Za-z0-9_]+(=[A-Za-z0-9_./@+-]*)?)*\Z')
+          - NFS_SERVICE is match('^[A-Za-z0-9_.@-]+[.]service\Z')
         fail_msg: >-
           nfs-export: invalid declaration (export_path={{ EXPORT_PATH }}
           export_opts={{ EXPORT_OPTS }} nfs_service={{ NFS_SERVICE }}):
@@ -147,7 +149,7 @@
     - name: "Compfuzor: validate export clients"
       ansible.builtin.assert:
         that:
-          - item is match('^[A-Za-z0-9.@*?_/-]+$')
+          - item is match('^[A-Za-z0-9.@*?_/-]+\Z')
           - item != '*'
         fail_msg: >-
           nfs-export: unsafe client spec "{{ item }}": use IPv4
