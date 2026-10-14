@@ -9,7 +9,7 @@ generated:
   at: 2026-10-14
 sources:
   - resource: opencode://ses_ec3b9dd3effe33r8JIOsc5WGTJ
-    title: NFS playbook direction, validation and ownership corrections, and verified loopback installation
+    title: NFS playbooks, validation and ownership corrections, loopback verification, and no-sudo nanomachine staging
   - resource: /cifs.etc.pb
     title: Existing separate systemd mount and automount pattern
   - resource: /nfs-export.srv.pb
@@ -30,7 +30,10 @@ sources:
   Only the automount is enabled; accessing its path mounts the export.
 
 These are independent deployments. They leave [Samba](/samba.srv.pb),
-[existing CIFS mounts](/cifs.etc.pb), fstab, and nanomachine unchanged.
+[existing CIFS mounts](/cifs.etc.pb) and fstab unchanged unless a separate cutover
+is explicitly chosen. For named-export composition, no-sudo SSH staging, actual
+host findings, and performance choices, see
+[Nanomachine staging and tuning](/doc/nfs/nanomachine.md).
 
 ## Loopback trial
 
