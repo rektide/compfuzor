@@ -1,6 +1,7 @@
 /**
  * lib.ts — shared helpers for the disk-cleanup bins (src-clean.ts,
- * rust-aggressive.ts, pnpm-prune.ts, rustup-clean.ts, btrfs-balance.ts).
+ * rust-aggressive.ts, pnpm-prune.ts, rustup-clean.ts, btrfs-balance.ts,
+ * archive-large.ts).
  *
  * Not a bin itself: deployed alongside them (raw copy) and imported with
  * explicit .ts extensions, which Node 22.18+/23.6+ type stripping (and

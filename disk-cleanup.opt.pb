@@ -49,6 +49,15 @@
         deletions (src-clean passes, toolchain uninstalls) re-sparse
         chunks. Re-run the cheap stages after those, never 45/65 absent
         new evidence.
+      - `archive-large.ts` — READ-ONLY ~/archive reporter (no deletion
+        path, no --apply): `<org>/<repo>` dirs over a threshold (default
+        2G), each hit's largest entries, org subtotals. First scan
+        2026-10-14: 11 of 6210 repos hold 43.3 of 240.8 GiB (anomalyco/
+        opencode 11.9G — half of it node_modules/ plus two dead
+        .jj.*ghost/backup trees; zen-browser .git 5.7G). Added after the
+        whole-target hollowing ask was measured a near-noop (src-clean +
+        rust-aggressive already cover 11.1 of 11.6 GiB across 138 ~/src
+        targets; node_modules declined per pnpm store semantics).
       - `lib.ts` — shared helpers (imported by the bins; not a command).
 
       Status: `bin/status.sh` (subsystem) and, for the scheduled clean,
@@ -189,6 +198,9 @@
         raw: True
       - name: btrfs-balance.ts
         src: btrfs-balance.ts
+        raw: True
+      - name: archive-large.ts
+        src: archive-large.ts
         raw: True
 
     # All bins are operator tools that dry-run by default (the pnpm-prune
