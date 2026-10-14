@@ -565,6 +565,18 @@
       Exit 0 means this shell is on the managed deployment; exit 1 prints each
       drift line. No network is involved — versions come from `--version`.
 
+      `bin/status-top.sh` (global `opencode-status-top`, primary only) is a
+      standalone resident-memory view, not a status.sh reporter: the N
+      largest OpenCode client instances by RSS (`-n`, default 8; 0 lists
+      all) in a columnar table with PID, RSS and PSS in MB, tmux session
+      and window, and the working directory (~-abbreviated). PSS comes
+      from smaps_rollup and stays blank where unreadable; RSS across
+      instances of one binary overstates unique use, so rank by RSS but
+      read PSS for honesty. A trailing `*` on the session marks a location
+      recovered from the client's inherited TMUX_PANE rather than live
+      ancestry. The origin `serve` process never competes for ranking; it
+      is summarized in one footnote line with its own resident size.
+
       The local `opencode-client-args` ZIM module exports the credential for
       interactive clients. The deployed CLI also reads the
       `OPENCODE_PASSWORD_FILE` pointer itself; the export keeps dated
@@ -1060,6 +1072,14 @@
       - name: status-opencode-ok.sh
         basedir: False
         global: "{{ 'opencode-status-ok' if OPENCODE_PRIMARY else False }}"
+      # Standalone resident-memory view, not a status.sh reporter: top-N
+      # OpenCode client instances by RSS with PID, RSS/PSS, tmux
+      # session+window, and working directory. Primary links it globally
+      # as opencode-status-top (same secondary collision reasoning as
+      # status-opencode-ok.sh).
+      - name: status-top.sh
+        basedir: False
+        global: "{{ 'opencode-status-top' if OPENCODE_PRIMARY else False }}"
       - name: backup.sh
         basedir: False
       # TypeScript port of backup.sh (node:util parse-args CLI). The Node
