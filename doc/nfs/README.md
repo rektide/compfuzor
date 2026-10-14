@@ -106,7 +106,8 @@ exported with `crossmnt`; declare them deliberately if needed.
 
 Changing a declaration and rerunning its installer updates that declaration.
 It does not stop or unexport older deployments. In particular, changing the
-export path or client list does not revoke old active export entries; remove
+export path or client list does not immediately revoke old active export entries;
+the distribution's next server restart reconciles its persistent fragments. Remove
 those deliberately with `sudo exportfs -u CLIENT:/old/path`, and remove obsolete
 fragments so they cannot return at server restart.
 
@@ -117,8 +118,8 @@ Do not test a second filesystem on the path of an active CIFS mount.
 For the default trial, stop the client first:
 
 ```sh
-sudo systemctl disable --now mnt-nfs\\x2dtest.automount
-sudo systemctl stop mnt-nfs\\x2dtest.mount
+sudo systemctl disable --now 'mnt-nfs\x2dtest.automount'
+sudo systemctl stop 'mnt-nfs\x2dtest.mount'
 sudo exportfs -u 127.0.0.1:/srv/nfs-test
 ```
 

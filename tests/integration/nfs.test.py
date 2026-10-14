@@ -30,13 +30,19 @@ def render(
         "BINS_RUN_BYPASS": True,
         "SYSTEMD_THUNK_BYPASS": True,
         "GLOBAL_BINS_BYPASS": True,
+        "USER": "",
         **(overrides or {}),
     }
     result = subprocess.run(
         ["ansible-playbook", "-i", "localhost,", "-c", "local", playbook,
          "-e", json.dumps(variables)],
         cwd=ROOT,
-        env={**os.environ, "ANSIBLE_NOCOLOR": "1"},
+        env={
+            **os.environ,
+            "ANSIBLE_NOCOLOR": "1",
+            "ANSIBLE_CONFIG": str(ROOT / "ansible.cfg"),
+            "HOME": str(payload.parent),
+        },
         text=True,
         capture_output=True,
         check=False,
@@ -68,9 +74,10 @@ def test_default_export(payload: Path) -> None:
     assert aggregate.index("install-apt.sh") < aggregate.index(
         "install-nfs-export.sh"
     )
-    assert aggregate.index("install-links.sh") < aggregate.index(
-        "install-nfs-export.sh"
-    )
+    assert "install-links.sh" in aggregate
+    # Link compositors normally run last. This installer must publish its
+    # fragment itself before the distro service reads all exports on startup.
+    assert installer.index("links.mjs") < installer.index("systemctl")
 
 
 def test_default_mount(payload: Path) -> None:
@@ -113,6 +120,7 @@ def test_reject_usermode(payload: Path) -> None:
             f"{playbook} accepted user-scoped kernel NFS"
         )
         assert not (payload / "bin/install.sh").exists()
+        assert not (payload / "bin/install-user.sh").exists()
 
 
 def test_reject_root_paths(payload: Path) -> None:
