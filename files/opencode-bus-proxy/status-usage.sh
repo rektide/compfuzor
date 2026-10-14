@@ -5,6 +5,9 @@ import os
 from pathlib import Path
 import subprocess
 
+# The authored listener binds 127.0.0.1; accept native and v4-mapped forms.
+PROXY_ADDRESSES = {"0100007F", "0000000000000000FFFF00000100007F"}
+
 
 def tmux_panes():
     try:
@@ -49,8 +52,14 @@ def tmux_location(proc, panes):
     return "; ".join(matches) if matches else f"{pane_id} (tmux server unavailable)"
 
 
-def proxy_inodes(proc, port):
-    inodes = set()
+def loopback(address):
+    # 127.0.0.0/8 (native or v4-mapped little-endian hex) plus ::1.
+    return address.endswith("7F") or address == "00000000000000000000000000000001"
+
+
+def socket_table(proc):
+    """Inode -> (state, remote address, remote port) from /proc/net/tcp{,6}."""
+    table = {}
     for name in ("tcp", "tcp6"):
         try:
             lines = (proc / "net" / name).read_text().splitlines()[1:]
@@ -60,29 +69,30 @@ def proxy_inodes(proc, port):
             raise
         for line in lines:
             fields = line.split()
-            address, remote_port = fields[2].split(":")
-            # Match the authored IPv4 loopback listener, including mapped IPv6.
-            if (fields[3] == "01" and int(remote_port, 16) == port
-                    and address in ("0100007F", "0000000000000000FFFF00000100007F")):
-                inodes.add(fields[9])
-    return inodes
+            address, port = fields[2].split(":")
+            table[fields[9]] = (fields[3], address, int(port, 16))
+    return table
 
 
-def inspect(proc, port):
-    wanted = proxy_inodes(proc, port)
+def established_pairs(proc, table):
+    """(remote address, remote port) of this process's ESTABLISHED sockets."""
+    pairs = set()
     for fd in (proc / "fd").iterdir():
         try:
             target = fd.readlink().as_posix()
         except FileNotFoundError:
             continue  # Socket closed during snapshot.
-        if target.startswith("socket:[") and target[8:-1] in wanted:
-            return True
-    return False
+        if target.startswith("socket:["):
+            entry = table.get(target[8:-1])
+            if entry and entry[0] == "01":
+                pairs.add((entry[1], entry[2]))
+    return pairs
 
 
 def report(root, uid, port, panes):
     total = using = unknown = 0
     rows = []
+    port_clients = {}
     for proc in sorted((p for p in root.iterdir() if p.name.isdigit()),
                        key=lambda p: int(p.name)):
         try:
@@ -97,24 +107,31 @@ def report(root, uid, port, panes):
             continue
         total += 1
         try:
-            connected = inspect(proc, port)
+            pairs = established_pairs(proc, socket_table(proc))
         except FileNotFoundError:
             if not proc.exists():
                 total -= 1
                 continue
-            connected = None
+            pairs = None
         except PermissionError:
-            connected = None
+            pairs = None
+        if pairs is None:
+            unknown += 1
+            connected = False
+        else:
+            connected = any(address in PROXY_ADDRESSES and remote == port
+                            for address, remote in pairs)
+            for address, remote in pairs:
+                if loopback(address):
+                    port_clients.setdefault(remote, set()).add(proc.name)
         if connected:
             using += 1
             continue
-        if connected is None:
-            unknown += 1
         try:
             cwd = str((proc / "cwd").readlink())
         except OSError:
             cwd = "unavailable"
-        rows.append((proc.name, "unknown" if connected is None else "not using",
+        rows.append((proc.name, "unknown" if pairs is None else "not using",
                      tmux_location(proc, panes), cwd))
     print(f"OpenCode clients without observed proxy use (127.0.0.1:{port}):")
     print("PID\tSTATUS\tTMUX\tCWD")
@@ -122,13 +139,19 @@ def report(root, uid, port, panes):
         print("\t".join(value.replace("\n", "\\n").replace("\t", "\\t") for value in row))
     if not rows:
         print("(none)")
+    print()
+    print("client ports (established loopback connections; clients per port):")
+    expected = port_clients.pop(port, set())
+    print(f"{port}\t{len(expected)}\texpected proxy")
+    for remote in sorted(port_clients):
+        print(f"{remote}\t{len(port_clients[remote])}")
     ratio = f"{using / total:.3f}" if total else "n/a"
     print(f"usage/total: {using}/{total} = {ratio}; unknown: {unknown}")
     return 2 if unknown else (1 if using < total else 0)
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Report current user's OpenCode proxy usage and tmux locations.")
+    parser = argparse.ArgumentParser(description="Report current user's OpenCode proxy usage, port histogram, and tmux locations.")
     parser.add_argument("port", type=int)
     args = parser.parse_args()
     raise SystemExit(report(Path("/proc"), os.getuid(), args.port, tmux_panes()))

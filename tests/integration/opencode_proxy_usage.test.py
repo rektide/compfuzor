@@ -43,6 +43,11 @@ class UsageTest(unittest.TestCase):
             code = MODULE["report"](self.proc, os.getuid() if uid is None else uid, 49372, panes)
         return code, output.getvalue()
 
+    def add_socket(self, proc, inode, remote):
+        with (proc / "net/tcp").open("a") as table:
+            table.write(f"0: 0100007F:ABCD {remote} 01 0:0 0:0 0 1000 0 {inode}\n")
+        (proc / f"fd/{inode}").symlink_to(f"socket:[{inode}]")
+
     def test_counts_clients_once_and_excludes_servers_and_other_processes(self):
         client = self.process(10)
         (client / "fd/11").symlink_to("socket:[42]")
@@ -55,21 +60,43 @@ class UsageTest(unittest.TestCase):
         self.assertIn("20\tnot using", text)
         self.assertNotIn("10\tnot using", text)
         self.assertEqual(self.report(uid=os.getuid() + 1)[0], 0)
+        self.assertIn("49372\t1\texpected proxy", text)
+        self.assertIn("49373\t1", text)
+        self.assertLess(text.index("expected proxy"), text.index("49373\t1"))
+
+    def test_port_histogram_sorted_with_expected_pinned_first(self):
+        client = self.process(10, remote="0100007F:01BB", inode="50")  # 443
+        self.add_socket(client, "51", "0100007F:1538")  # 5432
+        self.add_socket(client, "52", "0100007F:1538")  # Same port twice: one client.
+        self.add_socket(client, "53", "0100007F:EA60")  # 60000
+        code, text = self.report()
+        self.assertEqual(code, 1)
+        self.assertIn("49372\t0\texpected proxy", text)
+        self.assertIn("443\t1", text)
+        self.assertIn("5432\t1", text)
+        self.assertIn("60000\t1", text)
+        positions = [text.index(f"{line}\t") for line in ("49372", "443", "5432", "60000")]
+        self.assertEqual(positions, sorted(positions))
 
     def test_requires_established_loopback_destination(self):
-        self.process(10, remote="0200007F:C0DC")
+        self.process(10, remote="0200007F:1538")  # 127.0.0.2:5432 isn't our listener.
         self.process(20, state="0A")  # Listener isn't client usage.
         self.process(30, state="08")  # CLOSE_WAIT isn't active usage.
         code, text = self.report()
         self.assertEqual(code, 1)
         self.assertIn("usage/total: 0/3", text)
+        self.assertIn("49372\t0\texpected proxy", text)
+        self.assertIn("5432\t1", text)  # Other loopback addresses still count per port.
+        self.assertNotIn("49373\t", text)
 
     def test_mapped_ipv6_and_empty_report(self):
         self.assertIn("0/0 = n/a", self.report()[1])
+        self.assertIn("49372\t0\texpected proxy", self.report()[1])
         self.process(10, remote="0000000000000000FFFF00000100007F:C0DC", tcp6=True)
         code, text = self.report()
         self.assertEqual(code, 0)
         self.assertIn("1/1 = 1.000", text)
+        self.assertIn("49372\t1\texpected proxy", text)
 
     def test_missing_socket_data_is_unknown(self):
         proc = self.process(10)
@@ -78,6 +105,7 @@ class UsageTest(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("10\tunknown", text)
         self.assertIn("unknown: 1", text)
+        self.assertIn("49372\t0\texpected proxy", text)
 
     def test_tmux_ancestry_then_inherited_fallback(self):
         client = self.process(10, parent=20, remote="0100007F:C0DD")

@@ -201,10 +201,14 @@
       are excluded. Reports proxy usage/total and its ratio (ideal 1.000);
       no clients gives n/a. This is a live snapshot, not configured intent:
       disconnected/starting clients count as not using the proxy. Multiple
-      sockets count once per process. No credentials or arguments are printed.
-      tmux lookup uses the invoking shell's server (including TMUX); other
-      tmux servers may be unavailable. Exit 0 means all clients use the proxy
-      (or none exist), 1 means non-proxy clients, 2 means incomplete inspection.
+      sockets count once per process. A closing histogram lists every
+      loopback port with established client connections and how many
+      clients use each: the expected proxy port is pinned first (even at
+      zero) and the rest sort ascending. No credentials or arguments are
+      printed. tmux lookup uses the invoking shell's server (including
+      TMUX); other tmux servers may be unavailable. Exit 0 means all
+      clients use the proxy (or none exist), 1 means non-proxy clients,
+      2 means incomplete inspection.
 
       New build: `jj -R ~/src/opencode-bus-proxy bookmark set main -r <rev>`
       then rerun this playbook (it builds; installs are operator-run, the
