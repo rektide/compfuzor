@@ -17,7 +17,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SCRATCH = ROOT / ".test-agent/nfs"
 
 
-def render(playbook: str, payload: Path, overrides: dict | None = None) -> subprocess.CompletedProcess[str]:
+def render(
+    playbook: str, payload: Path, overrides: dict | None = None
+) -> subprocess.CompletedProcess[str]:
     variables = {
         "DIR": str(payload),
         "ETC": str(payload / "etc"),
@@ -55,13 +57,20 @@ def test_default_export(payload: Path) -> None:
     assert '127.0.0.1(rw,sync,no_subtree_check,root_squash)' in fragment
     assert "*(" not in fragment and "no_root_squash" not in fragment
     plan = json.loads((payload / "links.json").read_text())
-    assert any(row["dest"] == "/etc/exports.d/nfs-export-test.exports" for row in plan["links"])
+    assert any(
+        row["dest"] == "/etc/exports.d/nfs-export-test.exports"
+        for row in plan["links"]
+    )
     installer = (payload / "bin/install-nfs-export.sh").read_text()
     assert "nfs-server" in installer and "exportfs" in installer
     assert "exportfs -ra" not in installer and "exportfs -u" not in installer
     aggregate = (payload / "bin/install.sh").read_text()
-    assert aggregate.index("install-apt.sh") < aggregate.index("install-nfs-export.sh")
-    assert aggregate.index("install-links.sh") < aggregate.index("install-nfs-export.sh")
+    assert aggregate.index("install-apt.sh") < aggregate.index(
+        "install-nfs-export.sh"
+    )
+    assert aggregate.index("install-links.sh") < aggregate.index(
+        "install-nfs-export.sh"
+    )
 
 
 def test_default_mount(payload: Path) -> None:
@@ -100,7 +109,19 @@ def test_custom_mount(payload: Path) -> None:
 def test_reject_usermode(payload: Path) -> None:
     for playbook in ("nfs-export.srv.pb", "nfs.etc.pb"):
         result = render(playbook, payload, {"USERMODE": True})
-        assert result.returncode != 0, f"{playbook} accepted user-scoped kernel NFS"
+        assert result.returncode != 0, (
+            f"{playbook} accepted user-scoped kernel NFS"
+        )
+        assert not (payload / "bin/install.sh").exists()
+
+
+def test_reject_root_paths(payload: Path) -> None:
+    for playbook, overrides in (
+        ("nfs-export.srv.pb", {"export_path": "/"}),
+        ("nfs.etc.pb", {"where": "/"}),
+    ):
+        result = render(playbook, payload, overrides)
+        assert result.returncode != 0, f"{playbook} accepted a root path"
         assert not (payload / "bin/install.sh").exists()
 
 
@@ -108,7 +129,8 @@ def main() -> None:
     SCRATCH.mkdir(parents=True, exist_ok=True)
     (SCRATCH / "README.md").write_text(
         "# NFS integration scratch\n\n"
-        "The integration probe renders real playbooks into temporary directories here.\n"
+        "The integration probe renders real playbooks into temporary directories "
+        "here.\n"
         "Packages and activation are bypassed; no live exports or mounts are created.\n"
     )
     with tempfile.TemporaryDirectory(dir=SCRATCH) as directory:
@@ -117,6 +139,7 @@ def main() -> None:
         test_default_mount(root / "mount")
         test_custom_mount(root / "custom")
         test_reject_usermode(root / "rejected")
+        test_reject_root_paths(root / "rejected-root")
     print("ok: NFS export, automount, overrides, and system-scope boundary")
 
 

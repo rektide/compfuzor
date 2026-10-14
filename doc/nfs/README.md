@@ -12,6 +12,10 @@ sources:
     title: NFS playbook direction, integration review, and local verification
   - resource: /cifs.etc.pb
     title: Existing separate systemd mount and automount pattern
+  - resource: https://man7.org/linux/man-pages/man8/exportfs.8.html
+    title: Scoped export updates and exports.d persistence
+  - resource: https://man7.org/linux/man-pages/man5/exports.5.html
+    title: Export access rules, AUTH_SYS identities, and subdirectory limitations
 ---
 
 # NFS exports and automounts
@@ -87,6 +91,9 @@ Use a specific client address or a deliberately chosen trusted subnet, not
 `*`. AUTH_SYS is not suitable for untrusted networks; it does not authenticate
 the remote machine's users or encrypt traffic. Firewall the server accordingly.
 The playbooks do not configure Kerberos, TLS, firewall rules, or identity maps.
+For production, prefer exporting a filesystem root. Subdirectory exports with
+`no_subtree_check` are not a strong isolation boundary against malicious clients;
+see [exports(5), Subdirectory Exports](https://man7.org/linux/man-pages/man5/exports.5.html).
 
 Server `export_opts` defaults to `rw,sync,no_subtree_check,root_squash`.
 Client `mount_opts` appends to `vers=4.2,proto=tcp,hard,_netdev`; `idle` defaults
@@ -126,3 +133,22 @@ trigger. A later switch needs the actual export path, allowed client addresses,
 UID/GID alignment, filesystem/submount requirements, and an explicit cutover of
 the existing mountpoint. None of those decisions is implied by the loopback
 trial or by these example hostnames.
+
+## Render-only regression check
+
+```sh
+python3 tests/integration/nfs.test.py
+```
+
+The [integration probe](/tests/integration/nfs.test.py) renders the real playbooks
+under `.test-agent/nfs/` without installing packages or starting services. It
+checks export defaults, mount/automount contents, client overrides, and rejected
+user-scope/root-path configurations. It is not a replacement for the live trial.
+
+The use of scoped updates rather than global reconciliation follows
+[exportfs(8)](https://man7.org/linux/man-pages/man8/exportfs.8.html): `-i -o`
+updates a named client/path, while `-r` also revokes entries missing from the
+host's configuration. The latter is deliberately not part of this installer.
+The distribution's server unit still applies the host's exports on server
+startup and removes them on server stop; these playbooks do not replace that
+host-wide lifecycle.
