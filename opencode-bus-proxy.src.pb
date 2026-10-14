@@ -181,6 +181,46 @@
       This needs the new daemon flags in the selected build; generating
       config is not build installation or service activation.
 
+      Activation from fresh builds — the operator sequence that makes the
+      proxy take effect (renders are cheap; installs/restarts are yours):
+
+          # 1. Render both deployments with the opt-in and identical ports
+          #    (defaults 49373/49372; a separate stack overrides BOTH).
+          ansible-playbook -i 'localhost,' -c local opencode.src.pb \
+            -e OPENCODE_BUS_PROXY_DISCOVERY=true
+          ansible-playbook -i 'localhost,' -c local opencode-bus-proxy.src.pb \
+            -e OPENCODE_BUS_PROXY_DISCOVERY=true
+          # 2. Install (user scope, both deployments; Zim for client metadata).
+          /usr/local/src/opencode-git/bin/install-user.sh
+          {{DIR}}/bin/install-user.sh
+          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
+          # 3. Clients down first (discovery is build-stamped), then the
+          #    origin republishes with the proxy contact, then the proxy,
+          #    then clients back.
+          /usr/local/src/opencode-git/bin/restart-clients.sh kill
+          /usr/local/src/opencode-git/bin/restart.sh
+          systemctl --user restart opencode-bus-proxy
+          /usr/local/src/opencode-git/bin/restart-clients.sh relaunch
+          # 4. Verify: source health, the registration's contact, the ramp.
+          curl -fsS -u "opencode:$(cat ~/.config/opencode/secrets/OPENCODE_PASSWORD)" \
+            {{_bus_proxy_url}}/_bus/health
+          cat ~/.local/state/opencode/service-local.json
+          {{DIR}}/bin/status-usage.sh
+
+      The origin's restart.sh only restarts the server; relaunching clients
+      through restart-clients.sh keeps server and client builds matched,
+      which build-stamped discovery requires. An old origin publisher that
+      ignores OPENCODE_PROXY_URL needs the proxy playbook rendered with
+      `-e OPENCODE_BUS_PROXY_SERVICE_MODE=stomp` instead of the cooperate
+      default. Dated snapshot clients (opencode-last) dial the origin
+      directly through their explicit --server and bypass the proxy.
+      Selective event delivery additionally wants client
+      `experimental.session_streaming: true`; routed-but-broadcast clients
+      behave exactly as before. Rollback: rerender both playbooks without
+      the flag and restart both units — a graceful proxy stop restores only
+      its exact last contributed record, and the origin's next publication
+      reclaims the slot with its own contact.
+
       Health is source readiness, not process liveness:
 
           curl -fsS -u "opencode:$(cat ~/.config/opencode/secrets/OPENCODE_PASSWORD)" \
