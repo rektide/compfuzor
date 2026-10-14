@@ -1,0 +1,22 @@
+---
+# Render system-scope NFS artifacts over SSH, without privilege escalation,
+# package installation, global bin links, or activation. DIR and ETC must
+# already have user-writable parents; this is NOT a user-scope kernel server.
+#
+# ansible-playbook -i 'nanomachine,' nfs-export.srv.pb \
+#   -e @examples/nfs/stage-no-sudo.yaml -e @private/nfs/nanomachine-bitblaster.yaml
+#
+# JSON/YAML booleans matter: BECOME='False' as a string is truthy in the
+# legacy policy filter. Explicitly suppress both policy and Ansible become;
+# the policy's automatic permission check inspects the controller, not SSH.
+BECOME: false
+ansible_become: false
+USERMODE: false
+PKGS_BYPASS: true
+APT_BYPASS: true
+MODULES_BYPASS: true
+BINS_RUN_BYPASS: true
+SYSTEMD_THUNK_BYPASS: true
+GLOBAL_BINS_BYPASS: true
+# Do NOT set LINKS_BYPASS or SYSTEMD_INSTALL_BYPASS: keep the staged link
+# plans, runtime, mount units, and future privileged installers intact.

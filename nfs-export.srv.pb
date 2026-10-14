@@ -114,7 +114,11 @@
           fi
           # Distro service owns the nfsd lifecycle (no replacement unit):
           # starting with the fragment already published lets its own export
-          # pass see this deployment on first boot.
+          # pass see this deployment on first boot. Refresh generators after
+          # publication so nfs-server-generator orders backing disk mounts
+          # before nfs-server, including fstab automounts. This does not
+          # restart/reload the NFS service or reconcile its export table.
+          $SUDO_CMD systemctl daemon-reload
           $SUDO_CMD systemctl enable --now "$NFS_SERVICE"
           # Scoped convergence: exportfs -i replaces only these
           # (client, path) table entries; every other host declaration is
