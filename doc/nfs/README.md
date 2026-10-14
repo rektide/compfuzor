@@ -9,9 +9,13 @@ generated:
   at: 2026-10-14
 sources:
   - resource: opencode://ses_ec3b9dd3effe33r8JIOsc5WGTJ
-    title: NFS playbook direction, integration review, and local verification
+    title: NFS playbook direction, validation and ownership corrections, and verified loopback installation
   - resource: /cifs.etc.pb
     title: Existing separate systemd mount and automount pattern
+  - resource: /nfs-export.srv.pb
+    title: Export declaration, scoped installer, and validation
+  - resource: /nfs.etc.pb
+    title: NFS mount and automount declaration
   - resource: https://man7.org/linux/man-pages/man8/exportfs.8.html
     title: Scoped export updates and exports.d persistence
   - resource: https://man7.org/linux/man-pages/man5/exports.5.html
@@ -33,8 +37,10 @@ These are independent deployments. They leave [Samba](/samba.srv.pb),
 Render both deployments without installing packages or activating services:
 
 ```sh
-ansible-playbook -i 'localhost,' -c local nfs-export.srv.pb -e PKGS_BYPASS=True
-ansible-playbook -i 'localhost,' -c local nfs.etc.pb -e PKGS_BYPASS=True
+ansible-playbook -i 'localhost,' -c local nfs-export.srv.pb \
+  -e PKGS_BYPASS=True -e GLOBAL_BINS_BYPASS=True
+ansible-playbook -i 'localhost,' -c local nfs.etc.pb \
+  -e PKGS_BYPASS=True -e GLOBAL_BINS_BYPASS=True
 ```
 
 Then explicitly install their packages, publish configuration, and activate:
@@ -60,7 +66,8 @@ findmnt --mountpoint /mnt/nfs-test
 sudo exportfs -v
 ```
 
-The export installer creates a missing directory for the invoking user, but
+The export installer creates a missing directory for the rendering user, even
+when installation runs through sudo, but
 does **not** change an existing directory's ownership or permissions. With
 `root_squash`, client root is mapped to the anonymous identity and normally
 cannot write this user-owned directory. NFS AUTH_SYS uses numeric UID/GID
@@ -91,6 +98,9 @@ Use a specific client address or a deliberately chosen trusted subnet, not
 `*`. AUTH_SYS is not suitable for untrusted networks; it does not authenticate
 the remote machine's users or encrypt traffic. Firewall the server accordingly.
 The playbooks do not configure Kerberos, TLS, firewall rules, or identity maps.
+Export clients currently support IPv4 addresses/subnets, hostnames, wildcard
+hostnames, and netgroups, not IPv6 literals. Paths use a conservative
+whitespace-free character set; dot components and trailing slashes are rejected.
 For production, prefer exporting a filesystem root. Subdirectory exports with
 `no_subtree_check` are not a strong isolation boundary against malicious clients;
 see [exports(5), Subdirectory Exports](https://man7.org/linux/man-pages/man5/exports.5.html).
@@ -144,7 +154,29 @@ python3 tests/integration/nfs.test.py
 The [integration probe](/tests/integration/nfs.test.py) renders the real playbooks
 under `.test-agent/nfs/` without installing packages or starting services. It
 checks export defaults, mount/automount contents, client overrides, and rejected
-user-scope/root-path configurations. It is not a replacement for the live trial.
+user-scope/root-path configurations. A mocked installer run checks publication
+order, literal wildcard clients, preservation of existing data/permissions,
+and failure before activation when the link runtime is missing. It is not a
+replacement for the live trial.
+
+### Observed local verification — 2026-10-14
+
+On Linux `7.1.0-debplus.1`, Debian NFS utilities `3.1.1`, with a Btrfs export:
+
+- The render-only probe passed, including embedded-whitespace/newline, quoting,
+  empty-client-list, user-scope, and root-path rejection checks.
+- Both generated `bin/install.sh` commands completed. `exportfs -v` showed only
+  `127.0.0.1` for this export, with `sync` and `root_squash`; `findmnt` showed
+  `vers=4.2,hard,proto=tcp`.
+- Normal-user write/read, fsync, numeric ownership, chmod, symlinks, rename, and
+  server-to-client visibility passed. Client root was denied writes as expected.
+- Re-running the export installer through sudo preserved the existing export
+  directory's ownership, group, and permissions.
+- `systemd-analyze verify` accepted both installed units, with unrelated warnings
+  from existing host units.
+
+The loopback deployment was left enabled for further experiments. This verifies
+one host/filesystem combination, not nanomachine or a Samba migration.
 
 The use of scoped updates rather than global reconciliation follows
 [exportfs(8)](https://man7.org/linux/man-pages/man8/exportfs.8.html): `-i -o`
