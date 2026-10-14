@@ -79,7 +79,7 @@
           NFS_EXPORT_LINK_ID='system:/etc/exports.d/{{NAME}}.exports'
           EXPORT_PATH='{{EXPORT_PATH}}'
           EXPORT_OPTS='{{EXPORT_OPTS}}'
-          CLIENTS='{{CLIENTS|join(' ')}}'
+          CLIENTS=({% for _client in CLIENTS %} {{ _client|quote }}{% endfor %} )
           NFS_SERVICE='{{NFS_SERVICE}}'
           EXPORT_OWNER_DEFAULT={{ export_owner|default(ansible_user_uid)|string|quote }}
           EXPORT_GROUP_DEFAULT={{ export_group|default(ansible_user_gid)|string|quote }}
@@ -120,7 +120,7 @@
           # (client, path) table entries; every other host declaration is
           # left untouched. Removing or re-exporting anything else remains
           # a deliberate manual operation.
-          for _client in $CLIENTS; do
+          for _client in "${CLIENTS[@]}"; do
               $SUDO_CMD exportfs -i -o "$EXPORT_OPTS" "${_client}:${EXPORT_PATH}"
               echo "nfs-export: exported ${_client}:${EXPORT_PATH} (${EXPORT_OPTS})"
           done
@@ -149,7 +149,7 @@
     - name: "Compfuzor: validate export clients"
       ansible.builtin.assert:
         that:
-          - item is match('^[A-Za-z0-9.@*?_/-]+\Z')
+          - item is match('^[A-Za-z0-9@*?_][A-Za-z0-9.@*?_/-]*\Z')
           - item != '*'
         fail_msg: >-
           nfs-export: unsafe client spec "{{ item }}": use IPv4

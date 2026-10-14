@@ -102,6 +102,63 @@ def test_default_mount(payload: Path) -> None:
             assert 'UNIT_ENABLE_TARGETS=""' in script.read_text()
 
 
+def test_custom_export_installer(payload: Path) -> None:
+    source = payload.parent / "source-data"
+    require_success(render("nfs-export.srv.pb", payload, {
+        "clients": ["127.0.0.1", "*.example.test"],
+        "export_path": str(source), "export_mode": "0750",
+    }))
+    # Force a glob collision: client wildcard names must never become local
+    # filenames, including under the generated helper's nullglob setting.
+    (payload / "matched.example.test").touch()
+    shims = payload / "shims"
+    shims.mkdir()
+    sudo = shims / "sudo"
+    sudo.write_text('#!/bin/sh\nexec "$@"\n')
+    sudo.chmod(0o755)
+    logger = (
+        '#!/bin/sh\n'
+        'printf "%s %s\\n" "${0##*/}" "$*" >> "$NFS_TEST_LOG"\n'
+    )
+    for command in (shims / "systemctl", shims / "exportfs",
+                    payload / "bin/links.mjs"):
+        command.unlink(missing_ok=True)
+        command.write_text(logger)
+        command.chmod(0o755)
+    log = payload / "commands.log"
+    environment = {
+        **os.environ, "DIR": str(payload), "ENV_BYPASS": "1",
+        "PATH": f"{shims}:{os.environ['PATH']}", "NFS_TEST_LOG": str(log),
+    }
+    installer = payload / "bin/install-nfs-export.sh"
+
+    def install() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [str(installer)], env=environment, capture_output=True, text=True,
+            check=False,
+        )
+
+    require_success(install())
+    commands = log.read_text()
+    assert commands.index("links.mjs apply") < commands.index("systemctl")
+    assert f"*.example.test:{source}" in commands
+    assert "matched.example.test" not in commands
+    assert "exportfs -i -o" in commands and "exportfs -r" not in commands
+    assert source.stat().st_uid == os.getuid()
+    assert source.stat().st_mode & 0o777 == 0o750
+    source.chmod(0o700)
+    marker = source / "preserve"
+    marker.write_text("existing data\n")
+    require_success(install())
+    assert source.stat().st_mode & 0o777 == 0o700
+    assert marker.read_text() == "existing data\n"
+    before = log.read_text()
+    (payload / "bin/links.mjs").unlink()
+    rejected = install()
+    assert rejected.returncode != 0 and "no links runtime" in rejected.stderr
+    assert log.read_text() == before
+
+
 def test_custom_mount(payload: Path) -> None:
     require_success(render("nfs.etc.pb", payload, {
         "INSTANCE": "media", "srv": "fileserver", "export_path": "/srv/media",
@@ -143,6 +200,7 @@ def test_reject_unsafe_declarations(payload: Path) -> None:
         ("nfs-export.srv.pb", {"export_path": "/srv/../"}),
         ("nfs-export.srv.pb", {"clients": []}),
         ("nfs-export.srv.pb", {"clients": ["127.0.0.1\n"]}),
+        ("nfs-export.srv.pb", {"clients": ["-option"]}),
         ("nfs.etc.pb", {"where": "/mnt/has space"}),
         ("nfs.etc.pb", {"export_path": "/srv/trailing\n"}),
     ):
@@ -164,6 +222,7 @@ def main() -> None:
         test_default_export(root / "export")
         test_default_mount(root / "mount")
         test_custom_mount(root / "custom")
+        test_custom_export_installer(root / "custom-export")
         test_reject_usermode(root / "rejected")
         test_reject_root_paths(root / "rejected-root")
         test_reject_unsafe_declarations(root / "rejected-unsafe")
