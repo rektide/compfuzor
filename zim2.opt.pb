@@ -196,6 +196,9 @@
         phase: tools
       - source: rektide/zim-jaeger
         phase: tools
+      - source: rektide/zim-jj-waltz
+        phase: tools
+        comment: cached jw wrapper + regenerated dynamic completions
       - source: rektide/zim-jujutsu
         phase: tools
       - source: rektide/zim-mosh
