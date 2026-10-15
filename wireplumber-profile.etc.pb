@@ -35,34 +35,32 @@
           # 60-line-in.conf and 61-hdmi-delay.conf, which WirePlumber 0.4+
           # never loaded (flat files outside wireplumber.conf.d/ are
           # ignored). Nothing in them was active: 60-line-in.conf was fully
-          # commented scratch, 61-hdmi-delay.conf was empty. Intents are
-          # preserved below where the real mechanisms are named.
-          monitor.alsa.rules = [
-            {
-              matches = [
-                {
-                  # was 60-line-in.conf ("device 84"). The working line-in
-                  # -> speakers plumbing is pw-loopback.service (compfuzor
-                  # pw-loopback.srv.pb), capturing this source into
-                  # combine_sink. Original scratch props kept commented;
-                  # nothing active was ever intended here.
-                  node.name = "alsa_input.pci-0000_0b_00.4.analog-stereo"
-                }
-              ]
-              actions = {
-                update-props = {
-                  #node.description = "Laptop"
-                  #channelVolume = :q
-                }
-              }
-            }
-          ]
-          # was 61-hdmi-delay.conf (empty). Per-port latency offsets are
-          # route state, not monitor config: they live in
-          # ~/.local/state/wireplumber/default-routes and are edited via
-          # pavucontrol's per-port "Latency offset" field. Live value at
-          # capture time: alsa_card.pci-0000_07_00.1 hdmi-output-2 = 57.5ms.
-          # A drop-in cannot set port offsets, so no rule is emitted here.
+          # commented scratch, 61-hdmi-delay.conf was empty.
+          #
+          # 2026-10-16 REGRESSION LESSON: the first revival of this file
+          # shipped the 60-line-in rule as a real monitor.alsa.rules block
+          # whose actions.update-props was EMPTY, matching the PCI line-in
+          # node (the node the whole graph elects as master driver). After
+          # the next wireplumber restart every sink kept state "running"
+          # but emitted digital silence; pulse monitor taps returned zero
+          # bytes. Removing the drop-in restored audio immediately. A rule
+          # that matches a node must never carry an empty update-props;
+          # when there is nothing live to set, ship documentation only and
+          # link nothing into wireplumber.conf.d/. This file is therefore
+          # deliberately not installed (see install-user.sh) and defines
+          # no configuration keys.
+          #
+          # Intent inventory:
+          # - 60-line-in: the live line-in -> speakers plumbing is
+          #   pw-loopback.service (compfuzor pw-loopback.srv.pb), capturing
+          #   alsa_input.pci-0000_0b_00.4.analog-stereo into combine_sink.
+          #   Original scratch props, never active: node.description,
+          #   channelVolume (":q" was never valid syntax).
+          # - 61-hdmi-delay: per-port latency offsets are route state in
+          #   ~/.local/state/wireplumber/default-routes, edited via
+          #   pavucontrol's per-port "Latency offset" field (live value at
+          #   capture: 57.5ms on alsa_card.pci-0000_07_00.1
+          #   hdmi-output-2). A drop-in cannot set port offsets.
       - name: AUDIO-NOTES.md
         content: |
           # Audio volume layering on this host — non-active notes
@@ -115,6 +113,22 @@
             suspend the source, unbind/rebind snd_hda_intel for
             0000:0b:00.4, restart pw-loopback.
 
+          ## Incident log
+
+          - 2026-10-16: total digital silence after a wireplumber restart,
+            zero system events overnight. Cause: wireplumber-rules.conf
+            revival shipped an EMPTY update-props rule on the PCI line-in
+            node (the graph's elected driver). Every sink stayed "running"
+            while emitting silence; monitor taps returned zero bytes.
+            Removed the drop-in -> audio returned. Rules matching a node
+            must not carry empty update-props; see wireplumber-rules.conf.
+          - 2026-10-15: total silence. Causes: WEILIANG DAC isochronous
+            bandwidth exhaustion (-ENOSPC sharing controller 0000:02:00.0
+            with BS5P-ARC; codified output-only pin in
+            wireplumber-profile.conf) + wedged PCI HD-Audio capture
+            stalling the whole driver group. Fixed by unplug/profile-pin
+            and snd_hda_intel unbind/rebind on 0000:0b:00.4.
+
           ## Non-active example: codifying default device levels
 
           Intentionally NOT active — runtime state owns device levels today
@@ -134,7 +148,8 @@
           dest="${XDG_CONFIG_HOME:-$HOME/.config}/wireplumber/wireplumber.conf.d"
           mkdir -p $dest
           ln -sf ${ETC}/wireplumber-profile.conf $dest/
-          ln -sf ${ETC}/wireplumber-rules.conf $dest/
+          # wireplumber-rules.conf is documentation-only (see its header);
+          # deliberately NOT linked into wireplumber.conf.d/.
     ENV:
       ETC: "{{ETC}}"
       APP: wireplumber
