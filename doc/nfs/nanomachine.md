@@ -196,15 +196,27 @@ sudo); client profiles in `private/nfs/workhorse-nanomachine-*.yaml`.
 
 | Samba share | Server export (deployment) | Guard | Workhorse mount |
 | --- | --- | --- | --- |
-| bitblaster | `/mnt/bitblaster` (`nfs-export-bitblaster`) | `mountpoint` | `/mnt/bitblaster` (after cutover; see below) |
+| bitblaster | `/mnt/bitblaster` (`nfs-export-bitblaster`) | `mountpoint` | `/mnt/bitblaster` (live NFSv4.2, verified) |
 | src | `/usr/local/src` (`nfs-export-src`) | none (OS-filesystem subdirectory) | `/mnt/src` (armed; export not yet activated) |
 | exkay | `/mnt/keepstar/exkay` (`nfs-export-exkay`) | `mountpoint=/mnt/keepstar` | `/mnt/exkay` (live NFSv4.2, verified) |
 
 Naming flop (2026-10-16): NFS owns the un-prefixed paths; the CIFS
-deployments moved aside under `/mnt/smb-*` (`/mnt/smb-exkay` and
-`/mnt/smb-nanoshakes` done; `/mnt/smb-bitblaster` pending). CIFS profiles
-live in `private/cifs/workhorse-*.yaml`. The old `mnt-nfs\x2d*` units are
-removed for exkay and src; bitblaster's remain until its cutover.
+deployments moved aside under `/mnt/smb-*` (`/mnt/smb-bitblaster`,
+`/mnt/smb-exkay`, `/mnt/smb-nanoshakes` all done). CIFS profiles live in
+`private/cifs/workhorse-*.yaml`; the old `mnt-nfs\x2d*` units and paths are
+gone. Static-IP vars for both hosts live in the `~/.ansible/k3s.yml`
+inventory (`NODE_IP_CIDR`/`k3s_node_ip`: workhorse `192.168.1.8`,
+nanomachine `192.168.1.7`).
+
+Cutover verified end to end: `/mnt/bitblaster` and `/mnt/exkay` are NFSv4.2
+with `clientaddr=192.168.1.8`, `addr=192.168.1.7`, sharing one `nconnect=3`
+pool — `ss` shows exactly three connections `192.168.1.8 → 192.168.1.7:2049`
+— and a write through the mount is byte-identical on the server. Note from
+the cutover: `systemctl disable --now <automount> <mount>` aborts its whole
+transaction when the automount reports not-loaded, silently leaving the
+mount kernel-alive with its units removed; unmount such stragglers directly
+before remounting, and drop every nanomachine NFS mount together when
+re-anchoring the pool (v4.1 consolidation joins any surviving client).
 
 - All three exports allow `127.0.0.1` and workhorse's LAN source `192.168.1.8`
   (recheck with `ip -4 route get 192.168.0.235` before activating). The exkay
