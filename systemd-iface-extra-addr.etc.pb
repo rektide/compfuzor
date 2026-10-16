@@ -126,7 +126,7 @@
         content: |
           #!/bin/sh
           # Apply the secondary static address drop-in for {{IFACE}}:
-          #   install perms -> reload networkd -> reconfigure iface -> verify.
+          #   deliver drop-in (LINKS copy) -> reload networkd -> reconfigure -> verify.
           #
           # Idempotent: when the drop-in file, the static address, and the
           # DHCP default route are all already in place, exits without
@@ -152,8 +152,18 @@
 
           # networkd cannot traverse Compfuzor's private deployment dirs, so
           # LINKS delivers this as a regular copy. Ensure networkd can
-          # traverse the drop-in dir and read the copied file before reload.
+          # traverse the drop-in dir, then apply this deployment's own link
+          # record (record id matches the LINKS entry in DIR/links.json).
+          # No unmanaged-copy fallback: a render with LINKS_BYPASS ships no
+          # runtime, and delivering outside LINKS audit/remove reach would
+          # leave a drop-in nothing tracks.
           sudo install -d -m 0755 {{NETWORKD_CONFIG_DIR}}/{{NETWORK_FILE}}.network.d
+          if [ -x "${DIR}/bin/links.mjs" ]; then
+              "${DIR}/bin/links.mjs" apply --id "system:${DROPIN}"
+          else
+              echo "extra-addr: no links runtime (LINKS_BYPASS render?); ${DROPIN} not delivered" >&2
+              exit 1
+          fi
           sudo chmod 0644 "$DROPIN"
           sudo networkctl reload
           sudo networkctl reconfigure {{IFACE}}
