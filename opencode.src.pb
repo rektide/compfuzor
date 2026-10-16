@@ -80,7 +80,10 @@
       - name: OPENCODE_PASSWORD
         format: "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'"
         per_host: true
-        file: true
+        # Never persisted at render: credential.sh owns the source at install
+        # time (through the ~/.config/opencode link). Render-time persistence
+        # pre-created the config dir and blocked that link on fresh accounts.
+        file: false
     ENV:
       OPENCODE_PRINT_LOGS: 1
       OPENCODE_LOG_LEVEL: INFO
@@ -1030,9 +1033,15 @@
           dir={{DIR}}
           mkdir -p ~/.local/share/opencode/log
           {% if OPENCODE_PRIMARY %}
-          [ -n "$TARGET" ] || TARGET="$HOME/.config/opencode"
-          mkdir -p $(dirname $TARGET)
-          ln -sv ${dir}/etc $TARGET/
+          # XDG config entry: ~/.config/opencode becomes the link to this
+          # deployment's etc; the password source resolves through it.
+          TARGET="${TARGET:-$HOME/.config/opencode}"
+          mkdir -p "$(dirname "$TARGET")"
+          if [ -e "$TARGET" ] && [ ! -L "$TARGET" ]; then
+            echo "opencode: $TARGET exists and is not a symlink; refusing to replace" >&2
+            exit 1
+          fi
+          ln -svfn "${dir}/etc" "$TARGET"
           {% endif %}
       # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: restart.sh
