@@ -9,7 +9,7 @@ generated:
   at: 2026-10-14
 sources:
   - resource: opencode://ses_ec3b9dd3effe33r8JIOsc5WGTJ
-    title: Nanomachine share inspection, share-set staging, workhorse client mounts via nanomachine.lan, and tuning
+    title: Nanomachine share inspection, share-set staging, workhorse client mounts via nanomachine.lan, automount interaction verification, and tuning
   - resource: /nfs-export.srv.pb
     title: Per-deployment export fragment and scoped installer
   - resource: /nfs.etc.pb
@@ -122,9 +122,10 @@ export_opts: rw,sync,no_subtree_check,root_squash,mountpoint
 ```
 
 `mountpoint` is deliberate: this data lives on a separate disk, not an arbitrary
-directory to create on the OS filesystem. The distro generator's mount ordering
-and the export's mountpoint check work together; verify the physical Btrfs mount
-at activation, not just the existence of its autofs mountpoint.
+directory to create on the OS filesystem. If a disk is genuinely absent, the
+entry is skipped instead of exporting the empty directory on the OS filesystem;
+when the disk is present but its systemd automount is idle, activation triggers
+it automatically (see [Automount interaction](#automount-interaction)).
 
 From the controller's Compfuzor checkout:
 
@@ -157,14 +158,14 @@ ownership/mode remain unchanged. This is readiness verification, not a remote
 NFS throughput or file-operation test.
 
 For a later, deliberate privileged activation, inspect the staged fragment and
-README, confirm the LAN client IP and physical mount, and then use a terminal:
+README, confirm the LAN client IP, and then use a terminal:
 
 ```sh
 ssh -t nanomachine 'sudo bash /srv/nfs-export-bitblaster/bin/install.sh'
 ```
 
-The other staged exports activate the same way — `nfs-export-src` needs no
-disk pre-flight, `nfs-export-exkay` needs `/mnt/keepstar` mounted:
+The other staged exports activate the same way (no disk pre-flight is needed —
+see [Automount interaction](#automount-interaction)):
 
 ```sh
 ssh -t nanomachine 'sudo bash /srv/nfs-export-src/bin/install.sh'
@@ -223,6 +224,33 @@ Not staged, deliberately:
 - **kat**: nested inside `/mnt/bitblaster`, so it is already reachable through
   the bitblaster export; a separate overlapping export would be an
   anti-pattern.
+
+## Automount interaction
+
+Nanomachine's data disks are fstab systemd automounts (`/mnt/bitblaster`,
+`/mnt/keepstar`, 30-minute idle timeouts). Verified locally on 2026-10-16 with
+an equivalent transient tmpfs automount + `mountpoint`-guarded export:
+
+- **Activation triggers the automount itself.** `exportfs` stats the export
+  path to validate it; that stat walks the direct autofs mount and systemd
+  mounts the real filesystem. `exportfs -i` returned success with the backing
+  fs mounted by the export operation alone — no manual pre-mount.
+- **An export pins the backing mount.** With the entry in the kernel export
+  table, the automount could not idle-expire the filesystem even with zero
+  clients attached (idle timeout 20 s, still mounted after 25 s+ unattended),
+  and fresh client mounts resolved normally afterwards. Unmounting an exported
+  disk would fail busy by design.
+- **Boot needs no manual steps either**: `nfs-server.service` runs
+  `exportfs -r` at start, which performs the same validation-trigger across
+  all published fragments.
+- The `mountpoint` guard's real job is the failure case: if a disk is pulled
+  or fails to mount, the entry is skipped rather than exporting the empty
+  directory on the OS filesystem underneath.
+
+Trade-off: idle-expiry is effectively disabled for exported disks — bitblaster
+and keepstar stay mounted while their exports exist. That is normally
+irrelevant, but if USB disk spindown matters, it belongs to hd-idle-style
+tooling rather than automount unmounting.
 
 ## Performance choices
 
