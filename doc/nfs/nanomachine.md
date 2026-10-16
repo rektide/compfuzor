@@ -211,7 +211,10 @@ nanomachine `192.168.1.7`).
 Cutover verified end to end: `/mnt/bitblaster` and `/mnt/exkay` are NFSv4.2
 with `clientaddr=192.168.1.8`, `addr=192.168.1.7`, sharing one `nconnect=3`
 pool — `ss` shows exactly three connections `192.168.1.8 → 192.168.1.7:2049`
-— and a write through the mount is byte-identical on the server. Note from
+— and a write through the mount is byte-identical on the server. All four
+client mounts (bitblaster, src, exkay, loopback trial) carry
+`hard,softreval` after the 2026-10-16 baseline update; the shared `.1.7`
+pool survived the per-mount remounts unchanged. Note from
 the cutover: `systemctl disable --now <automount> <mount>` aborts its whole
 transaction when the automount reports not-loaded, silently leaving the
 mount kernel-alive with its units removed; unmount such stragglers directly
@@ -291,7 +294,8 @@ active. Prioritize the known topology rather than copying a long option list.
    routing/encryption behavior is a different benchmark. USB disk seeks and
    durable writes will matter especially for small-file workloads.
 2. **Keep NFSv4.2/TCP, hard mounts, server sync, and normal locking/caching.**
-   Avoid `soft`, server `async`, `noac`, `actimeo=0`, `nocto`, and local-only locking
+   The baseline now includes `softreval` (2026-10-16) so outage-time lookups
+   serve cache while writes stay hard. Avoid `soft`, server `async`, `noac`, `actimeo=0`, `nocto`, and local-only locking
    as blanket speed fixes. They either weaken correctness/coherence or can make
    performance substantially worse. Samba and local applications still write
    these files, so assuming a single immutable writer is inappropriate.

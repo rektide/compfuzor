@@ -109,12 +109,16 @@ For production, prefer exporting a filesystem root. Subdirectory exports with
 see [exports(5), Subdirectory Exports](https://man7.org/linux/man-pages/man5/exports.5.html).
 
 Server `export_opts` defaults to `rw,sync,no_subtree_check,root_squash`.
-Client `mount_opts` appends to `vers=4.2,proto=tcp,hard,_netdev,nconnect=3`;
+Client `mount_opts` appends to `vers=4.2,proto=tcp,hard,softreval,_netdev,nconnect=3`;
 `idle` defaults to `15min`. Connections pool per server endpoint: every mount
 to one endpoint shares the first mount's transport pool (and, on v4.1+, its
 session/credits), so keep client instances to the same endpoint configured
 alike — the shared default does. Hard mounts preserve retry semantics during outages, so processes
-doing I/O may block until the server returns. Use another `vers=` only after
+doing I/O may block until the server returns; `softreval` (2026-10-16) lets
+timed-out attribute revalidation serve cache so listing and browsing stay
+responsive while writes keep hard semantics. The considered-and-rejected
+tuning menu (soft/softerr, nocto/actimeo, noac, nolock; async, wdelay,
+nfsd threads) is recorded in the two playbooks' headers where the knobs live. Use another `vers=` only after
 checking the server's capabilities. Mounted sub-filesystems are not implicitly
 exported with `crossmnt`; declare them deliberately if needed.
 
