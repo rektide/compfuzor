@@ -196,20 +196,34 @@ sudo); client profiles in `private/nfs/workhorse-nanomachine-*.yaml`.
 
 | Samba share | Server export (deployment) | Guard | Workhorse mount |
 | --- | --- | --- | --- |
-| bitblaster | `/mnt/bitblaster` (`nfs-export-bitblaster`) | `mountpoint` | `/mnt/nfs-bitblaster` |
-| src | `/usr/local/src` (`nfs-export-src`) | none (OS-filesystem subdirectory) | `/mnt/nfs-src` |
-| exkay | `/mnt/keepstar/exkay` (`nfs-export-exkay`) | `mountpoint=/mnt/keepstar` | `/mnt/nfs-exkay` |
+| bitblaster | `/mnt/bitblaster` (`nfs-export-bitblaster`) | `mountpoint` | `/mnt/bitblaster` (after cutover; see below) |
+| src | `/usr/local/src` (`nfs-export-src`) | none (OS-filesystem subdirectory) | `/mnt/src` (armed; export not yet activated) |
+| exkay | `/mnt/keepstar/exkay` (`nfs-export-exkay`) | `mountpoint=/mnt/keepstar` | `/mnt/exkay` (live NFSv4.2, verified) |
+
+Naming flop (2026-10-16): NFS owns the un-prefixed paths; the CIFS
+deployments moved aside under `/mnt/smb-*` (`/mnt/smb-exkay` and
+`/mnt/smb-nanoshakes` done; `/mnt/smb-bitblaster` pending). CIFS profiles
+live in `private/cifs/workhorse-*.yaml`. The old `mnt-nfs\x2d*` units are
+removed for exkay and src; bitblaster's remain until its cutover.
 
 - All three exports allow `127.0.0.1` and workhorse's LAN source `192.168.1.8`
   (recheck with `ip -4 route get 192.168.0.235` before activating). The exkay
   export is a subdirectory of keepstar, so the guard names the **backing**
   mount: if the disk is absent, the export disappears rather than exposing the
   empty mountpoint directory on the OS filesystem.
-- All three client deployments are rendered with `srv=nanomachine.lan` and
-  installed on workhorse: automounts `mnt-nfs\x2d{bitblaster,src,exkay}.automount`
-  are enabled and active (2026-10-16), sharing one `nconnect=3` pool per the
-  resolved `192.168.0.235` endpoint. Mounts complete once the server side is
-  activated; trigger with `ls /mnt/nfs-bitblaster` etc.
+- All three client deployments are rendered with `srv=nanomachine.lan`
+  (→ static `192.168.1.7` via `/etc/hosts`) and installed on workhorse with
+  `nconnect=3`. One NFSv4.1 caveat observed during the flop: the kernel
+  consolidates mounts onto an existing nfs_client whenever a new mount's
+  server presents the same EXCHANGE_ID owner — **across addresses**. So the
+  exkay mount, triggered while bitblaster still held a client built against
+  `192.168.0.235`, joined that pool despite resolving `.1.7`. Re-anchoring
+  the pool on `.1.7` requires unmounting every nanomachine NFS mount at once,
+  then remounting (first mount wins the new pool).
+- CIFS moves are rendered the same way (`private/cifs/workhorse-*.yaml`,
+  `where=/mnt/smb-<share>`). The September CIFS deployments predate the
+  current link records, so `remove-link-records.sh` reports their old unit
+  symlinks "preserved" — remove those two stale symlinks by hand at cutover.
 - `src` and `exkay` server staging is verified (fragments + installers staged,
   nothing published), same as bitblaster earlier.
 
