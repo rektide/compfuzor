@@ -158,18 +158,20 @@ ownership/mode remain unchanged. This is readiness verification, not a remote
 NFS throughput or file-operation test.
 
 For a later, deliberate privileged activation, inspect the staged fragment and
-README, confirm the LAN client IP, and then use a terminal:
+README, confirm the LAN client IP, then run each deployment's installer **by
+path on the exporting host**. Generated bins carry their own shebang, exec
+bit, and internal sudo — no `bash`/`sudo` wrapper needed:
 
 ```sh
-ssh -t nanomachine 'sudo bash /srv/nfs-export-bitblaster/bin/install.sh'
+/srv/nfs-export-bitblaster/bin/install.sh
 ```
 
 The other staged exports activate the same way (no disk pre-flight is needed —
 see [Automount interaction](#automount-interaction)):
 
 ```sh
-ssh -t nanomachine 'sudo bash /srv/nfs-export-src/bin/install.sh'
-ssh -t nanomachine 'sudo bash /srv/nfs-export-exkay/bin/install.sh'
+/srv/nfs-export-src/bin/install.sh
+/srv/nfs-export-exkay/bin/install.sh
 ```
 
 Run the installers **sequentially**: each runs its own apt lane, and concurrent
