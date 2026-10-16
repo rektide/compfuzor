@@ -147,6 +147,23 @@ async function installZim(
   deploymentDir: string,
 ): Promise<number> {
   const configContext = getConfigContext(activation.configSpec, activation.spec.config);
+  // Registry publication is the one install step whose source lives in the
+  // CANONICAL config context, which the default (user-context) install does
+  // not assemble. Bypass, assemble, and preflight are all explicit here.
+  // The flagged assembly must run before the config install: the copy/link
+  // strategies publish the canonical donor outputs themselves, which do not
+  // exist yet on a fresh deployment, so a late assembly only ever worked
+  // under the default assemble strategy.
+  const registrySkip = truthy(process.env.COMPFUZOR_ZIM_REGISTRY_SKIP);
+  if (options.assembleCanonical && !registrySkip) {
+    const assembled = await runAssembly({
+      spec: activation.configSpec,
+      contextName: "canonical",
+      runner: options.configRunner,
+      names: ["zimrc", "zimenv"],
+    });
+    if (assembled !== 0) return assembled;
+  }
   const configResult = await installContext({
     spec: activation.configSpec,
     contextName: activation.spec.config,
@@ -191,21 +208,9 @@ async function installZim(
     }
   }
   await installActivation(activation, spec.canonical);
-  // Registry publication is the one install step whose source lives in the
-  // CANONICAL config context, which the default (user-context) install does
-  // not assemble. Bypass, assemble, and preflight are all explicit here.
-  if (truthy(process.env.COMPFUZOR_ZIM_REGISTRY_SKIP)) {
+  if (registrySkip) {
     console.error(`skipped Zim registry link for ${activation.name}: COMPFUZOR_ZIM_REGISTRY_SKIP`);
     return 0;
-  }
-  if (options.assembleCanonical) {
-    const assembled = await runAssembly({
-      spec: activation.configSpec,
-      contextName: "canonical",
-      runner: options.configRunner,
-      names: ["zimrc", "zimenv"],
-    });
-    if (assembled !== 0) return assembled;
   }
   const preflight = await inspectRegistry(
     activation,

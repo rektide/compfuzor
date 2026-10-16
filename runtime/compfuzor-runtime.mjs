@@ -3794,10 +3794,20 @@ Options:
   --install assemble|copy|link  Override CONFIG output installation
   --dropins copy|link            Override CONFIG input delivery
   --assemble-canonical           Assemble the canonical donor configs before
-                                 publishing the registry link (same as
-                                 config-assemble.sh --context canonical)
+                                 the CONFIG install -- the copy/link
+                                 strategies publish those donor outputs,
+                                 which do not exist yet on a fresh host --
+                                 and before publishing the registry link
+                                 (same as config-assemble.sh --context
+                                 canonical)
   --create-dest-parent           Create the registry destination's missing
-                                 parent directory before linking`,
+                                 parent directory before linking
+
+The registry preflight runs after activation: on a registry failure the
+completed activation changes remain. Fix the stated cause and rerun --
+activation is idempotent. These flags are options of install-zim.sh itself;
+the aggregate install.sh compositor forwards its own arguments to every
+child, so pass them to install-zim.sh directly.`,
 	import: `Usage: install-zim-context.sh [--context NAME] [--dropins copy|link] PRODUCER_DIR
 
 Import a producer's Zim fragments into a selected consumer context, then rebuild
@@ -4001,6 +4011,16 @@ async function inspectRegistry$1(activation, canonical, deploymentDir, createDes
 }
 async function installZim(options, settings, activation, spec, deploymentDir) {
 	const configContext = getConfigContext(activation.configSpec, activation.spec.config);
+	const registrySkip = truthy(process.env.COMPFUZOR_ZIM_REGISTRY_SKIP);
+	if (options.assembleCanonical && !registrySkip) {
+		const assembled = await runAssembly({
+			spec: activation.configSpec,
+			contextName: "canonical",
+			runner: options.configRunner,
+			names: ["zimrc", "zimenv"]
+		});
+		if (assembled !== 0) return assembled;
+	}
 	const configResult = await installContext({
 		spec: activation.configSpec,
 		contextName: activation.spec.config,
@@ -4025,18 +4045,9 @@ async function installZim(options, settings, activation, spec, deploymentDir) {
 		}
 	}
 	await installActivation(activation, spec.canonical);
-	if (truthy(process.env.COMPFUZOR_ZIM_REGISTRY_SKIP)) {
+	if (registrySkip) {
 		console.error(`skipped Zim registry link for ${activation.name}: COMPFUZOR_ZIM_REGISTRY_SKIP`);
 		return 0;
-	}
-	if (options.assembleCanonical) {
-		const assembled = await runAssembly({
-			spec: activation.configSpec,
-			contextName: "canonical",
-			runner: options.configRunner,
-			names: ["zimrc", "zimenv"]
-		});
-		if (assembled !== 0) return assembled;
 	}
 	const preflight = await inspectRegistry$1(activation, spec.canonical, deploymentDir, options.createDestParent);
 	if (preflight !== 0) return preflight;

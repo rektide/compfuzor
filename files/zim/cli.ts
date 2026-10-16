@@ -45,10 +45,20 @@ Options:
   --install assemble|copy|link  Override CONFIG output installation
   --dropins copy|link            Override CONFIG input delivery
   --assemble-canonical           Assemble the canonical donor configs before
-                                 publishing the registry link (same as
-                                 config-assemble.sh --context canonical)
+                                 the CONFIG install -- the copy/link
+                                 strategies publish those donor outputs,
+                                 which do not exist yet on a fresh host --
+                                 and before publishing the registry link
+                                 (same as config-assemble.sh --context
+                                 canonical)
   --create-dest-parent           Create the registry destination's missing
-                                 parent directory before linking`,
+                                 parent directory before linking
+
+The registry preflight runs after activation: on a registry failure the
+completed activation changes remain. Fix the stated cause and rerun --
+activation is idempotent. These flags are options of install-zim.sh itself;
+the aggregate install.sh compositor forwards its own arguments to every
+child, so pass them to install-zim.sh directly.`,
   import: `Usage: install-zim-context.sh [--context NAME] [--dropins copy|link] PRODUCER_DIR
 
 Import a producer's Zim fragments into a selected consumer context, then rebuild
@@ -118,10 +128,7 @@ export function parseZimArgs(argv: string[], deploymentDir: string): ZimCliOptio
   if (action === "import" && args.length !== 1)
     fail("import requires exactly one producer directory");
   if (values["activation-only"] && action !== "status") fail("--activation-only requires status");
-  if (
-    (values["assemble-canonical"] || values["create-dest-parent"]) &&
-    action !== "install"
-  )
+  if ((values["assemble-canonical"] || values["create-dest-parent"]) && action !== "install")
     fail("--assemble-canonical and --create-dest-parent require install");
   return {
     action,

@@ -1064,6 +1064,45 @@ zimfw() { :; }
         assert created.returncode == 0, (created.stdout, created.stderr)
         assert deep_registry.is_symlink() and deep_registry.resolve() == canonical_zimrc
 
+        # A virgin fixture under the copy strategy proves the ordering fix:
+        # copy/link publication reads the canonical donor outputs directly,
+        # so --assemble-canonical must run before the config install or a
+        # fresh host dies on the missing donor before activation starts.
+        copy_payload = temporary / "zim preflight copy host"
+        render_host(copy_payload, temporary / "copy host.json", ansible_env)
+        copy_controller = copy_payload / "src" / "zimfw.zsh"
+        copy_controller.parent.mkdir(parents=True, exist_ok=True)
+        copy_controller.write_text(
+            controller.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+        copy_home = temporary / "preflight copy home"
+        copy_xdg = temporary / "preflight copy xdg"
+        copy_zdot = temporary / "preflight copy zdot"
+        copy_zdot.mkdir()
+        copy_env = user_env(
+            copy_home,
+            copy_xdg,
+            copy_zdot,
+            copy_payload,
+            temporary / "preflight copy build.log",
+            block_in_file,
+        )
+        copied = run(
+            [
+                str(copy_payload / "bin" / "install-zim.sh"), "--context", "user",
+                "--install", "copy", "--assemble-canonical",
+            ],
+            cwd=temporary,
+            env=copy_env,
+        )
+        assert copied.returncode == 0, (copied.stdout, copied.stderr)
+        assert (copy_payload / "etc" / "zimrc").is_file()
+        copied_zimrc = copy_xdg / "zsh" / "zimrc"
+        assert copied_zimrc.is_file() and not copied_zimrc.is_symlink()
+        copy_registry = copy_xdg / "zsh" / "zimfw.conf"
+        assert copy_registry.is_symlink()
+        assert copy_registry.resolve() == copy_payload / "etc" / "zimrc"
+
 
 if __name__ == "__main__":
     test_zim_consumer_lifecycle()
