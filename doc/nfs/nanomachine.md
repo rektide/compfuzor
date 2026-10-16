@@ -9,7 +9,7 @@ generated:
   at: 2026-10-14
 sources:
   - resource: opencode://ses_ec3b9dd3effe33r8JIOsc5WGTJ
-    title: Read-only nanomachine inspection, no-sudo staging direction, composition review, and tuning research
+    title: Nanomachine share inspection, share-set staging, workhorse client mounts via nanomachine.lan, and tuning
   - resource: /nfs-export.srv.pb
     title: Per-deployment export fragment and scoped installer
   - resource: /nfs.etc.pb
@@ -58,6 +58,9 @@ and mounts still require system scope.
 - Wired `eno1`: `192.168.0.235`, 1000 Mb/s, MTU 1500. Wi-Fi also has an address.
   Locally, **`nanomachine` resolves to Tailscale `100.84.242.34`**, not the wired
   LAN address. The prepared LAN client must use `srv=192.168.0.235`.
+  Workhorse's `/etc/hosts` (2026-10-16) maps `nanomachine`, `nanomachine.local`,
+  and **`nanomachine.lan`** to `192.168.0.235`, so `srv=nanomachine.lan` selects
+  the wired LAN; the client's connection pool keys on the resolved address.
 - Workhorse's current source address toward that LAN endpoint is `192.168.1.8`.
   Confirm it remains correct before activation. No whole-LAN wildcard is needed.
 - NFS server/client executables and the NFS server unit were absent when inspected.
@@ -160,16 +163,66 @@ README, confirm the LAN client IP and physical mount, and then use a terminal:
 ssh -t nanomachine 'sudo bash /srv/nfs-export-bitblaster/bin/install.sh'
 ```
 
+The other staged exports activate the same way — `nfs-export-src` needs no
+disk pre-flight, `nfs-export-exkay` needs `/mnt/keepstar` mounted:
+
+```sh
+ssh -t nanomachine 'sudo bash /srv/nfs-export-src/bin/install.sh'
+ssh -t nanomachine 'sudo bash /srv/nfs-export-exkay/bin/install.sh'
+```
+
+Run the installers **sequentially**: each runs its own apt lane, and concurrent
+runs collide on the dpkg frontend lock (observed 2026-10-16; the loser fails
+before publishing its units and is safe to rerun). After activation, check
+`sudo exportfs -v` on nanomachine and `ls /mnt/nfs-bitblaster /mnt/nfs-src
+/mnt/nfs-exkay` on workhorse, then `findmnt` for effective options.
+
 The root-run aggregate installs the declared packages and publishes/activates
 this export. This is **not** executed by the staging command. Disk ownership and
 permissions are preserved. Confirm the generated mount dependencies and export
 table afterwards; make the Samba cutover separately.
 
 A safe first workstation mount would use a **new** path, not live CIFS's
-`/mnt/bitblaster`: for example `INSTANCE=nanomachine-bitblaster`,
-`srv=192.168.0.235`, `export_path=/mnt/bitblaster`,
-`where=/mnt/nfs-nanomachine-bitblaster`. The server and client filesystem paths
-are independent names.
+`/mnt/bitblaster`. That plan is now realized below: all client mounts live
+under `/mnt/nfs-*` and leave the CIFS mount untouched.
+
+## Staged share set and client mounts — 2026-10-16
+
+Server profiles live in `private/nfs/nanomachine-*.yaml` (SSH staging, no
+sudo); client profiles in `private/nfs/workhorse-nanomachine-*.yaml`.
+
+| Samba share | Server export (deployment) | Guard | Workhorse mount |
+| --- | --- | --- | --- |
+| bitblaster | `/mnt/bitblaster` (`nfs-export-bitblaster`) | `mountpoint` | `/mnt/nfs-bitblaster` |
+| src | `/usr/local/src` (`nfs-export-src`) | none (OS-filesystem subdirectory) | `/mnt/nfs-src` |
+| exkay | `/mnt/keepstar/exkay` (`nfs-export-exkay`) | `mountpoint=/mnt/keepstar` | `/mnt/nfs-exkay` |
+
+- All three exports allow `127.0.0.1` and workhorse's LAN source `192.168.1.8`
+  (recheck with `ip -4 route get 192.168.0.235` before activating). The exkay
+  export is a subdirectory of keepstar, so the guard names the **backing**
+  mount: if the disk is absent, the export disappears rather than exposing the
+  empty mountpoint directory on the OS filesystem.
+- All three client deployments are rendered with `srv=nanomachine.lan` and
+  installed on workhorse: automounts `mnt-nfs\x2d{bitblaster,src,exkay}.automount`
+  are enabled and active (2026-10-16), sharing one `nconnect=3` pool per the
+  resolved `192.168.0.235` endpoint. Mounts complete once the server side is
+  activated; trigger with `ls /mnt/nfs-bitblaster` etc.
+- `src` and `exkay` server staging is verified (fragments + installers staged,
+  nothing published), same as bitblaster earlier.
+
+Not staged, deliberately:
+
+- **nanoshakes** (`/mnt/nanoshakes`, NTFS via ntfs-3g `fuseblk`): the kernel
+  NFS server cannot export FUSE filesystems — they implement no export
+  operations, and `exportfs` refuses them ("does not support NFS exporting";
+  verifiable with `sudo exportfs -i -o ro 127.0.0.1:/mnt/nanoshakes`, which
+  fails without persisting anything). Keep this one on Samba or relocate the
+  data to a btrfs/ext4 volume.
+- **homes**: per-user home exports are a separate identity/autofs design
+  decision, not a share-by-share mirror of Samba.
+- **kat**: nested inside `/mnt/bitblaster`, so it is already reachable through
+  the bitblaster export; a separate overlapping export would be an
+  anti-pattern.
 
 ## Performance choices
 
