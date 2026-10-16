@@ -9,6 +9,14 @@ where ``template_data`` defers rendering for safe traversal, this module forces
 rendering so template strings nested inside dicts/lists/tuples resolve to
 their final values at the current scope.
 
+Caveat (ansible-core >= 2.19): re-rendering from inside a running filter
+evaluation trips the marker/deferral machinery in rich task scopes (the
+manual render raises ``MarkerError``, which the fall-through below silently
+swallows -- a no-op). For values that must be rendered NOW, prefer
+``lookup('template_value', ...)``, which re-enters the task-level templar
+the way lookups are designed to; gen_zim.tasks uses it for declaration
+values and ``zim_fragment`` rejects any marker that survives.
+
 Ansible filter exposed:
     ``resolve``  -- recursively render template strings in a value.
 
@@ -24,6 +32,7 @@ Typical use::
 Related modules:
     ``template_data``  -- raw data-access helpers (non-rendering).
     ``cfmerge``        -- consumes ``render_templates`` via ``merge_list(resolve=True)``.
+    ``template_value`` -- the lookup that renders reliably on 2.19+.
 """
 
 from __future__ import absolute_import, division, print_function

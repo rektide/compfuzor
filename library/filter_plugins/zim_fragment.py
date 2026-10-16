@@ -21,6 +21,12 @@ PHASE_NUMBERS = {
 }
 ZSH_PARAMETER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ZIM_CHANNELS = {"zimenv", "zimrc"}
+# Jinja markers that must never survive into an emitted zsh body: any
+# occurrence means a declaration value reached this filter unrendered and
+# would install literally (``{{var}}`` text inside init.zsh). Callers own
+# rendering -- gen_zim.tasks renders declaration values at the synthesis
+# task via the template_value lookup.
+TEMPLATE_MARKERS = ("{{", "{%")
 
 
 def _is_sequence(value):
@@ -104,6 +110,60 @@ def _join_args(args):
             type(args).__name__
         )
     )
+
+
+def _reject_template_markers(module, field, value):
+    """Refuse declaration values still carrying Jinja template markers.
+
+    Every value flowing into an emitted fragment or init.zsh body must be
+    fully rendered before this filter: ansible never re-templates filter
+    output, so a surviving ``{{``/``{%`` marker installs as literal text.
+    The error names the module and the offending field so the broken
+    declaration can be located directly.
+    """
+    values = value if _is_sequence(value) else [value]
+    for item in values:
+        if item is None or wrapped_test_undefined(item):
+            continue
+        text = str(item)
+        for marker in TEMPLATE_MARKERS:
+            if marker in text:
+                shown = text if len(text) <= 120 else text[:117] + "..."
+                raise AnsibleFilterError(
+                    "zim module {!r}: {} still contains template marker {!r}; "
+                    "declaration values must be rendered before zim_fragment "
+                    "(gen_zim.tasks renders them at the synthesis task via "
+                    "the template_value lookup); "
+                    "unresolved value: {!r}".format(
+                        module, field, marker, shown
+                    )
+                )
+
+
+def _reject_declaration_markers(norm):
+    """Check every declaration field that flows into an emitted body."""
+    name = norm["name"]
+    if norm["source"]:
+        _reject_template_markers(name, "source", norm["source"])
+    _reject_template_markers(name, "args", norm["args"])
+    _reject_template_markers(name, "comment", norm["comment"])
+    for comp in norm["completions"]:
+        _reject_template_markers(name, "completions entry", comp)
+    if norm["env"]:
+        for key, value in norm["env"].items():
+            _reject_template_markers(name, "env[{!r}]".format(key), value)
+    if norm["arrays"]:
+        for param, values in norm["arrays"].items():
+            for index, value in enumerate(values):
+                _reject_template_markers(
+                    name, "arrays[{!r}][{}]".format(param, index), value
+                )
+    if norm["aliases"]:
+        for alias, expansion in norm["aliases"].items():
+            _reject_template_markers(name, "aliases[{!r}]".format(alias), expansion)
+    if norm["functions"]:
+        for fname, body in norm["functions"].items():
+            _reject_template_markers(name, "functions[{!r}]".format(fname), body)
 
 
 def _normalize_entry(entry, default_phase):
@@ -453,6 +513,15 @@ def zim_fragment(modules, phase=None, etc=None, host=False):
     Returns a list of ``{name, content}`` records shaped as ETC_FILES entries
     (file modules additionally emit a ``{name, src}`` init.zsh record).
 
+    Declaration values must already be fully rendered when they arrive:
+    any ``{{`` or ``{%`` template marker surviving in a declaration field
+    (env/arrays/aliases/functions values, source, args, comment,
+    completions) or in a composed body raises an error naming the module
+    and field -- unrendered markers would otherwise install literally,
+    since nothing re-templates filter output downstream. Callers render
+    nested values first (``gen_zim.tasks`` applies the ``template_value``
+    lookup at the synthesis task).
+
     ``name`` is relative to the ETC dir (the ETC_FILES writer base), so it is
     ``zim/<channel>/<state>/<file>`` -- NOT ``etc/zim/...``. The latter would
     double up to ``ETC/etc/zim`` and miss ``install-zim.sh``'s ``DIR/etc/zim``
@@ -477,6 +546,10 @@ def zim_fragment(modules, phase=None, etc=None, host=False):
     host = bool(host) and not wrapped_test_undefined(host)
     for entry in items:
         norm = _normalize_entry(entry, phase)
+        # Loud guard for the nested-value rendering trap: refuse any
+        # declaration value (or composed body below) that still carries
+        # template markers rather than shipping them literally.
+        _reject_declaration_markers(norm)
         fn = _filename(norm["num"], norm["name"], norm["description"])
         state = "active" if norm["enabled"] else "disabled"
         fragment_key = (norm["channel"], fn)
@@ -506,10 +579,16 @@ def zim_fragment(modules, phase=None, etc=None, host=False):
             module_path = (
                 "{}/zim-modules/{}".format(etc, norm["name"]) if etc else norm["name"]
             )
+            fragment_content = _body(module_path, norm["args"], norm["comment"])
+            _reject_template_markers(
+                norm["name"],
+                "emitted fragment body {!r}".format(fragment_name),
+                fragment_content,
+            )
             results.append(
                 {
                     "name": fragment_name,
-                    "content": _body(module_path, norm["args"], norm["comment"]),
+                    "content": fragment_content,
                 }
             )
             # render the module script; only active modules need one on disk.
@@ -550,10 +629,16 @@ def zim_fragment(modules, phase=None, etc=None, host=False):
                         init_lines.insert(0, _fpath_line())
                     if norm["kind"] == "file":
                         init_lines.append("source ${0:h}/body.zsh")
+                    init_content = "\n".join(init_lines) + "\n"
+                    _reject_template_markers(
+                        norm["name"],
+                        "emitted init.zsh body",
+                        init_content,
+                    )
                     results.append(
                         {
                             "name": "zim-modules/{}/init.zsh".format(norm["name"]),
-                            "content": "\n".join(init_lines) + "\n",
+                            "content": init_content,
                         }
                     )
                     if norm["kind"] == "file":
@@ -573,10 +658,16 @@ def zim_fragment(modules, phase=None, etc=None, host=False):
                             }
                         )
         else:
+            fragment_content = _body(norm["source"], norm["args"], norm["comment"])
+            _reject_template_markers(
+                norm["name"],
+                "emitted fragment body {!r}".format(fragment_name),
+                fragment_content,
+            )
             results.append(
                 {
                     "name": fragment_name,
-                    "content": _body(norm["source"], norm["args"], norm["comment"]),
+                    "content": fragment_content,
                 }
             )
     return results

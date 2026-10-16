@@ -690,6 +690,126 @@ def test_completions_validation():
     )
 
 
+def test_template_marker_rejection():
+
+    print("\nunrendered template marker rejection:")
+    # the live bug shape: env value mixing shell ${...} with an unrendered
+    # nested jinja var -- error must name the module and the env field.
+    check_raises(
+        "env value marker names field",
+        lambda: zim_fragment(
+            [
+                {
+                    "name": "mise2-config",
+                    "phase": 10,
+                    "env": {
+                        "MISE_CONFIG_DIR": "${MISE_CONFIG_DIR:-{{mise2_config_dir}}}"
+                    },
+                }
+            ],
+            etc="/e",
+        ),
+        "env['MISE_CONFIG_DIR']",
+    )
+    check_raises(
+        "env value marker names module",
+        lambda: zim_fragment(
+            [
+                {
+                    "name": "mise2-config",
+                    "phase": 10,
+                    "env": {
+                        "MISE_CONFIG_DIR": "${MISE_CONFIG_DIR:-{{mise2_config_dir}}}"
+                    },
+                }
+            ],
+            etc="/e",
+        ),
+        "mise2-config",
+    )
+    check_raises(
+        "pure jinja env value rejected too",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "env": {"X": "{{var}}/x"}}], etc="/e"
+        ),
+        "template marker",
+    )
+    check_raises(
+        "{% marker rejected (zsh %D{...} prompt escapes must be avoided)",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "env": {"PROMPT": "%D{%Y}"}}], etc="/e"
+        ),
+        "env['PROMPT']",
+    )
+    check_raises(
+        "arrays value marker rejected",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "arrays": {"fpath": ["{{dir}}/f"]}}]
+        ),
+        "arrays['fpath'][0]",
+    )
+    check_raises(
+        "aliases expansion marker rejected",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "aliases": {"gs": "git {{what}}"}}]
+        ),
+        "aliases['gs']",
+    )
+    check_raises(
+        "functions body marker rejected",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "functions": {"f": "echo {{x}}"}}]
+        ),
+        "functions['f']",
+    )
+    check_raises(
+        "git source marker rejected",
+        lambda: zim_fragment([{"source": "{{base}}/zimfw", "phase": "tools"}]),
+        "source",
+    )
+    check_raises(
+        "comment marker lands in the fragment body guard",
+        lambda: zim_fragment(
+            [{"source": "x", "phase": "core", "comment": "see {{doc}}"}]
+        ),
+        "comment",
+    )
+    check_raises(
+        "completions filename marker rejected",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "completions": ["_{{tool}}"]}], etc="/e"
+        ),
+        "completions entry",
+    )
+    check_raises(
+        "composed fragment body guard catches markers in etc",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "env": {"X": "1"}}],
+            etc="{{unresolved_etc}}",
+        ),
+        "emitted fragment body",
+    )
+    # controls: shell expansion and single-brace zsh syntax are legitimate
+    out = zim_fragment(
+        [{"name": "m", "phase": "tools", "env": {"X": "${X:-/x with space}"}}],
+        etc="/e",
+    )
+    check(
+        "shell-only expansion passes",
+        '_compfuzor_env_set X "${X:-/x with space}"' in out[1]["content"],
+        True,
+    )
+    out = zim_fragment(
+        [{"name": "m", "phase": "tools", "env": {"PROMPT": "%D{z} %m:%~/"}}],
+        etc="/e",
+    )
+    check(
+        "single-brace zsh prompt escapes pass",
+        "_compfuzor_env_set PROMPT" in out[1]["content"],
+        True,
+    )
+
+
 if __name__ == "__main__":
     test_string_entry_uses_default_phase()
     test_numeric_phase_name()
@@ -736,5 +856,6 @@ if __name__ == "__main__":
     test_body_kinds_mutually_exclusive()
     test_aliases_and_functions_require_name()
     test_completions_validation()
+    test_template_marker_rejection()
     print("\n{} passed, {} failed".format(passed, failed))
     sys.exit(1 if failed else 0)
