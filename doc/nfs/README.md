@@ -109,8 +109,11 @@ For production, prefer exporting a filesystem root. Subdirectory exports with
 see [exports(5), Subdirectory Exports](https://man7.org/linux/man-pages/man5/exports.5.html).
 
 Server `export_opts` defaults to `rw,sync,no_subtree_check,root_squash`.
-Client `mount_opts` appends to `vers=4.2,proto=tcp,hard,_netdev`; `idle` defaults
-to `15min`. Hard mounts preserve retry semantics during outages, so processes
+Client `mount_opts` appends to `vers=4.2,proto=tcp,hard,_netdev,nconnect=3`;
+`idle` defaults to `15min`. Connections pool per server endpoint: every mount
+to one endpoint shares the first mount's transport pool (and, on v4.1+, its
+session/credits), so keep client instances to the same endpoint configured
+alike — the shared default does. Hard mounts preserve retry semantics during outages, so processes
 doing I/O may block until the server returns. Use another `vers=` only after
 checking the server's capabilities. Mounted sub-filesystems are not implicitly
 exported with `crossmnt`; declare them deliberately if needed.
@@ -180,6 +183,15 @@ On Linux `7.1.0-debplus.1`, Debian NFS utilities `3.1.1`, with a Btrfs export:
 
 The loopback deployment was left enabled for further experiments. This verifies
 one host/filesystem combination, not nanomachine or a Samba migration.
+
+### Observed nconnect application — 2026-10-16
+
+The client baseline gained `nconnect=3`. The loopback client was re-rendered
+and reinstalled (its mount was idle-unmounted, so the automount picked up the
+new unit on the next trigger). `findmnt` reports `nconnect=3` in effect;
+`ss` shows exactly three established loopback TCP connections to port 2049 —
+the one shared pool, not a set per mount — and the file-operation/root-squash
+probe still passes.
 
 The use of scoped updates rather than global reconciliation follows
 [exportfs(8)](https://man7.org/linux/man-pages/man8/exportfs.8.html): `-i -o`

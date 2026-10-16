@@ -94,8 +94,9 @@ Boundaries, rather than claims of complete isolation:
   NFS worker counts, protocol configuration, and filesystem permissions are
   host/filesystem concerns, not independent per-export knobs.
 - Clients may share transport connections and filesystem caches. Linux's first
-  mount to an endpoint can establish `nconnect`; later instances cannot be assumed
-  to have independent connection counts. Duplicate mounts of one export normally
+  mount to an endpoint establishes the shared connection pool; later instances
+  cannot be assumed to have independent connection counts (all client
+  instances now default to `nconnect=3`, so inheritance stays consistent). Duplicate mounts of one export normally
   share caches and some effective options. Do not force `nosharecache` to fake
   isolation; that can introduce incoherent caches.
 - AUTH_SYS uses numeric IDs, not Samba's `valid users`. The restricted `kat` share
@@ -188,11 +189,15 @@ active. Prioritize the known topology rather than copying a long option list.
 3. **Let transfer sizes negotiate.** Modern Linux can negotiate up to 1 MiB for
    `rsize` and `wsize`; inspect effective sizes with `nfsstat -m`/`findmnt`. Do not
    adopt Azure NetApp's appliance-specific 256-KiB recommendation for this host.
-4. **Benchmark `nconnect=4` versus the baseline.** It may improve concurrency,
-   but cannot exceed the NIC/disk ceiling. Use `-e mount_opts=nconnect=4` when
-   staging a test client. To change the endpoint's effective connection policy,
-   coordinate all mounts to that endpoint rather than assuming one new mount
-   overrides an existing connection pool. No blanket default has been changed.
+4. **Connection pooling is on by default (`nconnect=3`, 2026-10-16).** The
+   client baseline pools three TCP connections per server endpoint; it cannot
+   exceed the NIC/disk ceiling, so measure whether it helps or hurts before
+   trusting it — a comparison client can render with
+   `-e mount_opts=nconnect=1` or a higher count. Pools are shared per
+   endpoint: the first mount to `192.168.0.235` fixes the pool for every
+   mount to that address, so keep client instances to it configured alike;
+   the shared default keeps them consistent. Verified on the loopback trial
+   (three established connections, probe passing).
 5. **Tune the server only on evidence.** Watch `nfsiostat`, `nfsstat`, `iostat -xz`,
    CPU/network use, and negotiated sizes under representative sequential and
    metadata-heavy workloads. Consider nfsd worker counts or read-ahead only if
