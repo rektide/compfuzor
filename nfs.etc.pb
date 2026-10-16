@@ -23,6 +23,23 @@
 #   where        mountpoint (default /mnt/nfs-<INSTANCE>; absolute, not /)
 #   mount_opts   appended to Options
 #   idle         automount TimeoutIdleSec (default 15min)
+#
+# Options considered and deliberately NOT in the baseline (2026-10-16;
+# full reasoning in doc/nfs/README.md and doc/nfs/nanomachine.md):
+#   soft/softerr  EIO/ETIMEDOUT after retrans instead of blocking; nfs(5)
+#                 warns of silent data corruption. Only defensible for a
+#                 mount with no writers that values responsiveness.
+#   nocto / actimeo=N  stale reads across writers. Samba still writes
+#                 these files during the transition (smb-* mounts and
+#                 local access on the server), so close-to-open coherence
+#                 stays on. Revisit for read-mostly media mounts after
+#                 CIFS retirement.
+#   noac          attribute-cache coherence by disabling caching; large
+#                 performance penalty, use locking instead.
+#   nolock / local_lock  no: v4.x state-based locking is cheap and
+#                 recovers correctly.
+#   timeo/retrans only meaningful once soft; leave defaults for hard.
+# Any of these can be tried per-deployment via mount_opts.
 - hosts: all
   vars:
     TYPE: nfs
@@ -34,11 +51,14 @@
     UNIT: "{{ lookup('pipe', 'systemd-escape --path ' ~ (WHERE|quote)) }}"
     # vers=4.2 pins the negotiation; tcp avoids UDP fragility, hard retries
     # instead of surfacing EIO, and _netdev defers the mount until the
-    # network is up. nconnect=3 pools three TCP connections per server
-    # endpoint: the FIRST mount to an endpoint fixes the pool size for every
-    # mount sharing it, so keep all client instances to one server
-    # configured alike (the default here does). Append knobs with mount_opts.
-    MOUNT_OPTS: "vers=4.2,proto=tcp,hard,_netdev,nconnect=3{{ (',' ~ mount_opts) if mount_opts|default('')|length else '' }}"
+    # network is up. softreval keeps write semantics hard during server
+    # outages while timed-out attribute revalidation may serve cache, so
+    # listing/browsing does not hang. nconnect=3 pools three TCP
+    # connections per server endpoint: the FIRST mount to an endpoint fixes
+    # the pool size for every mount sharing it, so keep all client
+    # instances to one server configured alike (the default here does).
+    # Append knobs with mount_opts.
+    MOUNT_OPTS: "vers=4.2,proto=tcp,hard,softreval,_netdev,nconnect=3{{ (',' ~ mount_opts) if mount_opts|default('')|length else '' }}"
     SYSTEMD_ALIAS: false
     SYSTEMD_ROOTS:
       - NFS_MOUNT

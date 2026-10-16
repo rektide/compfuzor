@@ -135,7 +135,7 @@ def test_default_mount(payload: Path) -> None:
     text = mount.read_text()
     assert "What=127.0.0.1:/srv/nfs-test" in text
     assert "Where=/mnt/nfs-test" in text and "Type=nfs\n" in text
-    assert "Options=vers=4.2,proto=tcp,hard,_netdev,nconnect=3" in text
+    assert "Options=vers=4.2,proto=tcp,hard,softreval,_netdev,nconnect=3" in text
     assert "[Install]" not in text and "Alias=" not in text
     automatic = automount.read_text()
     assert "Where=/mnt/nfs-test" in automatic and "TimeoutIdleSec=15min" in automatic
@@ -293,7 +293,7 @@ def test_custom_mount(payload: Path) -> None:
     mount = (payload / r"etc/mnt-nfs\x2dmedia.mount").read_text()
     assert "What=fileserver:/srv/media" in mount
     assert "Where=/mnt/nfs-media" in mount
-    assert "Options=vers=4.2,proto=tcp,hard,_netdev,nconnect=3,ro" in mount
+    assert "Options=vers=4.2,proto=tcp,hard,softreval,_netdev,nconnect=3,ro" in mount
     automatic = (payload / r"etc/mnt-nfs\x2dmedia.automount").read_text()
     assert "TimeoutIdleSec=2min" in automatic
 

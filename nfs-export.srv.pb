@@ -32,6 +32,17 @@
 #                 of silently misapplied. Bare '*' (world) is refused.
 #   export_opts   option list applied to every client
 #                 (default rw,sync,no_subtree_check,root_squash)
+#                 sync is deliberate: WRITE/COMMIT acknowledgements mean
+#                 the data is on stable storage; async acknowledges early,
+#                 so a crash loses or tears already-acknowledged writes.
+#                 Considered and rejected for this content (backups,
+#                 snapshots, source trees; USB dropout is a real failure
+#                 mode here) — async would suit only a future pure-scratch
+#                 media export instance. wdelay (on by default) coalesces
+#                 adjacent sync writes; no_wdelay is the knob if
+#                 high-concurrency sync writes ever contend. More nfsd
+#                 threads (host-wide, threads= on the distro unit) overlap
+#                 flush waits without any durability cost.
 #   nfs_service   distro unit to enable/start (default nfs-server.service;
 #                 no replacement unit is generated here)
 #   export_owner / export_group / export_mode
