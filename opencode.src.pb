@@ -177,8 +177,18 @@
         # layout drift fails the boot loudly instead of silently booting an
         # ephemeral password. Requires a binary with env-pointer support.
         ExecStart: "{{OPENCODE_GLOBAL_BINS}}/{{OPENCODE_CLIENT}} serve --hostname {{OPENCODE_SERVER_HOSTNAME}} --port {{OPENCODE_SERVER_PORT}}{{ ' --publish' if OPENCODE_PRIMARY else '' }}"
+        # Env: the unit loads ONLY the unit-scoped {{ETC}}/env-service — the
+        # runtime keys this deployment declares in ENV/ENV_PRIO/ENV_LIST — and
+        # deliberately NOT {{DIR}}/env. The deployment env file begins with
+        # the identity header (DIR/NAME/TYPE/INSTANCE/REPO/REPO_DIR/BUILD_DIR/
+        # GLOBAL_BINS_DIR) plus compfuzor-contributed keys; loading it exported
+        # all of that into the server and every child process (agent sessions,
+        # tool shells, playbook runs, materialized bins), where bins'
+        # inherited-$DIR deference let this deployment masquerade as another.
+        # Bins keep reading {{DIR}}/env and env.export themselves — only the
+        # unit's inheritance surface changes. See design/env-pollution/.
         EnvironmentFile:
-          - "-{{DIR}}/env"
+          - "{{ETC}}/env-service"
           - "{{ETC}}/env-credential"
         LoadCredential: "OPENCODE_PASSWORD:{{PASSWORDS_DIR}}/OPENCODE_PASSWORD"
         ExecStartPre: /bin/sh -c 'test "${OPENCODE_PASSWORD_FILE}" = "${CREDENTIALS_DIRECTORY}/OPENCODE_PASSWORD"'
@@ -426,9 +436,18 @@
       until native proxy publication is composed. Client service `disabled`
       must be unset/false: true selects standalone mode and bypasses discovery.
 
-      The user unit gets ordinary runtime settings from its generated
-      `EnvironmentFile={{DIR}}/env`: the password-file pointer, Watchman
-      socket, logging, and the instance binary. The serve arguments
+      The user unit gets ordinary runtime settings from its unit-scoped
+      generated `EnvironmentFile={{ETC}}/env-service`: the password-file
+      pointer, Watchman socket, logging, and the instance's other runtime
+      keys — exactly the keys this deployment declares in ENV/ENV_PRIO/
+      ENV_LIST. The unit deliberately does NOT load `{{DIR}}/env`: that file
+      opens with the deployment identity header (DIR/NAME/TYPE/INSTANCE/
+      REPO/REPO_DIR/BUILD_DIR/GLOBAL_BINS_DIR) that bins rely on, and loading
+      it made the server — and every child process (agent sessions, tool
+      shells, playbook runs) — inherit one deployment's identity, letting
+      bins with inherited-$DIR deference quietly source the wrong
+      deployment's env. Bins keep reading env/env.export themselves; only
+      the unit's inheritance surface changed. The serve arguments
       themselves are literal in the unit — `ExecStart=<binary> serve
       --hostname <addr> --port <port> --publish` (secondaries omit
       `--publish`; their clients route through the instance launcher's
@@ -825,10 +844,37 @@
             envsubst:
               file: ../env.export
     ETC_FILES:
+      # Unit-scoped service environment file. Contains ONLY the keys this
+      # deployment declares for the service (ENV_PRIO + ENV + ENV_LIST names,
+      # snapshotted by the OPENCODE_SERVICE_ENV_KEYS task below BEFORE
+      # tasks/compfuzor.includes merges compfuzor-contributed identity keys —
+      # LINKS_JSON, REPO_DIR, STATUS_DIRS*, APT_INSTALL — into ENV). Values
+      # resolve at render time from the same merged ENV that {{DIR}}/env
+      # renders, so each line matches the deployment env file exactly.
+      # opencode.service loads this file INSTEAD of {{DIR}}/env, so the server
+      # and its children no longer inherit the deployment identity header
+      # (DIR/NAME/TYPE/...); bins still read env/env.export themselves. Hard
+      # (unprefixed) EnvironmentFile reference: this playbook always renders
+      # the file, so a missing file fails the unit loudly. See
+      # design/env-pollution/ for the full incident and fix scoping.
+      - name: env-service
+        content: |
+          # Unit-scoped service environment for {{NAME}} — deployment identity
+          # (DIR, NAME, TYPE, ...) deliberately absent. The full deployment env
+          # remains in {{DIR}}/env and {{DIR}}/env.export for bins.
+          {% for key in OPENCODE_SERVICE_ENV_KEYS|unique -%}
+          {%- set _raw = ENV[key] if key in ENV else lookup('vars', key, default='__CF_ENV_UNSET__') -%}
+          {%- if _raw is not none and _raw != '__CF_ENV_UNSET__' %}
+          {%- for _val in _raw|normalize(to='list') %}
+          {{key|upper}}="{{_val|string}}"
+          {% endfor -%}
+          {%- endif -%}
+          {%- endfor -%}
       - name: env-credential
         content: |
           # Unit-only credential pointer override: the second unit
-          # EnvironmentFile= (listed after {{DIR}}/env, later files win).
+          # EnvironmentFile= (listed after {{ETC}}/env-service, later files
+          # win).
           # systemd's LoadCredential= copies the 0600 password from
           # {{PASSWORDS_DIR}}/OPENCODE_PASSWORD to the unit's tmpfs
           # credentials directory at each start; the server reads that copy
@@ -1153,4 +1199,18 @@
              }) }}"
         ETC_FILES: "{{ ETC_FILES + [{'name': 'client/client-env.zsh', 'src': 'opencode-client-env.zsh'}] }}"
       when: not OPENCODE_PRIMARY
+    - name: "opencode: snapshot the deployment-declared env keys (unit-scoped service env)"
+      # Must run BEFORE tasks/compfuzor.includes: the includes' vars phase
+      # merges compfuzor-contributed keys into ENV (LINKS_JSON via
+      # gen_links, REPO_DIR via vars_repo, STATUS_DIRS*/APT_INSTALL via
+      # common.yaml subsystems) — deployment identity the unit must not
+      # inherit. Keys only: common.yaml is not loaded yet, so values could
+      # not render here (WATCHMAN_CANONICAL_SOCKET_ABS &c); the env-service
+      # ETC file resolves every key from the merged ENV at fs render time,
+      # byte-matching {{DIR}}/env. See design/env-pollution/.
+      set_fact:
+        OPENCODE_SERVICE_ENV_KEYS: >-
+          {{ ((ENV_PRIO|default({})).keys()|list)
+             + ((ENV.keys()|list) if ENV is mapping else [])
+             + (ENV_LIST|default([])|normalize(to='list')) }}
     - import_tasks: tasks/compfuzor.includes
