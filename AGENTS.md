@@ -59,3 +59,12 @@ ansible-playbook -i 'localhost,' -c local <name>.pb \
 
 Under DIR: `bin/` (scripts), `etc/` (config, symlink to ETCS_DIR/NAME), `env`,
 `env.export`, `README.md`.
+
+## Authoring: Jinja vs shell in generated content
+
+Generated shell bodies are Jinja-parsed. Bash `${#array[@]}` opens a Jinja
+comment — escape as `${{'{#'}}array[@]}` (see apply-patches in vars/common.yaml).
+Guard undefined lookups before testing them: `(X|default('')) is string`, not
+`X is string`. Eager SUBSYSTEM materialization renders every subsystem spec, so
+both failure classes break whole renders, not just the declaring playbook.
+
