@@ -197,7 +197,7 @@ sudo); client profiles in `private/nfs/workhorse-nanomachine-*.yaml`.
 | Samba share | Server export (deployment) | Guard | Workhorse mount |
 | --- | --- | --- | --- |
 | bitblaster | `/mnt/bitblaster` (`nfs-export-bitblaster`) | `mountpoint` | `/mnt/bitblaster` (live NFSv4.2, verified) |
-| src | `/usr/local/src` (`nfs-export-src`) | none (OS-filesystem subdirectory) | `/mnt/src` (armed; export not yet activated) |
+| src | `/usr/local/src` (`nfs-export-src`) | none (OS-filesystem subdirectory) | `/mnt/src` (live NFSv4.2, verified) |
 | exkay | `/mnt/keepstar/exkay` (`nfs-export-exkay`) | `mountpoint=/mnt/keepstar` | `/mnt/exkay` (live NFSv4.2, verified) |
 
 Naming flop (2026-10-16): NFS owns the un-prefixed paths; the CIFS
