@@ -936,6 +936,12 @@ SUBSYSTEM:
   # is `aptlane`, not `apt`, so the subsys <ID>_BYPASS convention does NOT
   # auto-bind APT_BYPASS (a render-side bypass that must not kill the
   # lane); APTLANE_BYPASS is the explicit generation opt-out.
+  # USERMODE renders (env.export carries USERMODE="True"; the render-time
+  # pkgs apply is already skipped under USERMODE) skip the lane by default
+  # on sudo-less accounts instead of failing hard at the sudo call: root
+  # (the `sudo bash bin/install.sh` route this lane exists for) and
+  # COMPFUZOR_APTLANE_FORCE=1 both run it. Without USERMODE the lane is
+  # unchanged. COMPFUZOR_APTLANE_BYPASS skips generation entirely.
   # Deliberately NO apt-get update in the lane: repo configuration and
   # index refresh stay render-side (apt.tasks -> ../apt.update.tasks).
   # APT_INSTALL disposition (default 'present', matching the render-side
@@ -946,7 +952,9 @@ SUBSYSTEM:
   # (APT_INSTALL=latest bin/install.sh) — the same expectation-altering
   # knob pattern as RUST_COPY. APTLANE_BYPASS remains the hard opt-out.
   # status-apt.sh reports drift per the PKG_STATUS map (pkg -> installed |
-  # latest | ignore; unlisted = installed) per the status.sh convention.
+  # latest | ignore; unlisted = installed) per the status.sh convention,
+  # printing `missing package: <pkg>` and exiting 1 when declared packages
+  # are absent.
   aptlane:
     requested: "{{ (PKGS|default([])|length > 0) or (PKGSET|default([])|length > 0) or (PKGSETS|default([])|length > 0) }}"
     contrib:
@@ -958,6 +966,17 @@ SUBSYSTEM:
         - name: install-apt.sh
           phase: packages
           generated: |
+            # USERMODE guard (before the package-manager gates): a user-mode
+            # render targets user scope, but this lane needs root. Root (the
+            # sudo route) and COMPFUZOR_APTLANE_FORCE=1 both run it.
+            if [ -z "${COMPFUZOR_APTLANE_FORCE:-}" ] && [ "$(id -u)" != "0" ]; then
+                case "${USERMODE:-}" in
+                    1|[Tt]rue|[Yy]|[Yy]es)
+                        echo "apt: skipping USERMODE packages lane (no root); run with sudo (sudo bash bin/install.sh) or set COMPFUZOR_APTLANE_FORCE=1" >&2
+                        exit 0
+                        ;;
+                esac
+            fi
             command -v apt-get >/dev/null 2>&1 || { echo "apt: apt-get not found, skipping"; exit 0; }
             SUDO_CMD="sudo"
             _pkgs="{{ _apt_pkgs | join(' ') }}"
@@ -1047,13 +1066,17 @@ SUBSYSTEM:
   # dual-list playbooks (PKGS for Debian + ARCH_PKGS for Arch) converge
   # correctly on either family. Deliberately NOT gated on PKGS_BYPASS/
   # APT_BYPASS (render-side bypasses that must not kill the lane);
-  # ARCHLANE_BYPASS is the explicit generation opt-out.
+  # ARCHLANE_BYPASS is the explicit generation opt-out. USERMODE renders
+  # skip the lane by default on sudo-less accounts (root and
+  # COMPFUZOR_ARCHLANE_FORCE=1 both run it), mirroring aptlane.
   # Deliberately NO `pacman -Sy` in the lane: index refresh stays
   # render-side, and immutable images (SteamOS) ship their sync db in the
   # image. `pacman -S --needed` is the convergence semantics: install
   # missing, upgrade stale, skip satisfied (APT_INSTALL 'latest' parity;
   # arch has no cheap 'present' pin without version specs).
-  # status-arch.sh reports drift per the PKG_STATUS map like status-apt.sh.
+  # status-arch.sh reports drift per the PKG_STATUS map like status-apt.sh,
+  # printing `missing package: <pkg>` and exiting 1 when declared packages
+  # are absent.
   archlane:
     requested: "{{ (ARCH_PKGS|default([])|length > 0) or (ARCH_PKGSET|default([])|length > 0) or (ARCH_PKGSETS|default([])|length > 0) }}"
     contrib:
@@ -1063,6 +1086,17 @@ SUBSYSTEM:
         - name: install-arch.sh
           phase: packages
           generated: |
+            # USERMODE guard (before the package-manager gates): a user-mode
+            # render targets user scope, but this lane needs root. Root (the
+            # sudo route) and COMPFUZOR_ARCHLANE_FORCE=1 both run it.
+            if [ -z "${COMPFUZOR_ARCHLANE_FORCE:-}" ] && [ "$(id -u)" != "0" ]; then
+                case "${USERMODE:-}" in
+                    1|[Tt]rue|[Yy]|[Yy]es)
+                        echo "arch: skipping USERMODE packages lane (no root); run with sudo (sudo bash bin/install.sh) or set COMPFUZOR_ARCHLANE_FORCE=1" >&2
+                        exit 0
+                        ;;
+                esac
+            fi
             command -v pacman >/dev/null 2>&1 || { echo "arch: pacman not found, skipping"; exit 0; }
             command -v pacman-conf >/dev/null 2>&1 || { echo "arch: pacman-conf not found, skipping"; exit 0; }
             [ -n "$(pacman-conf --repo-list 2>/dev/null)" ] || { echo "arch: no pacman repositories configured, skipping"; exit 0; }

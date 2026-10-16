@@ -419,6 +419,15 @@ playbook declaring both `PKGS` and `ARCH_PKGS` converges the correct list on
 either family with one `sudo bash bin/install.sh`. Render-side, `pkgs.tasks`
 dispatches the same way on `ansible_pkg_mgr`.
 
+USERMODE renders skip both lanes by default on sudo-less accounts (the lane
+would otherwise fail hard at its `sudo` call): the runtime guard reads
+`USERMODE` from the deployment's `env.export` (emitted by `files/_env` when the
+playbook renders user-mode) and exits 0 with a one-line reason and remedy.
+Root — the `sudo bash bin/install.sh` route — and
+`COMPFUZOR_APTLANE_FORCE=1` / `COMPFUZOR_ARCHLANE_FORCE=1` both run the lane.
+Without `USERMODE` the lanes are unchanged; `APTLANE_BYPASS` /
+`ARCHLANE_BYPASS` still skip lane generation entirely.
+
 Deb822 repository configuration is a separate `install-apt-sources.sh` child
 of the packages phase; it precedes `install-apt.sh` even on repo-only
 playbooks. Its source, key and bypass contracts are in [`doc/apt.md`](/doc/apt.md).
