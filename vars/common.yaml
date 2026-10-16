@@ -408,7 +408,7 @@ SUBSYSTEM:
   # NPM_PACKAGE_BIN overrides the derived binary name in source mode.
   npm:
     spec:
-      npm_package_bin: "{{ NPM_PACKAGE_BIN | default((NPM | default('') if NPM is string else (NPM | default([]) | first | default(''))) | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')) }}"
+      npm_package_bin: "{{ NPM_PACKAGE_BIN | default((NPM | default('')) if (NPM | default('')) is string else (NPM | default([]) | first | default('')) | regex_replace('(?:@[\\w.-]+/)?([\\w.-]+)(?:@[\\w.-]+)?', '\\1')) }}"
       npm_packages: "{{ NPM if NPM is string else (NPM | default([])) }}"
       npm_src: "{{ NPM_SRC | default(false) | bool }}"
     contrib:
@@ -703,7 +703,7 @@ SUBSYSTEM:
 
             shopt -s nullglob
             patches=("$PATCHES_DIR"/*.patch)
-            if [ ${#patches[@]} -eq 0 ]; then
+            if [ ${{'{#'}}patches[@]} -eq 0 ]; then
               echo "No patches found in $PATCHES_DIR"
               exit 0
             fi
@@ -716,7 +716,7 @@ SUBSYSTEM:
                 exit 1
               }
             done
-            echo "All ${#patches[@]} patch(es) applied successfully."
+            echo "All ${{'{#'}}patches[@]} patch(es) applied successfully."
       ENV:
         PATCHES_JSON: "{{ DIR }}/etc/patches.json"
       ENV_LIST: [PATCHES_JSON]
