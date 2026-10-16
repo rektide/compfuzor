@@ -735,11 +735,20 @@ def test_template_marker_rejection():
         "template marker",
     )
     check_raises(
-        "{% marker rejected (zsh %D{...} prompt escapes must be avoided)",
+        "complete jinja block in env value rejected",
         lambda: zim_fragment(
-            [{"name": "m", "phase": "tools", "env": {"PROMPT": "%D{%Y}"}}], etc="/e"
+            [{"name": "m", "phase": "tools", "env": {"X": "{% if x %}v{% endif %}"}}],
+            etc="/e",
         ),
-        "env['PROMPT']",
+        "env['X']",
+    )
+    check_raises(
+        "complete jinja block in a composed body rejected",
+        lambda: zim_fragment(
+            [{"name": "m", "phase": "tools", "env": {"X": "1"}}],
+            etc="{% if unresolved %}/e{% endif %}",
+        ),
+        "emitted fragment body",
     )
     check_raises(
         "arrays value marker rejected",
@@ -806,6 +815,16 @@ def test_template_marker_rejection():
     check(
         "single-brace zsh prompt escapes pass",
         "_compfuzor_env_set PROMPT" in out[1]["content"],
+        True,
+    )
+    # flipped control: a bare {% is legal zsh date-prompt syntax, so
+    # %D{%Y} must pass -- only complete {% ... %} jinja blocks reject.
+    out = zim_fragment(
+        [{"name": "m", "phase": "tools", "env": {"PROMPT": "%D{%Y}"}}], etc="/e"
+    )
+    check(
+        "zsh %D{%Y} date prompt passes",
+        '_compfuzor_env_set PROMPT "%D{%Y}"' in out[1]["content"],
         True,
     )
 

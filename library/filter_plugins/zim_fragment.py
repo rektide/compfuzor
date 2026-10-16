@@ -26,7 +26,10 @@ ZIM_CHANNELS = {"zimenv", "zimrc"}
 # would install literally (``{{var}}`` text inside init.zsh). Callers own
 # rendering -- gen_zim.tasks renders declaration values at the synthesis
 # task via the template_value lookup.
-TEMPLATE_MARKERS = ("{{", "{%")
+TEMPLATE_MARKERS = ("{{",)
+# A bare ``{%`` is legal Zsh (date prompt escapes such as ``%D{%Y}``), so
+# only a complete Jinja block (``{% ... %}`` / ``{%- ... -%}``) is rejected.
+TEMPLATE_BLOCK = re.compile(r"\{%-?[\s\S]*?-?%\}")
 
 
 def _is_sequence(value):
@@ -113,12 +116,14 @@ def _join_args(args):
 
 
 def _reject_template_markers(module, field, value):
-    """Refuse declaration values still carrying Jinja template markers.
+    """Refuse declaration values still carrying Jinja template syntax.
 
     Every value flowing into an emitted fragment or init.zsh body must be
     fully rendered before this filter: ansible never re-templates filter
-    output, so a surviving ``{{``/``{%`` marker installs as literal text.
-    The error names the module and the offending field so the broken
+    output, so surviving markers install as literal text. ``{{`` is
+    rejected outright; ``{%`` only as a complete Jinja block, because Zsh
+    date prompts like ``%D{%Y}`` legitimately carry a bare ``{%``. The
+    error names the module and the offending field so the broken
     declaration can be located directly.
     """
     values = value if _is_sequence(value) else [value]
@@ -126,18 +131,21 @@ def _reject_template_markers(module, field, value):
         if item is None or wrapped_test_undefined(item):
             continue
         text = str(item)
-        for marker in TEMPLATE_MARKERS:
-            if marker in text:
-                shown = text if len(text) <= 120 else text[:117] + "..."
-                raise AnsibleFilterError(
-                    "zim module {!r}: {} still contains template marker {!r}; "
-                    "declaration values must be rendered before zim_fragment "
-                    "(gen_zim.tasks renders them at the synthesis task via "
-                    "the template_value lookup); "
-                    "unresolved value: {!r}".format(
-                        module, field, marker, shown
-                    )
+        marker = next((m for m in TEMPLATE_MARKERS if m in text), None)
+        if marker is None:
+            block = TEMPLATE_BLOCK.search(text)
+            marker = block.group(0) if block is not None else None
+        if marker is not None:
+            shown = text if len(text) <= 120 else text[:117] + "..."
+            raise AnsibleFilterError(
+                "zim module {!r}: {} still contains template marker {!r}; "
+                "declaration values must be rendered before zim_fragment "
+                "(gen_zim.tasks renders them at the synthesis task via "
+                "the template_value lookup); "
+                "unresolved value: {!r}".format(
+                    module, field, marker, shown
                 )
+            )
 
 
 def _reject_declaration_markers(norm):
@@ -514,13 +522,14 @@ def zim_fragment(modules, phase=None, etc=None, host=False):
     (file modules additionally emit a ``{name, src}`` init.zsh record).
 
     Declaration values must already be fully rendered when they arrive:
-    any ``{{`` or ``{%`` template marker surviving in a declaration field
-    (env/arrays/aliases/functions values, source, args, comment,
-    completions) or in a composed body raises an error naming the module
-    and field -- unrendered markers would otherwise install literally,
-    since nothing re-templates filter output downstream. Callers render
-    nested values first (``gen_zim.tasks`` applies the ``template_value``
-    lookup at the synthesis task).
+    any ``{{`` marker or complete ``{% ... %}`` Jinja block surviving in a
+    declaration field (env/arrays/aliases/functions values, source, args,
+    comment, completions) or in a composed body raises an error naming the
+    module and field -- unrendered markers would otherwise install
+    literally, since nothing re-templates filter output downstream. A
+    bare ``{%`` is legitimate Zsh (date prompt escapes like ``%D{%Y}``)
+    and passes. Callers render nested values first (``gen_zim.tasks``
+    applies the ``template_value`` lookup at the synthesis task).
 
     ``name`` is relative to the ETC dir (the ETC_FILES writer base), so it is
     ``zim/<channel>/<state>/<file>`` -- NOT ``etc/zim/...``. The latter would
