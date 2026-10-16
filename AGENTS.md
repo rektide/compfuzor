@@ -67,4 +67,6 @@ comment — escape as `${{'{#'}}array[@]}` (see apply-patches in vars/common.yam
 Guard undefined lookups before testing them: `(X|default('')) is string`, not
 `X is string`. Eager SUBSYSTEM materialization renders every subsystem spec, so
 both failure classes break whole renders, not just the declaring playbook.
+To render nested declaration data, use the `template_value` lookup (task-level
+templar); the `resolve` filter silently swallows MarkerError in rich task scopes.
 
