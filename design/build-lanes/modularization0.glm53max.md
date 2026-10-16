@@ -698,3 +698,22 @@ plus one playbook run with run-bypasses.
 - [Conversion research wave](/design/archive-workspace/conversion0.gpt6luna.md) —
   the original conversion design; this proposal is the build-lane follow-up
   its assessment called for.
+
+## Operator rulings (2026-10-16)
+
+Recorded from the commissioning session
+(`opencode://ses_eba42c532ffeGDFn343ysNvjcd`):
+
+1. **Inherited-`$DIR` deference is load-bearing**: the operator sometimes
+   presets `DIR` deliberately when invoking rendered bins by hand. Open
+   question 1 is therefore answered *against* defaulting phase-3 pinning on
+   immediately — pinning needs a deprecation window (warn loudly first,
+   flip the default only after the fleet has been clean for a period the
+   operator chooses).
+2. **Implementation sequencing**: all implementation is on hold until the
+   env-pollution trackdown
+   ([`design/env-pollution/trackdown0.glm53fx.md`](/design/env-pollution/trackdown0.glm53fx.md),
+   in progress) reports. The unit-side emission fix and this design's
+   bin-side hardening (moves 3–4) are to be scoped together, since they
+   close the same incident from opposite ends.
+
