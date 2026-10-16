@@ -1,6 +1,6 @@
 /** Complete Zim install, producer import, and status orchestration. */
 
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -83,6 +83,62 @@ async function runRegistry(
   });
 }
 
+/**
+ * Operator-facing registry preflight for install: both sides of the link must
+ * be viable before apply runs. The checks are deliberately high-priority --
+ * the generic links table would otherwise report a cryptic `no-source` row
+ * for what is really an unassembled canonical donor -- while every fixing
+ * action stays behind explicit operator opt-ins: the canonical assembly runs
+ * only with --assemble-canonical, and the destination parent is created only
+ * with --create-dest-parent. COMPFUZOR_ZIM_REGISTRY_SKIP bypasses the whole
+ * registry step for exotic setups.
+ * @returns 0 when both sides are viable; 2 with a stderr remedy otherwise.
+ */
+async function inspectRegistry(
+  activation: Activation,
+  canonical: ZimCanonical,
+  deploymentDir: string,
+  createDestParent: boolean,
+): Promise<number> {
+  const assembleRemedy = `${join(deploymentDir, "bin", "config-assemble.sh")} --context canonical`;
+  let source: Awaited<ReturnType<typeof stat>> | undefined;
+  try {
+    source = await stat(canonical.registry);
+  } catch {
+    source = undefined;
+  }
+  if (source === undefined || !source.isFile()) {
+    console.error(
+      `zim registry preflight failed for context ${activation.name}: registry link source is missing or not a regular file: ${canonical.registry}`,
+    );
+    console.error(`remedy: run ${assembleRemedy} first, or pass --assemble-canonical`);
+    return 2;
+  }
+  const parent = dirname(activation.registry);
+  let existing: Awaited<ReturnType<typeof stat>> | undefined;
+  try {
+    existing = await stat(parent);
+  } catch {
+    existing = undefined;
+  }
+  if (existing !== undefined) {
+    if (existing.isDirectory()) return 0;
+    console.error(
+      `zim registry preflight failed for context ${activation.name}: registry destination parent is not a directory: ${parent}`,
+    );
+    return 2;
+  }
+  if (!createDestParent) {
+    console.error(
+      `zim registry preflight failed for context ${activation.name}: registry destination parent does not exist: ${parent}`,
+    );
+    console.error("remedy: create it deliberately, or rerun with --create-dest-parent");
+    return 2;
+  }
+  await mkdir(parent, { recursive: true });
+  return 0;
+}
+
 async function installZim(
   options: ZimCliOptions,
   settings: ZimSettings,
@@ -135,6 +191,29 @@ async function installZim(
     }
   }
   await installActivation(activation, spec.canonical);
+  // Registry publication is the one install step whose source lives in the
+  // CANONICAL config context, which the default (user-context) install does
+  // not assemble. Bypass, assemble, and preflight are all explicit here.
+  if (truthy(process.env.COMPFUZOR_ZIM_REGISTRY_SKIP)) {
+    console.error(`skipped Zim registry link for ${activation.name}: COMPFUZOR_ZIM_REGISTRY_SKIP`);
+    return 0;
+  }
+  if (options.assembleCanonical) {
+    const assembled = await runAssembly({
+      spec: activation.configSpec,
+      contextName: "canonical",
+      runner: options.configRunner,
+      names: ["zimrc", "zimenv"],
+    });
+    if (assembled !== 0) return assembled;
+  }
+  const preflight = await inspectRegistry(
+    activation,
+    spec.canonical,
+    deploymentDir,
+    options.createDestParent,
+  );
+  if (preflight !== 0) return preflight;
   const registryResult = await runRegistry("apply", activation, spec.canonical, deploymentDir);
   if (registryResult !== 0) return registryResult;
   return 0;

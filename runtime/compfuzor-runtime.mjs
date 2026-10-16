@@ -3792,7 +3792,12 @@ dotfiles (when declared), and publish the registry link.
 Options:
   --context NAME                 Select a declared Zim context
   --install assemble|copy|link  Override CONFIG output installation
-  --dropins copy|link            Override CONFIG input delivery`,
+  --dropins copy|link            Override CONFIG input delivery
+  --assemble-canonical           Assemble the canonical donor configs before
+                                 publishing the registry link (same as
+                                 config-assemble.sh --context canonical)
+  --create-dest-parent           Create the registry destination's missing
+                                 parent directory before linking`,
 	import: `Usage: install-zim-context.sh [--context NAME] [--dropins copy|link] PRODUCER_DIR
 
 Import a producer's Zim fragments into a selected consumer context, then rebuild
@@ -3835,6 +3840,8 @@ function parseZimArgs(argv, deploymentDir) {
 			"config-spec": { type: "string" },
 			"config-runner": { type: "string" },
 			"activation-only": { type: "boolean" },
+			"assemble-canonical": { type: "boolean" },
+			"create-dest-parent": { type: "boolean" },
 			help: {
 				type: "boolean",
 				short: "h"
@@ -3852,6 +3859,7 @@ function parseZimArgs(argv, deploymentDir) {
 	if (action !== "import" && args.length > 0) fail$9(`${action} does not accept positional arguments`);
 	if (action === "import" && args.length !== 1) fail$9("import requires exactly one producer directory");
 	if (values["activation-only"] && action !== "status") fail$9("--activation-only requires status");
+	if ((values["assemble-canonical"] || values["create-dest-parent"]) && action !== "install") fail$9("--assemble-canonical and --create-dest-parent require install");
 	return {
 		action,
 		context: values.context,
@@ -3863,6 +3871,8 @@ function parseZimArgs(argv, deploymentDir) {
 		configSpecExplicit: values["config-spec"] !== void 0,
 		configRunner: resolve(values["config-runner"] ?? join(deploymentDir, "bin", "config", "run.sh")),
 		activationOnly: values["activation-only"] ?? false,
+		assembleCanonical: values["assemble-canonical"] ?? false,
+		createDestParent: values["create-dest-parent"] ?? false,
 		args
 	};
 }
@@ -3945,6 +3955,50 @@ async function runRegistry(action, activation, canonical, deploymentDir) {
 		return (await runCommand(join(deploymentDir, "bin", "links.mjs"), args)).code;
 	});
 }
+/**
+* Operator-facing registry preflight for install: both sides of the link must
+* be viable before apply runs. The checks are deliberately high-priority --
+* the generic links table would otherwise report a cryptic `no-source` row
+* for what is really an unassembled canonical donor -- while every fixing
+* action stays behind explicit operator opt-ins: the canonical assembly runs
+* only with --assemble-canonical, and the destination parent is created only
+* with --create-dest-parent. COMPFUZOR_ZIM_REGISTRY_SKIP bypasses the whole
+* registry step for exotic setups.
+* @returns 0 when both sides are viable; 2 with a stderr remedy otherwise.
+*/
+async function inspectRegistry$1(activation, canonical, deploymentDir, createDestParent) {
+	const assembleRemedy = `${join(deploymentDir, "bin", "config-assemble.sh")} --context canonical`;
+	let source;
+	try {
+		source = await stat(canonical.registry);
+	} catch {
+		source = void 0;
+	}
+	if (source === void 0 || !source.isFile()) {
+		console.error(`zim registry preflight failed for context ${activation.name}: registry link source is missing or not a regular file: ${canonical.registry}`);
+		console.error(`remedy: run ${assembleRemedy} first, or pass --assemble-canonical`);
+		return 2;
+	}
+	const parent = dirname(activation.registry);
+	let existing;
+	try {
+		existing = await stat(parent);
+	} catch {
+		existing = void 0;
+	}
+	if (existing !== void 0) {
+		if (existing.isDirectory()) return 0;
+		console.error(`zim registry preflight failed for context ${activation.name}: registry destination parent is not a directory: ${parent}`);
+		return 2;
+	}
+	if (!createDestParent) {
+		console.error(`zim registry preflight failed for context ${activation.name}: registry destination parent does not exist: ${parent}`);
+		console.error("remedy: create it deliberately, or rerun with --create-dest-parent");
+		return 2;
+	}
+	await mkdir(parent, { recursive: true });
+	return 0;
+}
 async function installZim(options, settings, activation, spec, deploymentDir) {
 	const configContext = getConfigContext(activation.configSpec, activation.spec.config);
 	const configResult = await installContext({
@@ -3971,6 +4025,21 @@ async function installZim(options, settings, activation, spec, deploymentDir) {
 		}
 	}
 	await installActivation(activation, spec.canonical);
+	if (truthy(process.env.COMPFUZOR_ZIM_REGISTRY_SKIP)) {
+		console.error(`skipped Zim registry link for ${activation.name}: COMPFUZOR_ZIM_REGISTRY_SKIP`);
+		return 0;
+	}
+	if (options.assembleCanonical) {
+		const assembled = await runAssembly({
+			spec: activation.configSpec,
+			contextName: "canonical",
+			runner: options.configRunner,
+			names: ["zimrc", "zimenv"]
+		});
+		if (assembled !== 0) return assembled;
+	}
+	const preflight = await inspectRegistry$1(activation, spec.canonical, deploymentDir, options.createDestParent);
+	if (preflight !== 0) return preflight;
 	const registryResult = await runRegistry("apply", activation, spec.canonical, deploymentDir);
 	if (registryResult !== 0) return registryResult;
 	return 0;

@@ -22,6 +22,8 @@ export type ZimCliOptions = {
   configSpecExplicit?: boolean;
   configRunner: string;
   activationOnly: boolean;
+  assembleCanonical: boolean;
+  createDestParent: boolean;
   args: string[];
 };
 
@@ -41,7 +43,12 @@ dotfiles (when declared), and publish the registry link.
 Options:
   --context NAME                 Select a declared Zim context
   --install assemble|copy|link  Override CONFIG output installation
-  --dropins copy|link            Override CONFIG input delivery`,
+  --dropins copy|link            Override CONFIG input delivery
+  --assemble-canonical           Assemble the canonical donor configs before
+                                 publishing the registry link (same as
+                                 config-assemble.sh --context canonical)
+  --create-dest-parent           Create the registry destination's missing
+                                 parent directory before linking`,
   import: `Usage: install-zim-context.sh [--context NAME] [--dropins copy|link] PRODUCER_DIR
 
 Import a producer's Zim fragments into a selected consumer context, then rebuild
@@ -91,6 +98,8 @@ export function parseZimArgs(argv: string[], deploymentDir: string): ZimCliOptio
       "config-spec": { type: "string" },
       "config-runner": { type: "string" },
       "activation-only": { type: "boolean" },
+      "assemble-canonical": { type: "boolean" },
+      "create-dest-parent": { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -109,6 +118,11 @@ export function parseZimArgs(argv: string[], deploymentDir: string): ZimCliOptio
   if (action === "import" && args.length !== 1)
     fail("import requires exactly one producer directory");
   if (values["activation-only"] && action !== "status") fail("--activation-only requires status");
+  if (
+    (values["assemble-canonical"] || values["create-dest-parent"]) &&
+    action !== "install"
+  )
+    fail("--assemble-canonical and --create-dest-parent require install");
   return {
     action,
     context: values.context,
@@ -126,6 +140,8 @@ export function parseZimArgs(argv: string[], deploymentDir: string): ZimCliOptio
       values["config-runner"] ?? join(deploymentDir, "bin", "config", "run.sh"),
     ),
     activationOnly: values["activation-only"] ?? false,
+    assembleCanonical: values["assemble-canonical"] ?? false,
+    createDestParent: values["create-dest-parent"] ?? false,
     args,
   };
 }

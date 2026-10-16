@@ -655,6 +655,11 @@ zimfw() { :; }
             "ZIM_CONFIG_LINK": str(custom_registry),
             "DIR": str(temporary / "missing ambient deployment"),
         })
+        # The custom registry selector points into a tree nothing else
+        # creates; the registry preflight leaves creation to the operator
+        # (the compositor forwards "$@" to every child, so a Zim-only flag
+        # cannot ride through install.sh here).
+        custom_registry.parent.mkdir(parents=True, exist_ok=True)
         install_two = run([str(payload / "bin" / "install.sh")], cwd=temporary, env=env_two)
         assert custom_zimrc.is_file() and custom_zimenv.is_file()
         assert custom_registry.is_symlink() and custom_registry.resolve() == canonical_zimrc, (install_two.stdout, install_two.stderr, list(home_two.rglob("zimfw.conf")), list(xdg_two.rglob("zimfw.conf")))
@@ -677,7 +682,10 @@ zimfw() { :; }
             "COMPFUZOR_CONFIG_INSTALL_STRATEGY": "copy",
             "COMPFUZOR_CONFIG_DROPINS_STRATEGY": "link",
         })
-        run([str(payload / "bin" / "install-zim.sh")], cwd=temporary, env=system_env)
+        # The system registry lives in its own tree (system/registry) that
+        # neither the config install nor the activation creates; creation is
+        # an explicit opt-in of the registry preflight.
+        run([str(payload / "bin" / "install-zim.sh"), "--create-dest-parent"], cwd=temporary, env=system_env)
         assert (system_root / "config" / "zimrc").is_file()
         assert not (system_root / "config" / "zimrc.d").exists()
 
@@ -952,6 +960,112 @@ All paths stay inside this demo root.
             print(f"demo preserved at {temporary}")
 
 
+def test_zim_registry_preflight() -> None:
+    """Fresh fixture proves the registry preflight, its opt-ins, and its bypass.
+
+    The default install assembles only the activation context, while the
+    registry link sources the CANONICAL context's output. Without assembly the
+    preflight must fail naming the exact remedy instead of links.mjs's cryptic
+    no-source row; --assemble-canonical, --create-dest-parent, and
+    COMPFUZOR_ZIM_REGISTRY_SKIP are the explicit operator affordances.
+    """
+    SCRATCH.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="zim registry preflight-", dir=SCRATCH) as tmp:
+        temporary = Path(tmp)
+        block_in_file = temporary / "block-in-file"
+        block_in_file.write_text(
+            f'#!/bin/sh\nexec {NODE!r} {str(Path.home() / "src/block-in-file/dist/block-in-file.mjs")!r} "$@"\n',
+            encoding="utf-8",
+        )
+        block_in_file.chmod(0o755)
+        payload = temporary / "zim preflight host"
+        scenario = temporary / "host.json"
+        ansible_env = os.environ.copy()
+        ansible_env["ANSIBLE_CONFIG"] = str(ROOT / "ansible.cfg")
+        render_host(payload, scenario, ansible_env)
+
+        controller = payload / "src" / "zimfw.zsh"
+        controller.parent.mkdir(parents=True, exist_ok=True)
+        controller.write_text(
+            """mkdir -p -- "$ZIM_HOME"
+print -r -- "# cache built from $ZIM_CONFIG_FILE" > "$ZIM_HOME/init.zsh"
+print -r -- "$ZIM_CONFIG_FILE" >> "$ZIM_TEST_BUILD_LOG"
+zimfw() { :; }
+""",
+            encoding="utf-8",
+        )
+
+        home = temporary / "preflight home"
+        xdg = temporary / "preflight xdg"
+        zdot = temporary / "preflight zdot"
+        zdot.mkdir()
+        env = user_env(home, xdg, zdot, payload, temporary / "preflight-build.log", block_in_file)
+        registry = xdg / "zsh" / "zimfw.conf"
+        canonical_zimrc = payload / "etc" / "zimrc"
+
+        # Virgin account, no canonical assembly: the preflight fails loudly
+        # with the exact remedy while the activation itself completed.
+        missing_source = run(
+            [str(payload / "bin" / "install-zim.sh"), "--context", "user"],
+            cwd=temporary,
+            env=env,
+            check=False,
+        )
+        assert missing_source.returncode == 2, (missing_source.stdout, missing_source.stderr)
+        assert "registry link source is missing" in missing_source.stderr
+        assert "config-assemble.sh --context canonical" in missing_source.stderr
+        assert (xdg / "zsh" / "zimrc").is_file()
+        assert not registry.exists()
+
+        # The registry-specific bypass skips the step with a stated reason.
+        bypassed = run(
+            [str(payload / "bin" / "install-zim.sh"), "--context", "user"],
+            cwd=temporary,
+            env=env | {"COMPFUZOR_ZIM_REGISTRY_SKIP": "1"},
+        )
+        assert "skipped Zim registry link" in bypassed.stderr
+        assert "COMPFUZOR_ZIM_REGISTRY_SKIP" in bypassed.stderr
+        assert not registry.exists()
+
+        # --assemble-canonical runs the canonical assembly first and the
+        # install then completes, link included.
+        assembled = run(
+            [str(payload / "bin" / "install-zim.sh"), "--context", "user", "--assemble-canonical"],
+            cwd=temporary,
+            env=env,
+        )
+        assert assembled.returncode == 0, (assembled.stdout, assembled.stderr)
+        assert canonical_zimrc.is_file() and (payload / "etc" / "zimenv").is_file()
+        assert registry.is_symlink() and registry.resolve() == canonical_zimrc
+
+        # With the donor assembled, a destination whose parent tree is absent
+        # is the remaining blocker; creation is gated behind its own flag.
+        deep_registry = home / "deep registry" / "zimfw.conf"
+        missing_parent = run(
+            [str(payload / "bin" / "install-zim.sh"), "--context", "user"],
+            cwd=temporary,
+            env=env | {"ZIM_CONFIG_LINK": str(deep_registry)},
+            check=False,
+        )
+        assert missing_parent.returncode == 2, (missing_parent.stdout, missing_parent.stderr)
+        assert "registry destination parent does not exist" in missing_parent.stderr
+        assert "--create-dest-parent" in missing_parent.stderr
+        assert not deep_registry.exists()
+
+        # The explicit flag creates the parent and the link lands.
+        created = run(
+            [
+                str(payload / "bin" / "install-zim.sh"), "--context", "user",
+                "--create-dest-parent",
+            ],
+            cwd=temporary,
+            env=env | {"ZIM_CONFIG_LINK": str(deep_registry)},
+        )
+        assert created.returncode == 0, (created.stdout, created.stderr)
+        assert deep_registry.is_symlink() and deep_registry.resolve() == canonical_zimrc
+
+
 if __name__ == "__main__":
     test_zim_consumer_lifecycle()
+    test_zim_registry_preflight()
     print("ok: Zim consumer lifecycle")
