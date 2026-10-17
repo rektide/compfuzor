@@ -4,54 +4,56 @@
     TYPE: playwright-mcp
     INSTANCE: git
     REPO: https://github.com/microsoft/playwright-mcp
+    # Playwright's own Firefox, NOT the running desktop Firefox/profile.
+    # browserName accepts chromium, firefox, or webkit.
+    PLAYWRIGHT_BROWSER: firefox
+    PLAYWRIGHT_HEADLESS: false
     MCP_COMMAND:
-      - mcp-server-playwright
-    ENV:
-      mcp_arg_allowed_hosts: ""
-      mcp_arg_allowed_origins: ""
-      mcp_arg_block_service_workers: ""
-      mcp_arg_blocked_origins: ""
-      #mcp_arg_browser: "chrome"
-      mcp_arg_caps: ""
-      mcp_arg_cdp_endpoint: ""
-      mcp_arg_cdp_header: ""
-      mcp_arg_console_level: "info"
-      mcp_arg_device: ""
-      mcp_arg_executable_path: ""
-      mcp_arg_extension: ""
-      mcp_arg_grant_permissions: ""
-      mcp_arg_headless: ""
-      mcp_arg_host: "localhost"
-      mcp_arg_ignore_https_errors: ""
-      mcp_arg_image_responses: ""
-      mcp_arg_init_page: ""
-      mcp_arg_init_script: ""
-      mcp_arg_isolated: ""
-      mcp_arg_no_sandbox: "true"
-      mcp_arg_output_dir: "${DIR}/var/output"
-      mcp_arg_port: ""
-      mcp_arg_proxy_bypass: ""
-      mcp_arg_proxy_server: ""
-      mcp_arg_save_session: "true"
-      #mcp_arg_save_video: "800x600"
-      mcp_arg_save_video: ""
-      mcp_arg_secrets: ""
-      mcp_arg_shared_browser_context: "true"
-      mcp_arg_storage_state: "${DIR}/var/isolated-storage"
-      mcp_arg_test_id_attribute: ""
-      mcp_arg_timeout_action: "5000"
-      mcp_arg_timeout_navigation: "60000"
-      mcp_arg_user_agent: ""
-      mcp_arg_user_data_dir: "${DIR}/var/profile"
-      mcp_arg_viewport_size: "1356x1356"
+      - node
+      - "{{REPO_DIR}}/cli.js"
+      - --config
+      - "{{ETC}}/playwright.json"
+    # Native JSON avoids shell expansion and --boolean=true flag synthesis.
+    # No sandbox override, automatic recording, HTTP listener, or profile sharing.
+    ETC_FILES:
+      - name: playwright.json
+        json:
+          browser:
+            browserName: "{{PLAYWRIGHT_BROWSER}}"
+            userDataDir: "{{VAR}}/profile"
+            launchOptions:
+              headless: "{{PLAYWRIGHT_HEADLESS | bool}}"
+            contextOptions:
+              viewport: {width: 1356, height: 1356}
+          outputDir: "{{VAR}}/output"
     VAR_DIRS:
       - profile
       - output
-    LOG_DIR: True
     BINS:
       - name: install.sh
+        basedir: "{{REPO_DIR}}"
         content: |
-          pnpm i
-          pnpm link -g
+          npm ci
+      - name: install-browser.sh
+        compose: false
+        basedir: "{{REPO_DIR}}"
+        content: |
+          node cli.js install-browser {{ PLAYWRIGHT_BROWSER | quote }} "$@"
+    README: |
+      # Playwright MCP
+
+      `bin/install.sh` installs the checked-out server dependencies;
+      `bin/install-browser.sh` downloads the matching {{PLAYWRIGHT_BROWSER}}.
+      `etc/mcp.json` is a portable stdio server record for CONFIG consumers.
+      `etc/playwright.json` configures a separate persistent automation profile
+      at `{{VAR}}/profile`, not the desktop browser profile. Launch is lazy.
+
+      OpenCode V2 imports portable records under `mcp.servers`, for example:
+
+          /usr/local/src/opencode-git/bin/config-remote.mjs put mcp-portable \
+            {{ETC}}/mcp.json playwright.json
+
+      See compfuzor's `doc/playwright/README.md` for the CLI/MCP distinction,
+      live Firefox limitations, usage, and verification evidence.
   tasks:
     - import_tasks: tasks/compfuzor.includes
