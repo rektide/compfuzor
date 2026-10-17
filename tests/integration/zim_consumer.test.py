@@ -586,11 +586,11 @@ zimfw() { :; }
 
         producer = temporary / "producer"
         render_producer(producer, temporary / "producer-render.pb", ansible_env)
-        producer_install = producer / "bin" / "install-zimfw.sh"
+        producer_install = producer / "bin" / "install-zim-user.sh"
         assert producer_install.is_file()
         assert not (producer / "bin" / "install-user-zimfw.sh").exists()
         producer_compositor = (producer / "bin" / "install-user.sh").read_text(encoding="utf-8")
-        assert producer_compositor.count('"$DIR/bin/install-zimfw.sh" "$@"') == 1
+        assert producer_compositor.count('"$DIR/bin/install-zim-user.sh" "$@"') == 1
 
         skipped_import = run(
             [str(payload / "bin" / "install-zim-context.sh"), "--context", "user", str(producer)],
@@ -932,7 +932,7 @@ This directory was rendered from `zim.opt.pb` with downloads/package work disabl
 - user one config: `{local_root_one}`
 - user two config: `{xdg_two / 'zsh'}` (custom outputs are under `{home_two / 'custom'}`)
 - explicit system activation: `{system_root}`
-- producer fixture: `{producer}` (`bin/install-zimfw.sh`, explicitly user-scoped)
+- producer fixture: `{producer}` (`bin/install-zim-user.sh`, explicitly user-scoped)
 
 Run tools without sourcing a live profile:
 

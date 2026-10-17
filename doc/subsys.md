@@ -463,7 +463,7 @@ the generated `run_all` children runnable. A pure generated compositor has only
 
 `scope` accepts a string or list; an entry with `scope: [user, shell]`
 participates in both scoped compositors (one entry-point per scope). Explicit
-scope metadata lets a neutral command such as `install-zimfw.sh` join
+scope metadata lets a neutral command such as `install-zim-user.sh` join
 `install-user.sh`. Names beginning with `install-user-` or qualified as
 `install-*-user.sh` also infer user scope; the old `install-*.user.sh` spelling
 remains accepted for compatibility. This is how user-scope subsystems contribute

@@ -772,7 +772,7 @@ the effective host context; explicit canonical promotion is a separate admin
 operation:
 
 ```sh
-/opt/producer/bin/install-zimfw.sh --context user
+/opt/producer/bin/install-zim-user.sh --context user
 /opt/zim-main/bin/config-inputs.sh --context user disable zimrc/zimrc 55-example.conf
 
 # Shared-donor administration, never composed into install-user:

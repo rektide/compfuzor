@@ -176,9 +176,9 @@ Then import both Zim contributions:
 
 ```sh
 ZIM_HOST_DIR="$HOME/.local/opt/zim2-main" \
-  "$HOME/src/opencode-git/bin/install-zimfw.sh"
+  "$HOME/src/opencode-git/bin/install-zim-user.sh"
 ZIM_HOST_DIR="$HOME/.local/opt/zim2-main" \
-  "$HOME/src/opencode-bus-proxy-git/bin/install-zimfw.sh"
+  "$HOME/src/opencode-bus-proxy-git/bin/install-zim-user.sh"
 ```
 
 The `ZIM_HOST_DIR` override is important: the legacy importer defaults to

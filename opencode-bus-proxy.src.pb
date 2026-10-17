@@ -68,7 +68,7 @@
         basedir: False
         bypass: False
         content: 'exec {{ (BINS_DIR ~ "/config-assemble.sh") | quote }} --definition env --context canonical'
-      - name: install-zimfw.sh
+      - name: install-zim-user.sh
         early: '"$DIR/bin/config-assemble.sh" --definition env --context canonical'
     # Endpoint metadata only. Native publication/discovery owns client routing.
     # Keep the module identity so importing updates an older installed module.
@@ -107,7 +107,7 @@
 
       Import this deployment's Zim contribution for endpoint metadata:
 
-          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
+          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zim-user.sh
 
       New interactive shells export OPENCODE_PROXY_URL as metadata only.
       This module neither synthesizes nor clears OPENCODE_ARGS; deliberate
@@ -140,7 +140,7 @@
       host cache. Standalone assembly remains available for service config:
 
           {{DIR}}/bin/config-assemble.sh --definition env --context canonical
-          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
+          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zim-user.sh
 
       Build/render assembles ENV before Rust; normal install-user.sh assembles
       ENV before installing units, and the normal importer also supplies
@@ -193,7 +193,7 @@
           # 2. Install (user scope, both deployments; Zim for client metadata).
           /usr/local/src/opencode-git/bin/install-user.sh
           {{DIR}}/bin/install-user.sh
-          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zimfw.sh
+          ZIM_HOST_DIR=<zim-host> {{DIR}}/bin/install-zim-user.sh
           # 3. Clients down first (discovery is build-stamped), then the
           #    origin republishes with the proxy contact, then the proxy,
           #    then clients back.

@@ -283,8 +283,8 @@ def test_zim_incremental_contributor_is_inert_and_preserves_existing_values(rend
     assert module.is_file() and fragment.is_file()
     assert '_compfuzor_env_set CARGO_INCREMENTAL "0"' in module.read_text()
     assert str(module.resolve().parent) in fragment.read_text()
-    assert (deployment / "bin/install-zimfw.sh").is_file()
-    assert "install-zimfw.sh" in (deployment / "bin/install-user.sh").read_text()
+    assert (deployment / "bin/install-zim-user.sh").is_file()
+    assert "install-zim-user.sh" in (deployment / "bin/install-user.sh").read_text()
     env = {key: value for key, value in os.environ.items()
            if key not in ("CARGO_INCREMENTAL", "COMPFUZOR_ENV_OVERWRITE")}
     env |= {"HOME": str(home), "MODULE": str(module)}

@@ -995,6 +995,27 @@
       - name: credential.sh
         basedir: False
         compose: False
+      - name: install-config-user.sh
+        # The XDG config entry, alone: ~/.config/opencode becomes the link to
+        # this deployment's etc (the password source resolves through it).
+        # Standalone-runnable for re-pointing an account without the rest of
+        # the user lane.
+        scope: [user]
+        phase: identity
+        basedir: False
+        content: |
+          {% if OPENCODE_PRIMARY %}
+          TARGET="${TARGET:-$HOME/.config/opencode}"
+          mkdir -p "$(dirname "$TARGET")"
+          if [ -e "$TARGET" ] && [ ! -L "$TARGET" ]; then
+            echo "opencode: $TARGET exists and is not a symlink; refusing to replace" >&2
+            exit 1
+          fi
+          ln -svfn "${DIR}/etc" "$TARGET"
+          {% else %}
+          echo "opencode: secondary instance {{INSTANCE}} has no primary config link" >&2
+          exit 0
+          {% endif %}
       - name: install-credential-user.sh
         phase: identity
         basedir: False
@@ -1032,17 +1053,8 @@
         content: |
           dir={{DIR}}
           mkdir -p ~/.local/share/opencode/log
-          {% if OPENCODE_PRIMARY %}
-          # XDG config entry: ~/.config/opencode becomes the link to this
-          # deployment's etc; the password source resolves through it.
-          TARGET="${TARGET:-$HOME/.config/opencode}"
-          mkdir -p "$(dirname "$TARGET")"
-          if [ -e "$TARGET" ] && [ ! -L "$TARGET" ]; then
-            echo "opencode: $TARGET exists and is not a symlink; refusing to replace" >&2
-            exit 1
-          fi
-          ln -svfn "${dir}/etc" "$TARGET"
-          {% endif %}
+          # Config link, credential, Zim import, and units are each standalone
+          # install-*-user.sh targets; this aggregate runs them in order.
       # TODO: compfuzor helpers for installing content, automate this in install-user
       - name: restart.sh
         basedir: False

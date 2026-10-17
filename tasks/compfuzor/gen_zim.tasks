@@ -16,7 +16,7 @@
 # zimfw-loadable modules without a separate git repo.
 #
 # Every contributor also gets an auto-generated, explicitly user-scoped
-# install-zimfw.sh that imports its channel fragments into the effective host
+# install-zim-user.sh that imports its channel fragments into the effective host
 # context. Shared donor promotion remains an explicit host-admin operation.
 #
 # ZIM_ARRAYS declares Zsh-only arrays directly rather than projecting process
@@ -139,38 +139,47 @@
          | combine(_zim_env_prio_lookup)
          | combine(ENV_PRIO if ENV_PRIO is defined and ENV_PRIO is mapping else {})) }}
 
-- name: "Compfuzor: generate contributor install-zimfw.sh"
+- name: "Compfuzor: generate contributor install-zim-user.sh"
   set_fact:
-    BINS: "{{ BINS | merge_list(_zimfw_install_bin | annotate_bins('zim'), preset='bins_generated') }}"
+    BINS: "{{ BINS
+              | merge_list(_zimfw_install_tombstone, preset='bins_generated')
+              | merge_list(_zimfw_install_bin | annotate_bins('zim'), preset='bins_generated') }}"
   when:
     - (ZIM_MODULE is defined or ZIM_MODULES is defined or ZIM_ENV is deflengthy or ZIM_ARRAYS is deflengthy)
     - ZIM_HOST is not defined
     - ZIM_BYPASS is deffalsy
   vars:
-    _zimfw_install_bin:
+    # Earlier renders deployed the importer as install-zimfw.sh; remove the
+    # stale copy so one user-lane target per concern survives a rename.
+    _zimfw_install_tombstone:
       name: install-zimfw.sh
+      state: absent
+    _zimfw_install_bin:
+      name: install-zim-user.sh
       scope: [user]
       basedir: False
       bypass: ZIM
       content: |
-        # Scope is descriptor metadata, not part of this command's name. Parse
-        # only Zim's optional context flag; package compositors may pass other
-        # arguments that remain irrelevant to this importer.
+        # User-lane Zim contribution import: run alone to (re)import this
+        # deployment's fragments into the account's Zim host, or ride the
+        # install-user aggregate. Scope is descriptor metadata, not part of
+        # this command's name. Parse only Zim's optional context flag; package
+        # compositors may pass other arguments that remain irrelevant here.
         _zim_context_args=()
         _zim_context_set=0
         while [ "$#" -gt 0 ]; do
           case "$1" in
             --context)
-              [ "$_zim_context_set" -eq 0 ] || { echo "install-zimfw: --context specified more than once" >&2; exit 2; }
+              [ "$_zim_context_set" -eq 0 ] || { echo "install-zim-user: --context specified more than once" >&2; exit 2; }
               shift
-              [ "$#" -gt 0 ] && [ -n "$1" ] || { echo "install-zimfw: --context requires a name" >&2; exit 2; }
+              [ "$#" -gt 0 ] && [ -n "$1" ] || { echo "install-zim-user: --context requires a name" >&2; exit 2; }
               _zim_context_args=(--context "$1")
               _zim_context_set=1
               ;;
             --context=*)
-              [ "$_zim_context_set" -eq 0 ] || { echo "install-zimfw: --context specified more than once" >&2; exit 2; }
+              [ "$_zim_context_set" -eq 0 ] || { echo "install-zim-user: --context specified more than once" >&2; exit 2; }
               _zim_context=${1#--context=}
-              [ -n "$_zim_context" ] || { echo "install-zimfw: --context requires a name" >&2; exit 2; }
+              [ -n "$_zim_context" ] || { echo "install-zim-user: --context requires a name" >&2; exit 2; }
               _zim_context_args=(--context "$_zim_context")
               _zim_context_set=1
               ;;
@@ -207,7 +216,7 @@
         if [ -x "$host/bin/install-zim-context.sh" ]; then
           "$host/bin/install-zim-context.sh" "${_zim_context_args[@]}" "{{DIR}}"
         else
-          _cf_report_skip "install-zimfw.sh" "zim: host not found at $host (set ZIM_HOST_DIR)"
+          _cf_report_skip "install-zim-user.sh" "zim: host not found at $host (set ZIM_HOST_DIR)"
         fi
 
 - name: "Compfuzor: synthesize zim host artifacts"

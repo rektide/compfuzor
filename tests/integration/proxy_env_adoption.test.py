@@ -240,7 +240,7 @@ def normal_zim_import(temporary, producer, environment):
     module = producer / "etc/zim-modules/opencode-bus-proxy-client-env/init.zsh"
     current_module = module.read_bytes()
     module.write_text('export OPENCODE_ARGS="--server http://old-proxy.test:49372"\n')
-    run([producer / "bin/install-zimfw.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host)})
+    run([producer / "bin/install-zim-user.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host)})
     cache = Path(environment["HOME"]) / ".cache/zim/init.zsh"
     assert client(cache, runtime_env)["OPENCODE_ARGS"] == "--server http://old-proxy.test:49372"
     module.write_bytes(current_module)
@@ -248,7 +248,7 @@ def normal_zim_import(temporary, producer, environment):
     # Its generated helper must preserve this explicit invocation override.
     projection = producer / "etc/env-projections/proxy-client.env.export"
     projection.unlink()  # Import must assemble its prerequisite, not trust stale render state.
-    run([producer / "bin/install-zimfw.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host), "DIR": "/foreign-deployment"})
+    run([producer / "bin/install-zim-user.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host), "DIR": "/foreign-deployment"})
     assert projection.is_file()
     imported = Path(environment["XDG_CONFIG_HOME"]) / "zsh/zimrc.d/56-opencode-bus-proxy-client-env.conf"
     assert imported.is_symlink() and imported.resolve().is_relative_to(producer)
@@ -256,7 +256,7 @@ def normal_zim_import(temporary, producer, environment):
     values = client(cache, runtime_env)
     assert values["OPENCODE_PROXY_URL"] == "http://127.0.0.1:49372" and "OPENCODE_ARGS" not in values
     assert not any(key.startswith("BUS_PROXY_") for key in values)
-    run([producer / "bin/install-zimfw.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host)})
+    run([producer / "bin/install-zim-user.sh"], env={**runtime_env, "ZIM_HOST_DIR": str(host)})
     assert imported.is_symlink()
 
 

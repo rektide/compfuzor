@@ -92,7 +92,7 @@
       under {{DIR}}, installs nothing into Zim, and changes no monitor state.
       Importing is the explicit shell-configuration action:
 
-          {{BINS_DIR}}/install-zimfw.sh
+          {{BINS_DIR}}/install-zim-user.sh
 
       The importer feeds this contributor into the effective host context
       (ZIM_HOST_DIR, else the ~/.config/zsh/zimfw.conf registry, else

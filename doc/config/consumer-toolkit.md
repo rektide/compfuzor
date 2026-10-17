@@ -520,7 +520,7 @@ unchanged; no additional per-step Zim bypass vocabulary is introduced.
 
 The Zim host composes into bare `install.sh` even when its default context is
 `user`; user context does not manufacture `install-user.sh`. Contributor
-`install-zimfw.sh` remains explicitly user-scoped and may still compose through
+`install-zim-user.sh` remains explicitly user-scoped and may still compose through
 the legacy user lane because that is a contributor-domain choice.
 
 ## Old-to-new command mapping
