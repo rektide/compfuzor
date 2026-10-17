@@ -178,23 +178,30 @@
           shift
         done
 
-        # Host discovery: ZIM_HOST_DIR wins; otherwise resolve through the
-        # canonical registry link (~/.config/zsh/zimfw.conf -> <host>/etc/zimrc),
-        # which every zim host install creates -- the link IS the registry.
+        # Host discovery: ZIM_HOST_DIR wins; otherwise resolve through a
+        # canonical registry link (<host>/etc/zimrc), which every zim host
+        # install creates -- the link IS the registry. Production hosts own
+        # ~/.config/zsh/zimfw.conf; zim2 hosts own ~/.config/zsh/zim2/zimfw.conf
+        # (checked second so a dual-host account keeps its production host).
         # Final fallback /opt/zim-main (OPTS_DIR default location).
         host="${ZIM_HOST_DIR:-}"
         if [ -z "$host" ]; then
-          _conf="${ZIM_CONFIG_LINK:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf}"
-          _real=$(readlink -f "$_conf" 2>/dev/null || true)
-          if [ -n "$_real" ]; then
+          for _conf in \
+            ${ZIM_CONFIG_LINK:+"$ZIM_CONFIG_LINK"} \
+            "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zimfw.conf" \
+            "${XDG_CONFIG_HOME:-$HOME/.config}/zsh/zim2/zimfw.conf"; do
+            [ -n "$_conf" ] || continue
+            _real=$(readlink -f "$_conf" 2>/dev/null || true)
+            [ -n "$_real" ] || continue
             _etc_dir="$(dirname "$_real")"
-            for _cand in "${_etc_dir%/etc}" "$_etc_dir" "/opt/$(basename "$_etc_dir")"; do
+            for _cand in "${_etc_dir%/etc}" "$_etc_dir" "/opt/$(basename "$_etc_dir")" "$HOME/.local/opt/$(basename "${_etc_dir%/etc}")"; do
               if [ "$_cand" != "$_real" ] && [ -x "$_cand/bin/install-zim.sh" ]; then
                 host="$_cand"
                 break
               fi
             done
-          fi
+            [ -n "$host" ] && break
+          done
         fi
         host="${host:-/opt/zim-main}"
         if [ -x "$host/bin/install-zim-context.sh" ]; then

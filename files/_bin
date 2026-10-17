@@ -72,9 +72,27 @@ export DIR="$_cf_action_deployment"
 cd "${DIR}"
 {% elif item.basedir|default(True) == False %}
 {% elif item.basedir[0] == "/" or item.basedir[0] == "~" %}
+# A missing basedir is a deployment-shape mismatch (e.g. repo checkout
+# bypassed at render, binary provisioned separately), not a crash: state it
+# and skip. COMPFUZOR_BIN_BASEDIR_STRICT=1 restores the hard failure.
+if [ ! -d "{{item.basedir}}" ]; then
+  if [ -z "${COMPFUZOR_BIN_BASEDIR_STRICT:-}" ]; then
+    echo "skipped {{ item.name }}: basedir absent: {{item.basedir}} (checkout bypassed or binary provisioned separately; COMPFUZOR_BIN_BASEDIR_STRICT=1 fails hard)" >&2
+    exit 0
+  fi
+fi
 cd {{item.basedir}}
 {% else %}
-cd {{DIR}}/{{item.basedir}}
+# A missing basedir is a deployment-shape mismatch (e.g. repo checkout
+# bypassed at render, binary provisioned separately), not a crash: state it
+# and skip. COMPFUZOR_BIN_BASEDIR_STRICT=1 restores the hard failure.
+if [ ! -d "${DIR}/{{item.basedir}}" ]; then
+  if [ -z "${COMPFUZOR_BIN_BASEDIR_STRICT:-}" ]; then
+    echo "skipped {{ item.name }}: basedir absent: ${DIR}/{{item.basedir}} (checkout bypassed or binary provisioned separately; COMPFUZOR_BIN_BASEDIR_STRICT=1 fails hard)" >&2
+    exit 0
+  fi
+fi
+cd "${DIR}/{{item.basedir}}"
 {% endif %}
 {% endif %}
 

@@ -172,23 +172,52 @@ an extra-vars `ENV_PRIO` into the proxy render: that would mask its conditional
 discovery `set_fact` additions. Its native Rust polling path was selected instead
 of the optional Bun/Effect watcher bridge.
 
-As the account, after render and binary provisioning:
+As the account, after render and binary provisioning (binaries copied to
+`~/.local/bin`, both executable by the account):
 
 ```sh
-~/src/opencode-git/bin/install-credential-user.sh
-~/src/opencode-git/bin/install-service-opencode-user.sh
-~/src/opencode-bus-proxy-git/bin/build-proxy-env.sh
-~/src/opencode-bus-proxy-git/bin/install-service-opencode-bus-proxy-user.sh
+# Zim host: first run names the one-time remedy; apply it, rerun
+~/.local/opt/zim2-main/bin/install.sh          # exits 2 with the remedy
+~/.local/opt/zim2-main/bin/config-assemble.sh --context canonical
+~/.local/opt/zim2-main/bin/install.sh
 
-ZIM_HOST_DIR="$HOME/.local/opt/zim2-main" ~/src/opencode-git/bin/install-zimfw.sh
-ZIM_HOST_DIR="$HOME/.local/opt/zim2-main" ~/src/opencode-bus-proxy-git/bin/install-zimfw.sh
-opencode service unset disabled
+# Origin: user lane installs config link, credential, Zim import, and units
+~/src/opencode-git/bin/install-user.sh
+
+# Proxy: env assembly, Zim import, rust build (skips loudly without a
+# checkout), units — started against the origin's published record
+~/src/opencode-bus-proxy-git/bin/install-user.sh
+
+# Mise2: bash blocks + its Zim contribution
+~/.local/opt/mise2-main/bin/install-user.sh
+
+# Fresh-account roster: disable modules whose tools this account cannot
+# execute yet (atuin/bd/helm/jj/kubectl/timoni), then rebuild — or provision
+# the tools per-account (mise2) first and keep them enabled.
 ```
+
+This aggregate sequence is **live-validated on a scratch account** (zimtest2,
+ports 49573/49572): every step above ran from the generated installers with no
+explicit per-bin invocations, ending with the full account probe green. The
+origin's `install.sh` (not `-user`) remains the source-build lane — it cd's into
+the composed working tree and is the wrong entrypoint for binary-provisioned
+accounts. The Zim flags (`--assemble-canonical`, `--create-dest-parent`) are
+direct-child options only; the aggregate cannot forward them, which is why the
+canonical remedy above is a separate command.
+
+Validation-driven fixes landed with it: origin `install-user.sh` no longer
+crashes on an unset `TARGET` and links `~/.config/opencode` correctly (refusing
+to clobber a real directory); renders no longer persist the password or
+pre-create its directory (credential.sh owns the source); password generation
+only creates its directory when something will be persisted; the contributor
+Zim importer discovers zim2-host registries (`~/.config/zsh/zim2/zimfw.conf`)
+and usermode deployment roots on its own; bins with a missing `basedir`
+(e.g. rust lanes on checkout-bypassed renders) skip loudly with a
+`COMPFUZOR_BIN_BASEDIR_STRICT=1` hard-fail escape.
 
 The ordinary proxy user-install aggregate now has an identity-phase
 `install-proxy-env-user.sh` prerequisite so its required service ENV is assembled
-**before** systemd starts it. The lower-level unit installer above assumes its
-explicit preceding assembly. The importer also assembles its own ENV prerequisite.
+**before** systemd starts it. The importer also assembles its own ENV prerequisite.
 These reuse [selected ENV CONFIG outputs](/doc/config/definitions.md), not shell
 exports of the entire daemon environment.
 
@@ -218,10 +247,15 @@ the target user manager. Sudo-driven user-manager commands used
 - The full operator-oriented OpenCode status includes cleanup timers, working-tree
   link assertions and Watchman/shared-FFF defaults not adopted by this contained
   binary-bootstrap account. Those are not claimed as passing here.
-- The explicit origin credential/unit installers were exercised, not the full
-  legacy origin `install-user.sh` body (whose TARGET/config-link behavior still
-  needs attention). A generated deployment config is not proof of account config
-  adoption; this account currently uses its fresh native defaults.
+- The origin `install-user.sh` TARGET/config-link body is now exercised and
+  fixed (symlink shape, unset-var guard, refuse-to-clobber). A generated
+  deployment config is still not proof of assembled-config adoption: this
+  account runs the server on fresh native defaults, and `config-install.sh`
+  remains a separate explicit step if the assembled `opencode.json` is wanted.
+- The aggregate lanes were live-validated on the scratch account; the four
+  fixes that validation forced are not yet covered by focused automated tests
+  (rendered-script suites cover adjacent paths). Follow-up: pin each guard in
+  the zim_consumer/archlane-style fixtures.
 
 For **deck**, use an account-owned origin/proxy pair, check available ports, and
 provision its own credential source before installing its units. The port pair
