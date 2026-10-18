@@ -300,6 +300,26 @@ for skills-less CLI use; `playwright-cli --help` is the command reference.
   disconnect/connect cycle: `webdriver: false`, regular Firefox 156 UA, and
   Google's sign-in page rendering without the "This browser or app may not be
   secure" block. Completion of the actual login is the operator's step.
+- 2026-10-18 (dump lead, closed): source analysis suggested `window.dump` as
+  a surviving tell (Playwright's user.js and the remote agent's recommended
+  prefs both enable it; official Firefox defaults the pref off). Chased to
+  ground and disproven on this machine: Debian's stock Firefox 157 exposes
+  the binding regardless — with `browser.dom.window.dump.enabled=false`
+  confirmed in the live session's `prefs.js`, `typeof window.dump` is still
+  `"function"` (the pref only gates whether `dump()` prints; the binding
+  ships unconditionally in 157). `remote.prefs.recommended=false` and the
+  pref restore changed nothing observable, and the email step stayed
+  rejected in every configuration. Final standing verdict:
+  [remote-agent-detect0](/design/playwright/remote-agent-detect0.glm53m.md)
+  — under BiDi/WebDriver, automation-active state is live engine state with
+  no page-reachable channel, and Google's rejection survives every
+  page/JS/header/pref/typing normalization we could apply. Automated Google
+  sign-in on Firefox is effectively unreachable from our layers; branded
+  Chrome (CDP, no engine flag) is the supported path, and Firefox remains
+  usable for everything else including an established (manually created)
+  Google session. Disk note: the 11.4 GB gecko-dev clone pushed this
+  already-full volume to 100% and the archive was removed mid-analysis;
+  citations reference reads completed before removal.
 - 2026-10-18 (post-mortem): two further "obvious indicator" hypotheses were
   tested and exonerated. Wire headers: the patched build's navigation headers
   are shape-identical to stock Firefox 157 (`Accept-Language: en-US,en;q=0.9`
