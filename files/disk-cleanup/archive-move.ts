@@ -44,8 +44,14 @@ const PROG = "archive-move.ts";
 const DEFAULT_DEST_ROOT = "/mnt/bitblaster/archive";
 const DEFAULT_HOST = "nanomachine";
 const DEFAULT_CONCURRENCY = 3;
-/** ssh-side git runs as the same user but config distrust is cheap to defuse per-invocation. */
-const GIT_SAFE = "git -c safe.directory='*'";
+/**
+ * ssh-side git runs as the same user; safe.directory defuses ownership
+ * distrust per-invocation and excludesFile=/dev/null neutralizes the
+ * hosts' DIFFERENT global gitignores (this box hides rust target/
+ * globally, nanomachine does not — status parity must compare the same
+ * rules on both sides; repo-local .gitignore travels with the repo).
+ */
+const GIT_SAFE = "git -c safe.directory='*' -c core.excludesFile=/dev/null";
 
 interface Outcome {
 	rel: string;
@@ -170,7 +176,7 @@ async function moveRepo(
 	}
 	const bytes = await localSize(src);
 	const head = await capture("git", ["-C", src, "rev-parse", "HEAD"], 60_000);
-	const status = await capture("git", ["-C", src, "status", "--porcelain"], 120_000);
+	const status = await capture("git", ["-c", "core.excludesFile=/dev/null", "-C", src, "status", "--porcelain"], 120_000);
 	const count = await capture("find", [src, "-xdev"], 300_000);
 	if (count === null) {
 		return { rel, ok: false, detail: "local find failed" };
@@ -184,7 +190,7 @@ async function moveRepo(
 	// destination is local disk. Re-extraction replaces in place (resume).
 	const org = dirname(rel);
 	const repo = rel.split("/")[1] ?? "";
-	const extractCmd = `mkdir -p ${shq(join(destRoot, org))} && tar -C ${shq(join(destRoot, org))} -xf -`;
+	const extractCmd = `mkdir -p ${shq(join(destRoot, org))} && tar -C ${shq(join(destRoot, org))} -xpf -`;
 	const stream = await pipeInto(
 		"tar",
 		["-C", join(root, org), "-cf", "-", repo],
