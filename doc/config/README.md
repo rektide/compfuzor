@@ -4,8 +4,10 @@ title: Configuration
 description: Reading map for shared CONFIG operations, independent definitions, native consumers, and deployment evidence.
 resource: /doc/config/README.md
 status: active
-modified: {by: 'model:openai/gpt-6.1-sol#xhigh', at: 2026-10-12}
+modified: {by: 'model:openai/gpt-6.1-sol#high', at: 2026-10-18}
 sources:
+  - resource: opencode://ses_eaf8225bdffePtIv2dlUZgAGb3
+    title: brave-sailor — connect verified Playwright/OpenCode portable-record adoption and literal-environment correction
   - resource: opencode://ses_ed1c4aafeffectZuEW8rySlAgl
     title: lucky-engine — connect concrete proxy ENV adoption to the CONFIG reading map
   - resource: opencode://ses_ed1c3f231ffec43Dwg4C35l77Z
@@ -39,6 +41,9 @@ configuration for a selected consumer context.
 - [Consumer configuration toolkit](/doc/config/consumer-toolkit.md) — current
   commands, contexts, copy/link choices, portable JSON input placement,
   Zim workflow, and status semantics.
+- [Playwright and OpenCode](/doc/playwright/README.md#opencode-v2-and-compfuzor-config) —
+  verified native MCP producer/import, literal records without producer ENV,
+  and the distinction between assembled deployment config and live user config.
 - [Simplification plan](/doc/config/simplification.md) — candid account of the
   remaining accidental complexity and the deletion-oriented route out.
 - [Named actions and keybindings](/doc/config/keybindings.md) — first TypeScript

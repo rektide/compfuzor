@@ -1,3 +1,15 @@
+---
+type: Index
+title: Compfuzor Toolkit
+description: Toolkit entry point and reading map for host-configuration playbooks and subsystems.
+resource: /README.md
+status: active
+modified: {by: 'model:openai/gpt-6.1-sol#high', at: 2026-10-18}
+sources:
+  - resource: opencode://ses_eaf8225bdffePtIv2dlUZgAGb3
+    title: brave-sailor — add the maintained Playwright/OpenCode/Firefox return point; prior toolkit account retained
+---
+
 # Compfuzor Toolkit
 
 Compile-and-apply system for host configuration. Users declare intent in
@@ -23,6 +35,12 @@ filesystems, services, packages, and kernel state.
 - [Rust cache and age-based reclamation](/doc/rust-storage/README.md): independent
   user-scoped sccache and cargo-sweep deployments, inert rendering, explicit
   tool installation, and approved persistent sweep timers.
+
+## Browser automation
+
+- [Playwright MCP, CLI, and Firefox](/doc/playwright/README.md): installed tools,
+  OpenCode V2 integration, separate-profile browser control, and why the live
+  personal Firefox profile cannot be attached through Playwright.
 
 ## Filter plugins
 
