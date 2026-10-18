@@ -82,6 +82,21 @@
         First scan 2026-10-14 (as archive-large): 11 of 6210 repos
         held 43.3 of 240.8 GiB; the opencode ghosts + node_modules and
         zen-browser were deleted by the operator the same day.
+      - `archive-move.ts` — the move half of that policy (2026-10-18,
+        promoted from session scratch after the pilot): moves
+        ~/archive/<org>/<repo> to /mnt/bitblaster/archive and symlinks
+        the old path back — repo-level symlinks ONLY, never org-level
+        (operator rule; orgs stay real dirs even when emptied). Engine
+        is a single tar stream over ssh to nanomachine, extracted where
+        the destination is LOCAL disk — rsync-over-NFS had measured
+        ~0.5 MB/s (per-file temp+rename RTT storm over 44k files); the
+        tar-over-ssh engine restores wire speed and server-side
+        metadata. Verify (file count, git HEAD, git status hash) runs
+        server-side too; the source is removed and the symlink lands
+        only after parity. DRY-RUN default, `--apply` is the only
+        moving path; failures keep the source intact and leave a
+        resumable dest (re-extraction replaces in place). Batch use:
+        `--list <file>` + `--concurrency 3`.
       - `lib.ts` — shared helpers (imported by the bins; not a command).
 
       Status: `bin/status.sh` (subsystem) and, for the scheduled clean,
@@ -225,6 +240,9 @@
         raw: True
       - name: status-archive.ts
         src: status-archive.ts
+        raw: True
+      - name: archive-move.ts
+        src: archive-move.ts
         raw: True
 
     # All bins are operator tools that dry-run by default (the pnpm-prune
