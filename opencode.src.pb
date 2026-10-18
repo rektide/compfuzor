@@ -795,8 +795,12 @@
 
       The symlink points at the producer's original record. On each assembly,
       `${VAR}` in JSON strings is expanded from that producer's `env.export`
-      and the invoking environment; unresolved names fail assembly. The
-      producer file is never rewritten. For runtime secrets, prefer OpenCode's
+      and the invoking environment; unresolved names fail assembly. Literal
+      records do not load or require `env.export`. Legacy variable-bearing
+      records require the declared relative env file next to their physical
+      source layout; split ETC deployments should prefer literal records or
+      OpenCode-native environment references. The producer file is never
+      rewritten. For runtime secrets, prefer OpenCode's
       native `{env:VAR}` expression and ensure the server has that variable;
       `${VAR}` expansion writes the value into the assembled config. To avoid
       a stale server configuration, restart the service after changing MCPs.

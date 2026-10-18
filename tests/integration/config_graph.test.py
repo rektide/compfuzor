@@ -173,6 +173,23 @@ output.write_text(text)
         assert servers["second"]["url"] == "second"
         assert servers["docs"]["headers"]["Authorization"] == 'Bearer quoted"value'
         run([str(payload / "bin" / "config-remote.mjs"), "remove", "portable", "second.json"], cwd=payload, env=runtime_env)
+        # Literal records do not depend on producer env.export layout. Real
+        # deployments often store ETC outside the deployment root entirely.
+        literal = temporary / "etc-opt" / "literal-producer" / "mcp.json"
+        literal.parent.mkdir(parents=True)
+        literal_record = {"type": "local", "command": ["node", "/source/cli.js"],
+                          "environment": {"NATIVE": "{env:API_KEY}"}}
+        literal.write_text(json.dumps(literal_record), encoding="utf-8")
+        run([str(payload / "bin" / "config-remote.mjs"), "put", "portable", str(literal), "literal.json"], cwd=payload, env=runtime_env)
+        assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["literal"] == literal_record
+        # Once expansion is requested, a missing declared environment remains
+        # an error; preserve the previously assembled consumer output.
+        literal_original = (payload / "etc" / "app.json").read_text()
+        literal.write_text('{"command":["${NEEDS_PRODUCER_ENV}"]}', encoding="utf-8")
+        failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
+        assert failed.returncode != 0 and "missing JSON input environment file" in failed.stderr
+        assert (payload / "etc" / "app.json").read_text() == literal_original
+        run([str(payload / "bin" / "config-remote.mjs"), "remove", "portable", "literal.json"], cwd=payload, env=runtime_env)
         run([str(payload / "bin" / "config-remote.mjs"), "disable", "portable", "docs.json"], cwd=payload, env=runtime_env)
         assert (payload / "etc" / "portable" / "docs.json.disabled").is_symlink()
         assert json.loads((payload / "etc" / "app.json").read_text())["mcp"]["servers"]["docs"]["command"] == ["stale"]
@@ -217,7 +234,7 @@ output.write_text(text)
         failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
         assert failed.returncode != 0 and "missing environment variable" in failed.stderr
         assert (payload / "etc" / "app.json").read_text() == original
-        (producer / "etc" / "mcp.json").write_text('{"type":"local", "command":["echo"]}\n')
+        (producer / "etc" / "mcp.json").write_text('{"type":"local", "command":["echo", "${API_KEY}"]}\n')
         (producer / "env.export").write_text('return 1\n', encoding="utf-8")
         failed = run([str(payload / "bin" / "config-assemble.sh"), "app"], cwd=payload, check=False, env=runtime_env)
         assert failed.returncode != 0 and "failed to load JSON input environment file" in failed.stderr

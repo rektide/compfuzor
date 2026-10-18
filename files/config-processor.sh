@@ -35,11 +35,12 @@ case "$processor" in
     printf '{}\n' > "$CONFIG_CANDIDATE"
     while IFS=$'\t' read -r _kind identity path settings; do
       next=$(mktemp "$CONFIG_TRANSACTION/json.XXXXXX") || exit 1
-      # Source the explicitly declared producer env in a subshell so each
-      # fragment gets its own environment; never leak it into another input.
+      # Only records containing ${VAR} need the declared producer environment.
+      # Literal/native records work without an env.export (including split ETC
+      # deployments). Keep expansion scoped to this input's subshell.
       (
         env_file=$(jq -r '.envsubst.file // empty' <<<"$settings") || exit 1
-        if [ -n "$env_file" ]; then
+        if [ -n "$env_file" ] && jq -e 'any(.. | strings; test("\\$\\{[A-Za-z_][A-Za-z0-9_]*\\}"))' "$path" >/dev/null; then
           case "$env_file" in
             /*) ;;
             *) resolved_source=$(realpath -- "$path") || exit 1
