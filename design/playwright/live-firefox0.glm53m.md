@@ -14,7 +14,7 @@ sources:
   - resource: opencode://ses_eaf8225bdffePtIv2dlUZgAGb3
     title: Commissioning session — live ~1000-tab Firefox profile question, constraints, and scope
   - resource: opencode://ses_eaf816f55ffeVksaGbjo5Sm2TO
-    title: Investigation session — archive source reading, upstream doc checks, disposable client-side probes, report
+    title: Investigation session — archive source reading, upstream doc checks, disposable client-side probes, report, and correction round 1 (tab-listing cost precision, -new-tab profile-write claim, teardown scoping)
   - resource: /home/rektide/archive/microsoft/playwright
     title: microsoft/playwright @ b335271cdc2b (1.65.0-next, 2026-10-17); MCP server source now lives in-repo under packages/playwright-core/src/tools
   - resource: /home/rektide/archive/microsoft/playwright-mcp
@@ -51,6 +51,13 @@ them. "Open one tab in the live session without touching the rest" is trivially
 achievable without Playwright (`firefox -new-tab URL`); "control that tab with
 Playwright" is not achievable today without restarting the live browser under
 automation flags *and* using a non-Playwright BiDi client.
+
+**Home.** The maintained synthesis of this topic is
+[`/doc/playwright/README.md`](/doc/playwright/README.md) (parent-maintained,
+integrating this verdict). This file stays an independent `draft`-status wave
+report: the evidence record and full citation trail behind that README, kept
+under wave discipline rather than promoted, and revisable here without
+rewriting the maintained home.
 
 ## Summary matrix
 
@@ -142,8 +149,9 @@ look like, and currently it is adoption-free:
   one" (`bidiBrowser.ts:94-101`).
 - `context.newPage()` maps to `browsingContext.create` with
   `type: 'window'` (`bidiBrowser.ts:282-291`; enum
-  `third_party/bidiProtocolCore.ts:711-716`) — on Firefox this opens a **new
-  window**, not a tab in an existing one.
+  `third_party/bidiProtocolCore.ts:711-716`) — per source reading, on Firefox
+  this opens a **new window**, not a tab in an existing one (this session did
+  not runtime-test a native moz-firefox launch).
 - `page.title()` — which MCP tab listings call per tab (see §F) — is a script
   evaluation `document.title` **inside the page's own realm**
   (`server/frames.ts:1717-1729`), i.e. it touches each tab it names.
@@ -200,15 +208,24 @@ the Remote Agent*).
 - **Dispose closes adopted context + browser.** Last client disconnect or
   `browser_close` runs `browserContext.close()` then `browser.close()`
   (`program.ts:163-187`; `tools/backend/browserBackend.ts:137-140` → backend
-  dispose). Closing a persistent/default context escalates:
+  dispose). **For launch-owned persistent contexts** this escalates:
   `doClose` returns `'close-browser'` → full `browser.close()`
   (`server/bidi/bidiBrowser.ts:531-540`; same pattern in
   `server/chromium/crBrowser.ts:557-567` and `server/firefox/ffBrowser.ts:398-401`;
   escalation consumer at `server/browserContext.ts:550-557`). In one tool call
-  ("close browser"), a persistent session — all 1000 tabs if this were the live
-  profile — goes down. `browser.close()` on a *connected* (launchServer)
-  browser only drops the connection (`client/browser.ts:183-196` with
-  `_shouldCloseConnectionOnClose`), which is the safe half of the design.
+  ("close browser"), a *launch-owned* persistent session goes down — the
+  1000-tab exposure would exist if the live profile were ever launched under
+  Playwright, which §D rules out anyway.
+- **Attach-mode teardown is a different case and was not traced to a
+  confirmed browser-side close.** For `connect()`-style browsers the client
+  `Browser.close()` only drops the connection
+  (`client/browser.ts:183-196` with `_shouldCloseConnectionOnClose`), so the
+  MCP dispose's `browser.close()` there is a disconnect, not a browser
+  termination. Whether the MCP factory's dispose path, run against a CDP or
+  extension-mode *attached* browser, ultimately closes the real browser (or
+  merely detaches and tears down the relay) depends on attach-mode
+  `BrowserOptions.browserProcess` plumbing this investigation did not follow
+  to a verified end — flagged unverified rather than projected either way.
 - **CDP attach caveat for the Chromium analogy:** persistent CDP connects run
   `Target.setAutoAttach` with `waitForDebuggerOnStart: true`
   (`server/chromium/crBrowser.ts:84-99`) — attaching pauses new targets until
@@ -226,21 +243,38 @@ the Remote Agent*).
 MCP's `browser_tabs list` maps every tab in the adopted context to
 `headerSnapshot()`, which awaits `page.title()` **and** a console/error count
 per tab (`tools/backend/tabs.ts:37-66`; `tools/backend/tab.ts:299-324`,
-console round-trips at :402-415). That is ≥2 protocol calls — including an
-in-page evaluation — per tab, per listing. At 1000 tabs this is minutes-scale
-churn at best and tab-disturbing at worst. On moz-firefox it is moot (only
-Playwright-created tabs are visible); on Chromium-CDP attach modes it would
-be very real. Snapshots (`browser_snapshot`) are scoped to the selected tab
-only — safe by comparison.
+console counts at :402-415). The per-tab headers are gathered concurrently
+(`Promise.all` over tabs, `tabs.ts:63`), so this is not serial waiting — but
+the work is still O(N) in tab count, and it distinguishes into layers:
+
+- `page.title()` is an **in-page script evaluation** (`document.title` in the
+  page realm, `server/frames.ts:1717-1729`) — a browser-protocol round trip
+  per tab that touches the tab it names. Whether it wakes a Firefox-unloaded
+  tab is Firefox-internal behavior this investigation did not verify; treat
+  "listing may wake" as plausible, not proven.
+- The console/error counts go through `page.consoleMessages()` /
+  `page.pageErrors()` (`client/page.ts:752-764`) — Playwright-channel calls
+  answered from state the server side already buffers from its event
+  subscriptions; these need not trigger new browser-protocol round trips.
+
+Net: per listing, N in-page title evaluations plus channel-level count
+fetches, and an N-entry tab-header payload in the tool response. At ~1000
+tabs that is a large operation and may be slow; no quantitative timing is
+claimed here (nothing was benchmarked). On moz-firefox the question is moot
+(only Playwright-created tabs are visible); on Chromium-CDP attach modes it
+would be very real. Snapshots (`browser_snapshot`) are scoped to the selected
+tab only — safe by comparison.
 
 ## G. Recommended paths, least-invasive first
 
 - **A. Open a tab in the live session, no automation at all.**
   `firefox -new-tab URL` (or plain `firefox URL`) is a *remote command*: the
   launcher hands it to the running instance and exits (MozillaWiki
-  *CommandLineOptions*; `-no-remote` documents the inverse). Zero profile
-  writes, no protocol, nothing to clean up. This exactly satisfies the "open a
-  new tab, leave others alone" half of the ask. Works under snap packaging.
+  *CommandLineOptions*; `-no-remote` documents the inverse). It makes no
+  automation configuration, relaunch, or protocol changes — though ordinary
+  browsing itself persists state (the new tab lands in the session store and
+  history like any user-opened tab). This satisfies the "open a new tab,
+  leave others alone" half of the ask. Works under snap packaging.
 - **B. Playwright-driven Firefox, parallel to the live session.** Run MCP
   (`--browser moz-firefox` for native, `--browser firefox` for patched) with
   its own profile — default is a per-workspace persistent dir under the
@@ -288,3 +322,10 @@ Chromium-only); Firefox resurrecting CDP (removed, opposite direction).
 - Constraint compliance: the user's actual browser/profile was never attached
   to, launched, copied, or inspected; no MCP server was started; probes above
   failed client-side before any process spawn.
+- No native `moz-firefox` launch was runtime-tested by this session; every
+  moz-*/BiDi claim rests on source reading alone.
+- Reported by the commissioning session (not verified here, and distinct from
+  the moz path): installed `@playwright/mcp` 0.0.83 and Playwright CLI 0.1.22
+  driving **separate patched-Firefox profiles** (Juggler builds), headless
+  and headed, through live OpenCode sessions — no real user browser or
+  profile touched. That validates recommendation B's patched-build leg.
