@@ -18,15 +18,22 @@
               }
               stream.props = {
               }
-              # Exclude Bluetooth devices by node.name to prevent combine_sink
-              # from routing audio to them. This avoids A2DP transport failures
-              # caused by the CSR8510 adapter's firmware (missing USB completion
-              # reports) which corrupts audio for both the BT device and any
-              # linked streams. Add more bluez_output.* patterns as needed.
+              # Sinks excluded from the combine_sink fan-out, by node.name regex:
+              # - bluez_output.B0_C2_C7_FA_76_D7: Bluetooth. A2DP transport
+              #   failures caused by the CSR8510 adapter's firmware (missing
+              #   USB completion reports) corrupt audio for both the BT device
+              #   and any linked streams. Add more bluez_output.* alternatives
+              #   to the group as needed.
+              # - easyeffects_sink: EasyEffects' virtual sink (2026-10-18).
+              #   combine fed EasyEffects' own output back into its input
+              #   (apps -> easyeffects_sink -> effects -> combine ->
+              #   easyeffects_sink ...): a feedback loop, and a dead end while
+              #   EE's player stream was down (total silence). Effects/virtual
+              #   processing sinks must never be fan-out targets.
               stream.rules = [{
                 matches = [{
                   media.class = "Audio/Sink"
-                  node.name = "!~bluez_output.B0_C2_C7_FA_76_D7.*"
+                  node.name = "!~(bluez_output.B0_C2_C7_FA_76_D7|easyeffects_sink).*"
                 }]
                 actions = { create-stream = {}}
               }]
