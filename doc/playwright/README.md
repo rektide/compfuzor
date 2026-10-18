@@ -300,6 +300,19 @@ for skills-less CLI use; `playwright-cli --help` is the command reference.
   disconnect/connect cycle: `webdriver: false`, regular Firefox 156 UA, and
   Google's sign-in page rendering without the "This browser or app may not be
   secure" block. Completion of the actual login is the operator's step.
+- 2026-10-18 (post-mortem): two further "obvious indicator" hypotheses were
+  tested and exonerated. Wire headers: the patched build's navigation headers
+  are shape-identical to stock Firefox 157 (`Accept-Language: en-US,en;q=0.9`
+  is current-normal, verified against the stock binary; full Sec-Fetch
+  family, Priority, zstd all match). Automation prefs: Playwright's BiDi
+  profile inherits a Puppeteer-derived pref set that disables the popup
+  blocker, ETP, Safe Browsing, and HTTPS-First (page-observable markers);
+  launching stock Firefox with all of those restored to stock values was
+  still rejected at the email step. Remaining standing explanation: the
+  engine-level automation-active state of a BiDi/Juggler session itself,
+  which no page, header, or pref layer can mask — consistent with branded
+  Chrome under CDP passing, since CDP attach does not set a webdriver flag
+  anywhere in the engine.
 - 2026-10-18 (final): the operator completed password + 2FA once in the
   branded-Chrome window; the Google and ChatGPT sessions persisted in
   `profile-chrome` across a full browser relaunch headed **and** fully
