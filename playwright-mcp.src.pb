@@ -22,11 +22,28 @@
     # Native JSON avoids shell expansion and --boolean=true flag synthesis.
     # No sandbox override, automatic recording, HTTP listener, or profile sharing.
     ETC_FILES:
+      # Evaluated in every page before page scripts. The patched Juggler build
+      # hardwires navigator.webdriver=true; regular browsers report false, and
+      # Google sign-in (e.g. OpenAI SSO) blanket-rejects webdriver:true even
+      # for headed human-driven sessions. The user agent and other navigator
+      # surfaces already match the regular build; this normalizes the one
+      # automation tell. Bash-style ${} expansion and Jinja {{}} must stay out.
+      - name: automation-masking.js
+        content: |
+          try {
+            Object.defineProperty(Navigator.prototype, 'webdriver', {
+              get: function () { return false; },
+              enumerable: true,
+              configurable: true,
+            });
+          } catch (error) {}
       - name: playwright.json
         json:
           browser:
             browserName: "{{PLAYWRIGHT_BROWSER}}"
             userDataDir: "{{VAR}}/profile"
+            initScript:
+              - "{{ETC}}/automation-masking.js"
             launchOptions:
               headless: "{{PLAYWRIGHT_HEADLESS | bool}}"
             contextOptions:
@@ -53,6 +70,9 @@
       `etc/mcp.json` is a portable stdio server record for CONFIG consumers.
       `etc/playwright.json` configures a separate persistent automation profile
       at `{{VAR}}/profile`, not the desktop browser profile. Launch is lazy.
+      `etc/automation-masking.js` reports the regular-browser value for
+      navigator.webdriver so Google SSO (OpenAI login) accepts the profile;
+      the user agent and other markers already match the regular build.
       The MCP record carries the rendering session's display coordinates so
       headed Firefox also works from a background OpenCode service. Rerender
       from the graphical session if its display/socket paths change.

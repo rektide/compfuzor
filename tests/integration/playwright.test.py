@@ -65,6 +65,9 @@ def test_playwright_mcp() -> None:
         assert browser["browserName"] == "firefox"
         assert browser["launchOptions"]["headless"] is False
         assert browser["userDataDir"] == str(directory / "var/playwright-mcp-git/profile")
+        assert browser["initScript"] == [str(directory / "etc/playwright-mcp-git/automation-masking.js")]
+        masking = (directory / "etc/playwright-mcp-git/automation-masking.js").read_text()
+        assert "webdriver" in masking and "return false" in masking
         assert config["outputDir"] == str(directory / "var/playwright-mcp-git/output")
         assert "saveSession" not in config and "sharedBrowserContext" not in config
         assert "storageState" not in browser["contextOptions"]
