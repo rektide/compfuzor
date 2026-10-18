@@ -1,13 +1,7 @@
 ---
 - hosts: all
   vars:
-    TYPE: zx
-    INSTANCE: git
     REPO: https://github.com/google/zx
-    BINS:
-    - name: install.sh
-      exec: |
-        npm install
-        npm link
+    NODEJS: True
   tasks:
-  - include: tasks/compfuzor.includes type=src
+    - import_tasks: tasks/compfuzor.includes
