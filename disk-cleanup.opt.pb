@@ -49,39 +49,39 @@
         deletions (src-clean passes, toolchain uninstalls) re-sparse
         chunks. Re-run the cheap stages after those, never 45/65 absent
         new evidence.
-      - `archive-large.ts` — READ-ONLY ~/archive reporter (no deletion
-        path, no --apply): `<org>/<repo>` dirs over a threshold (default
-        2G) plus org subtotals; per-hit largest-entries drill-down is
-        opt-in via `--top N` and floors entries at 50M (`--min-child`;
-        default off, operator preference 2026-10-14: the detail was
-        noise and sub-50M entries irrelevant). First scan 2026-10-14: 11 of
-        6210 repos held 43.3 of 240.8 GiB (anomalyco/opencode 11.9G —
-        half of it node_modules/ plus two dead .jj.*ghost/backup trees;
-        zen-browser .git 5.7G); the opencode ghosts + node_modules and
-        zen-browser were deleted by the operator the same day. Added
-        after the whole-target hollowing ask was measured a near-noop
-        (src-clean + rust-aggressive already cover 11.1 of 11.6 GiB
-        across 138 ~/src targets; node_modules declined per pnpm store
-        semantics). Grouped by workspace status since 2026-10-18
-        (operator policy: archive keeps repos we hold jj workspaces
-        for; plain git clones are the move pool to
+      - `status-archive.ts` — READ-ONLY ~/archive status reporter (no
+        deletion path, no --apply; born 2026-10-14 as archive-large.ts,
+        renamed and widened 2026-10-18 when the operator made the
+        archive org-centric and policy-bound: archive keeps repos we
+        hold jj workspaces for; plain git clones are the move pool to
         /mnt/bitblaster/archive — nanomachine NFSv4.2, identically
-        pathed on both hosts — with the old path symlinked back). Hits
-        report per kind (no-.jj candidates / with-.jj keep-local /
-        no-marker inspect), repo symlinks into /mnt/bitblaster count as
-        already moved, and their NFS-side bytes are deliberately not
-        walked: the report is the local disk's truth. Size cache added
-        the same day: every measured repo's size lands in
-        `<root>/.archive-large.du` (hidden, du-style
-        `bytes<TAB>org/repo`, rewritten in full and atomically at the
-        end of each run). A run loads it, tags repos missing from it
-        `[new]`, and re-reports cached repos whose size moved at least
-        `--delta` (default 10M) as `old -> new (+/-delta)` change
-        records ordered largest-cached-first; `--no-old-size` drops
-        the old size from those records and `--no-cache` bypasses
-        load+write entirely. Cached entries whose repo no longer
-        measures (moved to bitblaster, deleted) are dropped from the
-        rewrite and counted in the report.
+        pathed on both hosts — with the old path symlinked back,
+        repo-level symlinks ONLY, never org-level). Every repo gets a
+        class: `plain-clean` (git agrees nothing is ours — clean
+        status, no non-remote-reachable commits, no stashes; move
+        candidate), `plain-flagged` (local state, review first),
+        `workspace` (keep local), `nonrepo` (inspect). `--dirs` flips
+        to the org view with class mixes, since moves are planned
+        whole orgs at a time. Default threshold 60M (2026-10-18: the
+        old 2G only showed extremes). Repo symlinks into
+        /mnt/bitblaster count as already moved; their NFS-side bytes
+        are deliberately not walked — the report is the local disk's
+        truth. node_modules/ and rust target/ sizes are measured per
+        repo and reported as "reported, not touched" aggregates with
+        top offenders — reclaiming them is a separate exercise from
+        moving. Attributed per-class caches:
+        `<root>/.status-archive.<class>.du+jsonl` (hidden JSON-lines
+        du-plus-classification: bytes, flags, junk attributes; moved
+        symlinks get a file of targets), rewritten in full and
+        atomically at the end of each run. A run loads them, tags
+        repos missing from them `[new]`, and re-reports cached repos
+        whose size moved at least `--delta` (default 10M) as
+        `old -> new (+/-delta)` change records ordered
+        largest-cached-first; `--no-old-size` drops the old size,
+        `--cache-stem`/`--no-cache` retitle or bypass the caches.
+        First scan 2026-10-14 (as archive-large): 11 of 6210 repos
+        held 43.3 of 240.8 GiB; the opencode ghosts + node_modules and
+        zen-browser were deleted by the operator the same day.
       - `lib.ts` — shared helpers (imported by the bins; not a command).
 
       Status: `bin/status.sh` (subsystem) and, for the scheduled clean,
@@ -223,8 +223,8 @@
       - name: btrfs-balance.ts
         src: btrfs-balance.ts
         raw: True
-      - name: archive-large.ts
-        src: archive-large.ts
+      - name: status-archive.ts
+        src: status-archive.ts
         raw: True
 
     # All bins are operator tools that dry-run by default (the pnpm-prune
