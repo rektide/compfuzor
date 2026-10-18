@@ -68,6 +68,14 @@ def test_playwright_mcp() -> None:
         assert browser["initScript"] == [str(directory / "etc/playwright-mcp-git/automation-masking.js")]
         masking = (directory / "etc/playwright-mcp-git/automation-masking.js").read_text()
         assert "webdriver" in masking and "return false" in masking
+        # v2 also restores the stock PDF-viewer surface (5 plugins, 2 MIME
+        # types, pdfViewerEnabled) the patched build omits...
+        assert "PDF Viewer" in masking and "PluginArray" in masking
+        assert "pdfViewerEnabled" in masking
+        # v3 (files/playwright-mcp/automation-masking.js) tripwires probes:
+        # reads, descriptor probes, and native toString checks each warn.
+        assert "descriptor-probe" in masking and "native-check" in masking
+        assert "read" in masking and "console.warn" in masking
         assert config["outputDir"] == str(directory / "var/playwright-mcp-git/output")
         assert "saveSession" not in config and "sharedBrowserContext" not in config
         assert "storageState" not in browser["contextOptions"]

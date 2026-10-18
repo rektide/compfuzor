@@ -27,16 +27,10 @@
       # Google sign-in (e.g. OpenAI SSO) blanket-rejects webdriver:true even
       # for headed human-driven sessions. The user agent and other navigator
       # surfaces already match the regular build; this normalizes the one
-      # automation tell. Bash-style ${} expansion and Jinja {{}} must stay out.
+      # automation tell. The body lives in files/playwright-mcp/ (name-only
+      # ETC entry renders files/<TYPE>/<name> through the template writer) and
+      # also tripwires every probe of the masked surface; see its header.
       - name: automation-masking.js
-        content: |
-          try {
-            Object.defineProperty(Navigator.prototype, 'webdriver', {
-              get: function () { return false; },
-              enumerable: true,
-              configurable: true,
-            });
-          } catch (error) {}
       - name: playwright.json
         json:
           browser:

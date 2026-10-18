@@ -151,9 +151,21 @@ sign-in (used by OpenAI SSO) blanket-rejects `webdriver:true` browsers even
 for headed, human-driven sessions — the linked support page names "controlled
 through software automation" as a block reason. The user agent and other
 navigator surfaces already match the regular build.
-`etc/automation-masking.js` is registered through `browser.initScript` and
-reports the spec-default regular-browser value (`false`) before any page
-script runs. Upstream Playwright MCP does the equivalent for Chromium by
+`files/playwright-mcp/automation-masking.js` (rendered from a name-only ETC
+entry) is registered through `browser.initScript` and runs before any page
+script. It reports the spec-default regular-browser value for
+`navigator.webdriver` (`false`) and restores the stock PDF-viewer surface the
+patched build omits (5 Chrome-compat `plugins` entries, 2 `mimeTypes`,
+`pdfViewerEnabled: true`). It is also a **tripwire**: every read (including
+`typeof`), `Object.getOwnPropertyDescriptor(s)` probe, and
+`Function.prototype.toString` native-check of the masked surface fires a
+`console.warn` naming the probe kind, key, and caller stack site — visible
+through the MCP console tooling — while the getters and wrapped builtins
+still answer native-shaped `toString()` so the instrumentation does not
+become its own tell. `'webdriver' in navigator`-style probes do not invoke
+getters and remain unobservable without a navigator Proxy (a larger
+fingerprint seam than the signal). Upstream Playwright MCP does the
+Chromium equivalent by
 default (`--disable-blink-features=AutomationControlled`), so this brings the
 Firefox profile to parity rather than adding a novel deception. A config-file
 change is only read at server startup: an unchanged MCP command needs an
@@ -169,8 +181,17 @@ build tells — so no in-page masking clears Google's browser check. **Branded
 Chrome is the Google-SSO-capable path.** `etc/playwright-chrome.json` and
 `etc/mcp-chrome.json` deploy a second, separate headful server
 (`launchOptions.channel: chrome`, google-chrome 150, own `profile-chrome`);
-it passed the email step to the password prompt in the live test. No masking
-init script is registered for it — upstream already handles Chromium
+it passed the email step to the password prompt in the live test. The
+operator then completed password + 2FA in the visible Chrome window once:
+the Google and OpenAI/ChatGPT sessions both landed in the persistent
+`profile-chrome` and survived a full browser relaunch headed **and** fully
+headless with no re-authentication. Headless needs one addition: Chrome
+stamps `HeadlessChrome` into its user agent and Cloudflare's "Just a
+moment…" gate stops it, so headless launches must pass a regular
+`userAgent` override
+(`Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36`);
+with that, headless loads straight into the logged-in ChatGPT UI. No masking
+init script is registered for Chrome — upstream already handles Chromium
 automation markers. Register it under its own server name with the same
 display environment as the Firefox record:
 
@@ -279,6 +300,17 @@ for skills-less CLI use; `playwright-cli --help` is the command reference.
   disconnect/connect cycle: `webdriver: false`, regular Firefox 156 UA, and
   Google's sign-in page rendering without the "This browser or app may not be
   secure" block. Completion of the actual login is the operator's step.
+- 2026-10-18 (final): the operator completed password + 2FA once in the
+  branded-Chrome window; the Google and ChatGPT sessions persisted in
+  `profile-chrome` across a full browser relaunch headed **and** fully
+  headless (headless needs a regular `userAgent` override — Chrome stamps
+  `HeadlessChrome` into its UA and Cloudflare's gate stops that). The v3
+  instrumented masking (`files/playwright-mcp/automation-masking.js`) was
+  verified live: surface regular, and read/`typeof`/descriptor/native-check
+  probes each fired a caller-identifying console warning. An unexplained
+  Chromium-layout store was found clobbering the Firefox `profile` dir (no
+  valuable state); it was moved aside as
+  `var/profile.clobbered-chromium` and the directory recreated clean.
 - 2026-10-18 (later still): With masking verified live, Google still rejected
   the submitted email in the automation Firefox (`/v3/signin/rejected`):
   fingerprint tells beyond webdriver — the patched build reports
