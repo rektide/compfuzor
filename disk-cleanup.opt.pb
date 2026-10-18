@@ -70,7 +70,18 @@
         report per kind (no-.jj candidates / with-.jj keep-local /
         no-marker inspect), repo symlinks into /mnt/bitblaster count as
         already moved, and their NFS-side bytes are deliberately not
-        walked: the report is the local disk's truth.
+        walked: the report is the local disk's truth. Size cache added
+        the same day: every measured repo's size lands in
+        `<root>/.archive-large.du` (hidden, du-style
+        `bytes<TAB>org/repo`, rewritten in full and atomically at the
+        end of each run). A run loads it, tags repos missing from it
+        `[new]`, and re-reports cached repos whose size moved at least
+        `--delta` (default 10M) as `old -> new (+/-delta)` change
+        records ordered largest-cached-first; `--no-old-size` drops
+        the old size from those records and `--no-cache` bypasses
+        load+write entirely. Cached entries whose repo no longer
+        measures (moved to bitblaster, deleted) are dropped from the
+        rewrite and counted in the report.
       - `lib.ts` — shared helpers (imported by the bins; not a command).
 
       Status: `bin/status.sh` (subsystem) and, for the scheduled clean,

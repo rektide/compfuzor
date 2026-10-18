@@ -27,6 +27,16 @@
  * moved — its bytes now live on NFS and are deliberately not walked:
  * this report is the local disk's truth, not the mount's.
  *
+ * Size cache (operator ask 2026-10-18): every measured repo's size is
+ * remembered in <root>/.archive-large.du (hidden, du-style
+ * bytes<TAB>org/repo lines, atomically rewritten at the end of each
+ * run). A run loads it first, tags repos missing from it [new], then
+ * re-checks cached repos — largest cached first — re-reporting the ones
+ * whose size has moved at least --delta (default 10M) as change
+ * records `old -> new (+/-delta)` (--no-old-size omits the old size).
+ * The cache is the run-to-run memory that turns "what is big" into
+ * "what is big AND changing".
+ *
  * Model: ~/archive/<org>/<repo> is the archive layout (workspace
  * convention; `dl` fetches there). Orgs and repos are the real
  * directories at those two levels — files and symlinks are skipped and
@@ -38,6 +48,8 @@
  *
  * Usage:
  *   archive-large.ts [--root <dir>] [--threshold 2G] [--top N]
+ *                    [--delta 10M] [--no-old-size] [--no-cache]
+ *                    [--cache <file>]
  *
  * The default report is the grouped hit list plus org subtotals; the
  * per-hit drill-down (largest entries inside each hit) is OPT-IN via
@@ -50,7 +62,7 @@
  * failure, 2 usage error.
  */
 
-import { readlink, readdir, stat } from "node:fs/promises";
+import { readFile, readlink, readdir, rename, stat, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -63,6 +75,8 @@ const DEFAULT_THRESHOLD = "2G";
 const DEFAULT_TOP = 0;
 /** Drill-down floor: children below this are irrelevant (2026-10-14). */
 const DEFAULT_MIN_CHILD = "50M";
+/** Change-record floor: cached repos moving less than this stay silent (2026-10-18). */
+const DEFAULT_DELTA = "10M";
 const ORG_TOTALS_SHOWN = 10;
 /**
  * Repo-level symlinks pointing in here count as "already moved to
@@ -72,6 +86,11 @@ const ORG_TOTALS_SHOWN = 10;
  * Anything else a repo symlink points at is an alias, counted only.
  */
 const MOVED_PREFIX = "/mnt/bitblaster/";
+/**
+ * Size cache: hidden du-style file at the archive root (operator habit:
+ * ~/archive/*.du). Bytes TAB org/repo per measured repo, "#" comments.
+ */
+const CACHE_FILENAME = ".archive-large.du";
 
 type RepoKind = "plain" | "workspace" | "nonrepo";
 
@@ -92,6 +111,10 @@ interface Repo {
 	/** Measurement walk hit permission/IO errors; size is a lower bound. */
 	partial: boolean;
 	kind: RepoKind;
+	/** org/repo — cache key. */
+	key: string;
+	/** Cached size from the loaded cache, when present. */
+	cached?: bigint;
 }
 
 interface Child {
@@ -112,13 +135,26 @@ interface ScanResult {
 	unreadable: number;
 }
 
+interface CacheOutcome {
+	/** org/repo -> cached bytes. Empty when absent or unreadable. */
+	entries: Map<string, bigint>;
+	/** Cache file was found and loaded (gates [new] tags + change records). */
+	present: boolean;
+	/** Where it came from, for the header line. */
+	path: string;
+	/** stat().mtimeMs of the cache file, when it exists. */
+	writtenAt?: number;
+	/** Unparseable lines skipped with a stderr warning. */
+	badLines: number;
+}
+
 function usage(): string {
 	return `usage: ${PROG} [options]
 
 Report ~/archive/<org>/<repo> directories over a size threshold,
 GROUPED by workspace status, with each hit's largest immediate entries
 and org subtotals. READ-ONLY: this tool never deletes anything and has
-no --apply.
+no --apply. Run-to-run size changes are tracked through a cache.
 
 options:
   --root <dir>        archive root (default: $HOME/archive)
@@ -128,6 +164,13 @@ options:
                       hit (default 0 = off)
   --min-child <size>  drill-down floor: entries below this size are not
                       listed (default 50M; 0 disables the floor)
+  --delta <size>      change-record floor: cached repos whose size moved
+                      at least this much since the cache are re-reported
+                      (default ${DEFAULT_DELTA}; 0 reports every change)
+  --no-old-size       change records show only the new size (default:
+                      "old -> new (+/-delta)" with both sizes)
+  --cache <file>      size cache file (default: <root>/${CACHE_FILENAME})
+  --no-cache          do not load or write the size cache
   --help              this help
 
 threshold syntax: a number plus optional binary unit suffix —
@@ -143,6 +186,15 @@ NFS and are not walked — this report is the local disk's truth); other
 symlinks and files at either level are skipped and counted. .git/.jj
 are MEASURED (unlike the cleaners' walks) — in an archive they are
 usually the bulk.
+
+cache model: every measured repo's size is written to the cache
+(<root>/${CACHE_FILENAME} by default — hidden, du-style
+bytes<TAB>org/repo, atomically replaced at the end of the run). The
+next run loads it, tags repos not in it [new], and re-reports cached
+repos whose size moved at least --delta as change records, largest
+cached size first. Cached entries whose repo no longer measures (moved
+to bitblaster, deleted) are dropped from the rewritten cache and
+counted in the report.
 
 sizes are block usage (du -s parity: st_blocks × 512). A hit's children
 may sum past the hit itself: each child traversal recounts hardlinks
@@ -216,7 +268,7 @@ async function classifyRepo(path: string): Promise<RepoKind> {
 	return "nonrepo";
 }
 
-async function scan(root: string): Promise<ScanResult> {
+async function scan(root: string, cache: CacheOutcome): Promise<ScanResult> {
 	const scan = { nonDirs: 0, unreadable: 0, aliases: 0 };
 	const repos: Repo[] = [];
 	const moved: string[] = [];
@@ -242,7 +294,8 @@ async function scan(root: string): Promise<ScanResult> {
 					}
 					const kind = await classifyRepo(path);
 					const { bytes, errors } = await duBytes(path);
-					repos.push({ org, name: entry.name, path, bytes, partial: errors > 0, kind });
+					const key = `${org}/${entry.name}`;
+					repos.push({ org, name: entry.name, path, bytes, partial: errors > 0, kind, key, cached: cache.entries.get(key) });
 				}),
 			);
 		}),
@@ -276,16 +329,70 @@ async function largestChildren(path: string, top: number, minBytes: bigint): Pro
 	return sorted.slice(0, top);
 }
 
+/** Load the size cache; absent file is a clean first run, not an error. */
+async function loadCache(path: string): Promise<CacheOutcome> {
+	const outcome: CacheOutcome = { entries: new Map(), present: false, path, badLines: 0 };
+	try {
+		const info = await stat(path);
+		if (!info.isFile()) {
+			console.error(`${PROG}: cache path is not a file: ${path} — continuing without cache`);
+			return outcome;
+		}
+		outcome.writtenAt = info.mtimeMs;
+		const text = await readFile(path, "utf8");
+		for (const rawLine of text.split("\n")) {
+			const line = rawLine.trimEnd();
+			if (line === "" || line.startsWith("#")) continue;
+			const match = /^(\d+)\t(.+)$/.exec(line);
+			if (match === null || !match[2].includes("/")) {
+				outcome.badLines++;
+				continue;
+			}
+			outcome.entries.set(match[2], BigInt(match[1]));
+		}
+		outcome.present = true;
+	} catch (error) {
+		if (!isErrnoError(error)) throw error;
+		// ENOENT (or EACCES): first run / unreadable — report says so.
+	}
+	return outcome;
+}
+
+/** Atomically rewrite the cache with every measured repo, largest first. */
+async function writeCache(path: string, repos: readonly Repo[]): Promise<void> {
+	const sorted = [...repos].sort((a, b) => (a.bytes < b.bytes ? 1 : a.bytes > b.bytes ? -1 : a.key.localeCompare(b.key)));
+	const lines = [
+		`# ${PROG} size cache v1 — bytes<TAB>org/repo (block usage, du -s parity)`,
+		`# written ${new Date().toISOString()} — rewritten in full at the end of every run`,
+	];
+	for (const repo of sorted) {
+		lines.push(`${repo.bytes}\t${repo.key}`);
+	}
+	const tmp = `${path}.tmp`;
+	await writeFile(tmp, `${lines.join("\n")}\n`, "utf8");
+	await rename(tmp, path);
+}
+
 function byBytesDesc(a: Repo, b: Repo): number {
 	return a.bytes < b.bytes ? 1 : a.bytes > b.bytes ? -1 : 0;
+}
+
+/** "+2.6 GiB" / "-3.0 MiB" for change-record deltas. */
+function signedDelta(bytes: bigint): string {
+	const sign = bytes < 0n ? "-" : "+";
+	const abs = bytes < 0n ? -bytes : bytes;
+	return `${sign}${human(abs)}`;
 }
 
 async function report(
 	root: string,
 	result: ScanResult,
+	cache: CacheOutcome,
 	threshold: bigint,
 	top: number,
 	minChild: bigint,
+	delta: bigint,
+	oldSizeShown: boolean,
 ): Promise<string> {
 	const lines: string[] = [];
 	const sorted = [...result.repos].sort(byBytesDesc);
@@ -303,10 +410,23 @@ async function report(
 
 	lines.push(`${PROG}: READ-ONLY report — this tool never deletes anything`);
 	lines.push(`root: ${root}  threshold: ${human(threshold)}`);
+	if (cache.present) {
+		const cachedTotal = sorted.reduce((sum, repo) => sum + (repo.cached ?? 0n), 0n);
+		const written = cache.writtenAt === undefined ? "" : `, written ${new Date(cache.writtenAt).toISOString()}`;
+		lines.push(
+			`cache: ${cache.path} — ${cache.entries.size} entries${written} (last run's archive total: ${human(cachedTotal)})${cache.badLines > 0 ? ` [${cache.badLines} bad line(s) skipped]` : ""}`,
+		);
+	} else {
+		lines.push(`cache: none at ${cache.path} — first run; sizes cached for next time`);
+	}
 	lines.push("");
 	lines.push(
 		`repos at/over threshold: ${allHits.length} of ${sorted.length} (${human(allHitsTotal)}; archive total ${human(rootTotal)}; ${result.moved.length} already moved to bitblaster, not walked)`,
 	);
+	const fresh = sorted.filter((repo) => repo.cached === undefined);
+	if (cache.present && fresh.length > 0) {
+		lines.push(`new since cache: ${fresh.length} repo(s), tagged [new] below`);
+	}
 	for (const group of GROUPS) {
 		const repos = sorted.filter((repo) => repo.kind === group.kind);
 		const total = repos.reduce((sum, repo) => sum + repo.bytes, 0n);
@@ -323,7 +443,8 @@ async function report(
 		lines.push("       SIZE  ORG/REPO");
 		for (const hit of hits) {
 			const note = hit.partial ? "  [partial: size is a lower bound]" : "";
-			lines.push(`${human(hit.bytes).padStart(10)}  ${hit.org}/${hit.name}${note}`);
+			const isNew = cache.present && hit.cached === undefined ? "  [new]" : "";
+			lines.push(`${human(hit.bytes).padStart(10)}  ${hit.org}/${hit.name}${note}${isNew}`);
 		}
 		if (top > 0) {
 			const floorNote = minChild > 0n ? `, entries under ${human(minChild)} omitted` : "";
@@ -338,6 +459,44 @@ async function report(
 					lines.push(`${human(child.bytes).padStart(12)}  ${child.name}${child.isDir ? "/" : ""}`);
 				}
 			}
+		}
+	}
+	if (cache.present) {
+		const changed = sorted
+			.filter((repo) => {
+				if (repo.cached === undefined) return false;
+				const diff = repo.bytes > repo.cached ? repo.bytes - repo.cached : repo.cached - repo.bytes;
+				return delta === 0n ? repo.bytes !== repo.cached : diff >= delta;
+			})
+			.sort((a, b) => {
+				// Largest cached first — the operator's re-check order.
+				const ac = a.cached ?? 0n;
+				const bc = b.cached ?? 0n;
+				return ac < bc ? 1 : ac > bc ? -1 : 0;
+			});
+		const dropped = cache.entries.size - sorted.filter((repo) => repo.cached !== undefined).length;
+		lines.push("");
+		const floorWord = delta === 0n ? "any change" : `moved ≥ ${human(delta)}`;
+		lines.push(`changed since cache (${floorWord}; largest cached first):`);
+		if (changed.length === 0) {
+			lines.push(`  (no cached repo ${floorWord})`);
+		} else if (oldSizeShown) {
+			lines.push("        OLD -> NEW  (DELTA)  ORG/REPO");
+			for (const repo of changed) {
+				const diff = repo.bytes - (repo.cached ?? 0n);
+				lines.push(
+					`${human(repo.cached ?? 0n).padStart(10)} -> ${human(repo.bytes).padStart(10)}  (${signedDelta(diff)})  ${repo.org}/${repo.name}`,
+				);
+			}
+		} else {
+			lines.push("         NEW  (DELTA)  ORG/REPO");
+			for (const repo of changed) {
+				const diff = repo.bytes - (repo.cached ?? 0n);
+				lines.push(`${human(repo.bytes).padStart(10)}  (${signedDelta(diff)})  ${repo.org}/${repo.name}`);
+			}
+		}
+		if (dropped > 0) {
+			lines.push(`  (${dropped} cached entr${dropped === 1 ? "y" : "ies"} no longer measured — moved away or deleted; dropped from cache)`);
 		}
 	}
 	lines.push("");
@@ -361,6 +520,10 @@ async function main(argv: string[]): Promise<number> {
 			threshold: { type: "string" },
 			top: { type: "string" },
 			"min-child": { type: "string" },
+			delta: { type: "string" },
+			"no-old-size": { type: "boolean", default: false },
+			cache: { type: "string" },
+			"no-cache": { type: "boolean", default: false },
 			help: { type: "boolean", default: false },
 		},
 	});
@@ -372,6 +535,8 @@ async function main(argv: string[]): Promise<number> {
 	// "0" disables the drill-down floor; parseSize proper rejects ≤ 0
 	// (correct for --threshold, where 0 would report everything).
 	const minChild = values["min-child"] === "0" ? 0n : parseSize(values["min-child"] ?? DEFAULT_MIN_CHILD, "--min-child");
+	// Same 0-means-off convention for the change-record floor.
+	const delta = values.delta === "0" ? 0n : parseSize(values.delta ?? DEFAULT_DELTA, "--delta");
 	const topRaw = values.top ?? String(DEFAULT_TOP);
 	const top = Number.parseInt(topRaw, 10);
 	if (!Number.isInteger(top) || top < 0 || top > 50) {
@@ -387,9 +552,21 @@ async function main(argv: string[]): Promise<number> {
 		if (error instanceof UsageError) throw error;
 		throw new UsageError(`--root is unreadable or missing: ${rootPath} (${(error as NodeJS.ErrnoException).code ?? error})`);
 	}
+	const cachePath = values.cache ?? join(rootPath, CACHE_FILENAME);
 
-	const result = await scan(rootPath);
-	console.log(await report(rootPath, result, threshold, top, minChild));
+	const cache = values["no-cache"]
+		? ({ entries: new Map(), present: false, path: cachePath, badLines: 0 } satisfies CacheOutcome)
+		: await loadCache(cachePath);
+	const result = await scan(rootPath, cache);
+	console.log(await report(rootPath, result, cache, threshold, top, minChild, delta, !values["no-old-size"]));
+	if (!values["no-cache"]) {
+		try {
+			await writeCache(cachePath, result.repos);
+		} catch (error) {
+			console.error(`${PROG}: cache write failed: ${cachePath} (${error instanceof Error ? error.message : error})`);
+			return 1;
+		}
+	}
 	return 0;
 }
 
