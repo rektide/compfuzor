@@ -62,7 +62,15 @@
         after the whole-target hollowing ask was measured a near-noop
         (src-clean + rust-aggressive already cover 11.1 of 11.6 GiB
         across 138 ~/src targets; node_modules declined per pnpm store
-        semantics).
+        semantics). Grouped by workspace status since 2026-10-18
+        (operator policy: archive keeps repos we hold jj workspaces
+        for; plain git clones are the move pool to
+        /mnt/bitblaster/archive — nanomachine NFSv4.2, identically
+        pathed on both hosts — with the old path symlinked back). Hits
+        report per kind (no-.jj candidates / with-.jj keep-local /
+        no-marker inspect), repo symlinks into /mnt/bitblaster count as
+        already moved, and their NFS-side bytes are deliberately not
+        walked: the report is the local disk's truth.
       - `lib.ts` — shared helpers (imported by the bins; not a command).
 
       Status: `bin/status.sh` (subsystem) and, for the scheduled clean,

@@ -17,10 +17,21 @@
  * on the cargo-sweep timers. The surviving need was seeing which
  * archived repos hold the bytes: this bin.
  *
+ * Grouping (operator policy 2026-10-18): the archive holds repos we
+ * have jj workspaces for; plain clones are the pool for moving to
+ * /mnt/bitblaster/archive (nanomachine's NFSv4.2 export, identically
+ * pathed on both hosts) and symlinking back. So hits are reported per
+ * kind: no-.jj git clones (move candidates), with-.jj (keep local),
+ * and neither-marker dirs (inspect before treating as movable). A repo
+ * whose path is already a symlink into /mnt/bitblaster is counted as
+ * moved — its bytes now live on NFS and are deliberately not walked:
+ * this report is the local disk's truth, not the mount's.
+ *
  * Model: ~/archive/<org>/<repo> is the archive layout (workspace
  * convention; `dl` fetches there). Orgs and repos are the real
  * directories at those two levels — files and symlinks are skipped and
- * counted, not measured. Sizes are block usage (du -s parity:
+ * counted, not measured (repo-level symlinks additionally classified
+ * moved/alias). Sizes are block usage (du -s parity:
  * st_blocks × 512, hardlinks once per traversal), so a repo's listed
  * children may sum to more than the repo (per-child traversals recount
  * shared inodes) — same caveat as `du -s repo/*` vs `du -s repo`.
@@ -28,7 +39,7 @@
  * Usage:
  *   archive-large.ts [--root <dir>] [--threshold 2G] [--top N]
  *
- * The default report is the plain hit list plus org subtotals; the
+ * The default report is the grouped hit list plus org subtotals; the
  * per-hit drill-down (largest entries inside each hit) is OPT-IN via
  * --top N — operator preference 2026-10-14: the detail was noise. The
  * drill-down also floors entries at 50M (--min-child; operator
@@ -39,7 +50,7 @@
  * failure, 2 usage error.
  */
 
-import { readdir, stat } from "node:fs/promises";
+import { readlink, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -53,6 +64,23 @@ const DEFAULT_TOP = 0;
 /** Drill-down floor: children below this are irrelevant (2026-10-14). */
 const DEFAULT_MIN_CHILD = "50M";
 const ORG_TOTALS_SHOWN = 10;
+/**
+ * Repo-level symlinks pointing in here count as "already moved to
+ * bitblaster" (nanomachine NFSv4.2 export, identically pathed on both
+ * hosts — the established move convention mv's the repo to
+ * /mnt/bitblaster/archive/<org>/<repo> and symlinks the old path back).
+ * Anything else a repo symlink points at is an alias, counted only.
+ */
+const MOVED_PREFIX = "/mnt/bitblaster/";
+
+type RepoKind = "plain" | "workspace" | "nonrepo";
+
+/** Report sections in this order; titles carry the archive policy. */
+const GROUPS: readonly { kind: RepoKind; title: string }[] = [
+	{ kind: "plain", title: "no jj workspace — plain git clones (move candidates)" },
+	{ kind: "workspace", title: "with jj workspace (keep local)" },
+	{ kind: "nonrepo", title: "no .git/.jj — not a repo (inspect before moving)" },
+];
 
 interface Repo {
 	org: string;
@@ -63,6 +91,7 @@ interface Repo {
 	bytes: bigint;
 	/** Measurement walk hit permission/IO errors; size is a lower bound. */
 	partial: boolean;
+	kind: RepoKind;
 }
 
 interface Child {
@@ -73,8 +102,12 @@ interface Child {
 
 interface ScanResult {
 	repos: readonly Repo[];
-	/** Non-directory (or symlink) entries at org/repo levels, skipped. */
+	/** org/repo paths already symlinked into MOVED_PREFIX (not measured). */
+	moved: readonly string[];
+	/** Non-directory (or org-level symlink) entries, skipped. */
 	nonDirs: number;
+	/** Repo-level symlinks NOT into MOVED_PREFIX, skipped. */
+	aliases: number;
 	/** Unreadable (EACCES etc.) directories, skipped quietly. */
 	unreadable: number;
 }
@@ -82,9 +115,10 @@ interface ScanResult {
 function usage(): string {
 	return `usage: ${PROG} [options]
 
-Report ~/archive/<org>/<repo> directories over a size threshold, with
-each hit's largest immediate entries and org subtotals. READ-ONLY: this
-tool never deletes anything and has no --apply.
+Report ~/archive/<org>/<repo> directories over a size threshold,
+GROUPED by workspace status, with each hit's largest immediate entries
+and org subtotals. READ-ONLY: this tool never deletes anything and has
+no --apply.
 
 options:
   --root <dir>        archive root (default: $HOME/archive)
@@ -101,9 +135,14 @@ threshold syntax: a number plus optional binary unit suffix —
 Units are binary (G = GiB = 2^30) to match the sizes this tool prints.
 
 walk model: orgs are real directories directly under the root; repos
-are real directories directly under each org. Files and symlinks at
-either level are skipped and counted. .git/.jj are MEASURED (unlike the
-cleaners' walks) — in an archive they are usually the bulk.
+are real directories directly under each org, classified by marker —
+.jj → workspace (keep local), .git alone → plain clone (move
+candidate), neither → nonrepo. Repo-level symlinks into
+${MOVED_PREFIX}... are counted as already moved (their bytes live on
+NFS and are not walked — this report is the local disk's truth); other
+symlinks and files at either level are skipped and counted. .git/.jj
+are MEASURED (unlike the cleaners' walks) — in an archive they are
+usually the bulk.
 
 sizes are block usage (du -s parity: st_blocks × 512). A hit's children
 may sum past the hit itself: each child traversal recounts hardlinks
@@ -127,23 +166,26 @@ function parseSize(raw: string, flag = "--threshold"): bigint {
 	return BigInt(bytes);
 }
 
-/** Real directories at one level of the tree; non-dirs and read errors counted. */
-async function realDirs(
-	dir: string,
-	scan: { nonDirs: number; unreadable: number },
-): Promise<readonly string[]> {
-	let entries: Dirent[];
+/** readdir with dirents; unreadable dirs counted, not thrown. */
+async function readDirents(dir: string, scan: { unreadable: number }): Promise<readonly Dirent[]> {
 	try {
-		entries = await readdir(dir, { withFileTypes: true });
+		return await readdir(dir, { withFileTypes: true });
 	} catch (error) {
 		if (!isErrnoError(error)) throw error;
 		scan.unreadable++;
 		return [];
 	}
+}
+
+/** Real directories at one level of the tree; non-dirs and read errors counted. */
+async function realDirs(
+	dir: string,
+	scan: { nonDirs: number; unreadable: number },
+): Promise<readonly string[]> {
+	const entries = await readDirents(dir, scan);
 	const names: string[] = [];
 	for (const entry of entries) {
-		const entryPath = join(dir, entry.name);
-		if (await isRealDir(entryPath)) {
+		if (await isRealDir(join(dir, entry.name))) {
 			names.push(entry.name);
 		} else {
 			scan.nonDirs++;
@@ -152,23 +194,60 @@ async function realDirs(
 	return names;
 }
 
+/** stat() existence; errno → false (EACCES reads as absent — markers are 0755 in practice), other errors rethrow. */
+async function pathExists(path: string): Promise<boolean> {
+	try {
+		await stat(path);
+		return true;
+	} catch (error) {
+		if (isErrnoError(error)) return false;
+		throw error;
+	}
+}
+
+/**
+ * Kind of a repo dir. .jj (dir, or a stale file remnant) wins over .git —
+ * a colocated jj repo is a workspace even though .git sits beside .jj.
+ * A .git FILE (worktree/submodule pointer) still marks a git repo.
+ */
+async function classifyRepo(path: string): Promise<RepoKind> {
+	if (await pathExists(join(path, ".jj"))) return "workspace";
+	if (await pathExists(join(path, ".git"))) return "plain";
+	return "nonrepo";
+}
+
 async function scan(root: string): Promise<ScanResult> {
-	const scan = { nonDirs: 0, unreadable: 0 };
+	const scan = { nonDirs: 0, unreadable: 0, aliases: 0 };
 	const repos: Repo[] = [];
+	const moved: string[] = [];
 	const orgs = await realDirs(root, scan);
 	await Promise.all(
 		orgs.map(async (org) => {
-			const repoNames = await realDirs(join(root, org), scan);
+			const entries = await readDirents(join(root, org), scan);
 			await Promise.all(
-				repoNames.map(async (name) => {
-					const path = join(root, org, name);
+				entries.map(async (entry) => {
+					const path = join(root, org, entry.name);
+					if (entry.isSymbolicLink()) {
+						const target = await readlink(path);
+						if (target.startsWith(MOVED_PREFIX)) {
+							moved.push(`${org}/${entry.name}`);
+						} else {
+							scan.aliases++;
+						}
+						return;
+					}
+					if (!(await isRealDir(path))) {
+						scan.nonDirs++;
+						return;
+					}
+					const kind = await classifyRepo(path);
 					const { bytes, errors } = await duBytes(path);
-					repos.push({ org, name, path, bytes, partial: errors > 0 });
+					repos.push({ org, name: entry.name, path, bytes, partial: errors > 0, kind });
 				}),
 			);
 		}),
 	);
-	return { repos, nonDirs: scan.nonDirs, unreadable: scan.unreadable };
+	return { repos, moved, nonDirs: scan.nonDirs, aliases: scan.aliases, unreadable: scan.unreadable };
 }
 
 /**
@@ -197,6 +276,10 @@ async function largestChildren(path: string, top: number, minBytes: bigint): Pro
 	return sorted.slice(0, top);
 }
 
+function byBytesDesc(a: Repo, b: Repo): number {
+	return a.bytes < b.bytes ? 1 : a.bytes > b.bytes ? -1 : 0;
+}
+
 async function report(
 	root: string,
 	result: ScanResult,
@@ -205,11 +288,12 @@ async function report(
 	minChild: bigint,
 ): Promise<string> {
 	const lines: string[] = [];
-	const hits = [...result.repos].filter((repo) => repo.bytes >= threshold).sort((a, b) => (a.bytes < b.bytes ? 1 : a.bytes > b.bytes ? -1 : 0));
-	const hitsTotal = hits.reduce((sum, repo) => sum + repo.bytes, 0n);
-	const rootTotal = result.repos.reduce((sum, repo) => sum + repo.bytes, 0n);
+	const sorted = [...result.repos].sort(byBytesDesc);
+	const rootTotal = sorted.reduce((sum, repo) => sum + repo.bytes, 0n);
+	const allHits = sorted.filter((repo) => repo.bytes >= threshold);
+	const allHitsTotal = allHits.reduce((sum, repo) => sum + repo.bytes, 0n);
 	const orgs = new Map<string, { bytes: bigint; repos: number; over: number }>();
-	for (const repo of result.repos) {
+	for (const repo of sorted) {
 		const entry = orgs.get(repo.org) ?? { bytes: 0n, repos: 0, over: 0 };
 		entry.bytes += repo.bytes;
 		entry.repos++;
@@ -220,28 +304,39 @@ async function report(
 	lines.push(`${PROG}: READ-ONLY report — this tool never deletes anything`);
 	lines.push(`root: ${root}  threshold: ${human(threshold)}`);
 	lines.push("");
-	lines.push(`repos at/over threshold: ${hits.length} of ${result.repos.length} (${human(hitsTotal)}; archive total ${human(rootTotal)})`);
-	if (hits.length === 0) {
-		lines.push("  (none found)");
-	} else {
+	lines.push(
+		`repos at/over threshold: ${allHits.length} of ${sorted.length} (${human(allHitsTotal)}; archive total ${human(rootTotal)}; ${result.moved.length} already moved to bitblaster, not walked)`,
+	);
+	for (const group of GROUPS) {
+		const repos = sorted.filter((repo) => repo.kind === group.kind);
+		const total = repos.reduce((sum, repo) => sum + repo.bytes, 0n);
+		const hits = repos.filter((repo) => repo.bytes >= threshold);
+		const hitsTotal = hits.reduce((sum, repo) => sum + repo.bytes, 0n);
+		lines.push("");
+		lines.push(
+			`${group.title}: ${repos.length} repo(s), ${human(total)} total — ${hits.length} at/over ${human(threshold)} (${human(hitsTotal)})`,
+		);
+		if (hits.length === 0) {
+			lines.push(`  (no hits at/over ${human(threshold)})`);
+			continue;
+		}
 		lines.push("       SIZE  ORG/REPO");
 		for (const hit of hits) {
 			const note = hit.partial ? "  [partial: size is a lower bound]" : "";
 			lines.push(`${human(hit.bytes).padStart(10)}  ${hit.org}/${hit.name}${note}`);
 		}
-	}
-	if (top > 0 && hits.length > 0) {
-		lines.push("");
-		const floorNote = minChild > 0n ? `, entries under ${human(minChild)} omitted` : "";
-		lines.push(`largest entries inside each hit (top ${top}${floorNote}; children can sum past the hit — hardlinks):`);
-		for (const hit of hits) {
-			lines.push(`  ${hit.org}/${hit.name}`);
-			const children = await largestChildren(hit.path, top, minChild);
-			if (children.length === 0) {
-				lines.push(minChild > 0n ? `    (no entries at/over ${human(minChild)})` : "    (unreadable)");
-			}
-			for (const child of children) {
-				lines.push(`${human(child.bytes).padStart(12)}  ${child.name}${child.isDir ? "/" : ""}`);
+		if (top > 0) {
+			const floorNote = minChild > 0n ? `, entries under ${human(minChild)} omitted` : "";
+			lines.push(`  largest entries inside each hit (top ${top}${floorNote}; children can sum past the hit — hardlinks):`);
+			for (const hit of hits) {
+				lines.push(`  ${hit.org}/${hit.name}`);
+				const children = await largestChildren(hit.path, top, minChild);
+				if (children.length === 0) {
+					lines.push(minChild > 0n ? `    (no entries at/over ${human(minChild)})` : "    (unreadable)");
+				}
+				for (const child of children) {
+					lines.push(`${human(child.bytes).padStart(12)}  ${child.name}${child.isDir ? "/" : ""}`);
+				}
 			}
 		}
 	}
@@ -252,7 +347,9 @@ async function report(
 		lines.push(`${human(entry.bytes).padStart(10)}  ${org} (${entry.repos} repo${entry.repos === 1 ? "" : "s"}, ${entry.over} over)`);
 	}
 	lines.push("");
-	lines.push(`skipped: ${result.unreadable} unreadable dir(s) (quiet), ${result.nonDirs} non-directory entrie(s) at org/repo level`);
+	lines.push(
+		`skipped: ${result.unreadable} unreadable dir(s) (quiet), ${result.nonDirs} non-directory entrie(s), ${result.aliases} repo symlink(s) to elsewhere`,
+	);
 	return lines.join("\n");
 }
 
