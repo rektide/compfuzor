@@ -13,6 +13,12 @@
       - "{{REPO_DIR}}/cli.js"
       - --config
       - "{{ETC}}/playwright.json"
+    # OpenCode's background service need not inherit the graphical session.
+    # Pass only display connection coordinates captured by this local render.
+    MCP_ENV: >-
+      {{ ansible_env | dict2items |
+         selectattr('key', 'in', ['DISPLAY', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR', 'XAUTHORITY']) |
+         items2dict }}
     # Native JSON avoids shell expansion and --boolean=true flag synthesis.
     # No sandbox override, automatic recording, HTTP listener, or profile sharing.
     ETC_FILES:
@@ -47,6 +53,9 @@
       `etc/mcp.json` is a portable stdio server record for CONFIG consumers.
       `etc/playwright.json` configures a separate persistent automation profile
       at `{{VAR}}/profile`, not the desktop browser profile. Launch is lazy.
+      The MCP record carries the rendering session's display coordinates so
+      headed Firefox also works from a background OpenCode service. Rerender
+      from the graphical session if its display/socket paths change.
 
       OpenCode V2 imports portable records under `mcp.servers`, for example:
 

@@ -54,6 +54,8 @@ def test_playwright_mcp() -> None:
         deployment = render("playwright-mcp.src.pb", directory)
         record = json.loads((deployment / "etc/mcp.json").read_text())
         config = json.loads((deployment / "etc/playwright.json").read_text())
+        display = record.pop("environment")
+        assert set(display) <= {"DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR", "XAUTHORITY"}
         assert record == {
             "type": "local",
             "command": ["node", str(deployment / "repo/cli.js"), "--config",
@@ -74,10 +76,14 @@ def test_playwright_mcp() -> None:
         download = (deployment / "bin/install-browser.sh").read_text()
         assert 'node cli.js install-browser firefox "$@"' in download
         render("playwright-mcp.src.pb", directory,
-               PLAYWRIGHT_BROWSER="chromium", PLAYWRIGHT_HEADLESS=True)
+               PLAYWRIGHT_BROWSER="chromium", PLAYWRIGHT_HEADLESS=True,
+               MCP_ENV={"DISPLAY": ":test", "XDG_RUNTIME_DIR": "/runtime/test"})
         overridden = json.loads((deployment / "etc/playwright.json").read_text())
         assert overridden["browser"]["browserName"] == "chromium"
         assert overridden["browser"]["launchOptions"]["headless"] is True
+        assert json.loads((deployment / "etc/mcp.json").read_text())["environment"] == {
+            "DISPLAY": ":test", "XDG_RUNTIME_DIR": "/runtime/test",
+        }
 
 
 def test_playwright_cli() -> None:
