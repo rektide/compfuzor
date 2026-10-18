@@ -49,9 +49,31 @@
             contextOptions:
               viewport: {width: 1356, height: 1356}
           outputDir: "{{VAR}}/output"
+      # Second server: branded Chrome (google-chrome) in its own headful
+      # profile. Google SSO fingerprint-rejects the patched Playwright
+      # Firefox at the email step even with webdriver masked (plugins and
+      # other build tells), while real Chrome passes through to the password
+      # step. Upstream MCP already launches Chromium with
+      # --disable-blink-features=AutomationControlled, so no masking init
+      # script is registered here. See doc/playwright/README.md.
+      - name: playwright-chrome.json
+        json:
+          browser:
+            browserName: chromium
+            userDataDir: "{{VAR}}/profile-chrome"
+            launchOptions:
+              channel: chrome
+              headless: false
+            contextOptions:
+              viewport: {width: 1356, height: 1356}
+          outputDir: "{{VAR}}/output-chrome"
+      - name: mcp-chrome.json
+        json: "{{ {'type': 'local', 'command': ['node', REPO_DIR ~ '/cli.js', '--config', ETC ~ '/playwright-chrome.json']} | combine({'environment': MCP_ENV} if MCP_ENV is defined else {}) }}"
     VAR_DIRS:
       - profile
       - output
+      - profile-chrome
+      - output-chrome
     BINS:
       - name: install.sh
         basedir: "{{REPO_DIR}}"
@@ -73,6 +95,11 @@
       `etc/automation-masking.js` reports the regular-browser value for
       navigator.webdriver so Google SSO (OpenAI login) accepts the profile;
       the user agent and other markers already match the regular build.
+      Google still fingerprint-rejects the patched Firefox build at the email
+      step, so `etc/playwright-chrome.json` and `etc/mcp-chrome.json` deploy a
+      second headful branded-Chrome server (`channel: chrome`, own profile at
+      `{{VAR}}/profile-chrome`), which passes to the password step. Register
+      the chrome record under its own server name.
       The MCP record carries the rendering session's display coordinates so
       headed Firefox also works from a background OpenCode service. Rerender
       from the graphical session if its display/socket paths change.

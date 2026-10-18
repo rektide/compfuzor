@@ -78,6 +78,23 @@ def test_playwright_mcp() -> None:
         assert "npm ci" in install and "pnpm link" not in install
         download = (deployment / "bin/install-browser.sh").read_text()
         assert 'node cli.js install-browser firefox "$@"' in download
+        chrome_record = json.loads((deployment / "etc/mcp-chrome.json").read_text())
+        assert chrome_record.pop("environment") == display
+        assert chrome_record == {
+            "type": "local",
+            "command": ["node", str(deployment / "repo/cli.js"), "--config",
+                        str(directory / "etc/playwright-mcp-git/playwright-chrome.json")],
+        }
+        chrome_browser = json.loads(
+            (deployment / "etc/playwright-chrome.json").read_text())["browser"]
+        assert chrome_browser["browserName"] == "chromium"
+        assert chrome_browser["launchOptions"] == {"channel": "chrome", "headless": False}
+        assert chrome_browser["userDataDir"] == str(
+            directory / "var/playwright-mcp-git/profile-chrome")
+        assert chrome_browser["contextOptions"]["viewport"] == {"width": 1356, "height": 1356}
+        assert "initScript" not in chrome_browser
+        assert json.loads((deployment / "etc/playwright-chrome.json").read_text())["outputDir"] == \
+            str(directory / "var/playwright-mcp-git/output-chrome")
         render("playwright-mcp.src.pb", directory,
                PLAYWRIGHT_BROWSER="chromium", PLAYWRIGHT_HEADLESS=True,
                MCP_ENV={"DISPLAY": ":test", "XDG_RUNTIME_DIR": "/runtime/test"})
@@ -87,6 +104,13 @@ def test_playwright_mcp() -> None:
         assert json.loads((deployment / "etc/mcp.json").read_text())["environment"] == {
             "DISPLAY": ":test", "XDG_RUNTIME_DIR": "/runtime/test",
         }
+        assert json.loads((deployment / "etc/mcp-chrome.json").read_text())["environment"] == {
+            "DISPLAY": ":test", "XDG_RUNTIME_DIR": "/runtime/test",
+        }
+        # The branded-Chrome variant stays headful regardless of the knob:
+        # Google SSO is the job it exists for.
+        assert json.loads((deployment / "etc/playwright-chrome.json")
+                          .read_text())["browser"]["launchOptions"]["headless"] is False
 
 
 def test_playwright_cli() -> None:

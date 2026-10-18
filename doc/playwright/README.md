@@ -1,13 +1,13 @@
 ---
 type: Guide
-title: Playwright browser automation and live Firefox boundaries
-description: Return point for Compfuzor's Playwright MCP and CLI deployments, OpenCode V2 registration, verified separate-profile Firefox control, and the unsupported live Firefox attachment goal.
+title: Playwright browser automation, Firefox and branded-Chrome boundaries
+description: Return point for Compfuzor's Playwright MCP and CLI deployments, OpenCode V2 registration, verified separate-profile Firefox control, the branded-Chrome Google-SSO variant, and the unsupported live Firefox attachment goal.
 resource: /doc/playwright/README.md
 status: active
 generated: {by: 'model:openai/gpt-6.1-sol#high', at: 2026-10-18}
 sources:
   - resource: opencode://ses_eaf8225bdffePtIv2dlUZgAGb3
-    title: brave-sailor — commissioned Firefox investigation, refreshed archives/tools, repaired native configuration and CONFIG integration, verified OpenCode browser control
+    title: brave-sailor — commissioned Firefox investigation, refreshed archives/tools, repaired native configuration and CONFIG integration, verified OpenCode browser control; commissioned branded-Chrome Google-SSO variant after the masked Firefox build still failed Google's email step
   - resource: /design/playwright/live-firefox0.glm53m.md
     title: Independent GLM safety/support investigation with revision-bound upstream source references
   - resource: https://github.com/microsoft/playwright-mcp/blob/b8b4183e099f/README.md
@@ -21,7 +21,7 @@ sources:
 verification: Separate Playwright Firefox tested through MCP SDK, CLI, and the live OpenCode MCP connection; no attachment, inspection, copying, or modification of the desktop Firefox profile. Native Firefox BiDi channels and thousand-tab behavior were source-reviewed, not benchmarked here.
 ---
 
-# Playwright: Firefox, MCP, and CLI
+# Playwright: Firefox, branded Chrome, MCP, and CLI
 
 **Playwright supports Firefox; it is not Chrome/Edge-only. But it cannot attach
 to an ordinarily running Firefox session.** The Chrome/Edge-only feature is
@@ -110,6 +110,10 @@ obsolete `mcp-server-playwright` launcher or a global pnpm link.
 | `etc/automation-masking.js` | Init script reporting the regular-browser `navigator.webdriver` value |
 | `/var/lib/playwright-mcp-git/profile` | Dedicated automation profile, **not** the desktop profile |
 | `/var/lib/playwright-mcp-git/output` | Browser-tool output |
+| `etc/playwright-chrome.json` | Branded-Chrome variant: `channel: chrome`, headful, same viewport, own profile and output |
+| `etc/mcp-chrome.json` | Portable local MCP record for the branded-Chrome server, same environment map |
+| `/var/lib/playwright-mcp-git/profile-chrome` | Dedicated branded-Chrome automation profile |
+| `/var/lib/playwright-mcp-git/output-chrome` | Branded-Chrome server tool output |
 | `bin/install.sh` | `npm ci` in the source checkout |
 | `bin/install-browser.sh` | Download the matching configured Playwright browser; excluded from the install compositor |
 
@@ -154,8 +158,29 @@ default (`--disable-blink-features=AutomationControlled`), so this brings the
 Firefox profile to parity rather than adding a novel deception. A config-file
 change is only read at server startup: an unchanged MCP command needs an
 explicit `mcp … disconnect`/`connect` cycle (or OpenCode restart) before the
-new config takes effect. If a provider's deeper heuristics still reject the
-patched build, the branded-Chrome profile is the fallback.
+new config takes effect.
+
+**That masking was necessary but not sufficient.** Verified live with
+`webdriver: false` and the regular Firefox UA, Google sign-in (OpenAI SSO)
+still rejected the account at the email step (`/v3/signin/rejected`): the
+patched Juggler build carries deeper fingerprints — `navigator.plugins.length`
+is 0 where a regular Firefox reports 5 compatibility entries, and likely other
+build tells — so no in-page masking clears Google's browser check. **Branded
+Chrome is the Google-SSO-capable path.** `etc/playwright-chrome.json` and
+`etc/mcp-chrome.json` deploy a second, separate headful server
+(`launchOptions.channel: chrome`, google-chrome 150, own `profile-chrome`);
+it passed the email step to the password prompt in the live test. No masking
+init script is registered for it — upstream already handles Chromium
+automation markers. Register it under its own server name with the same
+display environment as the Firefox record:
+
+```sh
+opencode mcp add playwright-chrome --global \
+  --env DISPLAY=:0 --env WAYLAND_DISPLAY=wayland-0 \
+  --env XAUTHORITY=$HOME/.Xauthority --env XDG_RUNTIME_DIR=/run/user/1000 -- \
+  node /usr/local/src/playwright-mcp-git/repo/cli.js \
+  --config /etc/opt/playwright-mcp-git/playwright-chrome.json
+```
 
 ## OpenCode V2 and Compfuzor CONFIG
 
@@ -254,3 +279,21 @@ for skills-less CLI use; `playwright-cli --help` is the command reference.
   disconnect/connect cycle: `webdriver: false`, regular Firefox 156 UA, and
   Google's sign-in page rendering without the "This browser or app may not be
   secure" block. Completion of the actual login is the operator's step.
+- 2026-10-18 (later still): With masking verified live, Google still rejected
+  the submitted email in the automation Firefox (`/v3/signin/rejected`):
+  fingerprint tells beyond webdriver — the patched build reports
+  `navigator.plugins.length` 0 where a regular Firefox reports 5 compatibility
+  entries, among other build-tell differences. A real branded-Chrome test
+  (playwright-cli `--browser=chrome`, headed, separate `profile-chrome`)
+  passed the email step to the password prompt and was stopped there — no
+  credentials beyond the test email were entered. The branded-Chrome MCP
+  variant (`etc/playwright-chrome.json`, `etc/mcp-chrome.json`,
+  `profile-chrome`, `output-chrome`) was rendered, the playbook and
+  integration test extended, and the server registered globally plus
+  activated at runtime without restarting OpenCode (`opencode mcp list`:
+  **connected**); a non-Google smoke test through the MCP confirmed a
+  Chrome/150 UA, native `webdriver: false`, and snapshots landing in the
+  configured `output-chrome`. During the first render a string-typed
+  `MCP_ENV` extra var (`-e 'MCP_ENV=…'` instead of a JSON blob) corrupted the
+  Firefox record's environment map; the corrected rerender reproduced
+  `etc/mcp.json` byte-identical to its prior checksum.
