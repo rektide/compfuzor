@@ -1,0 +1,106 @@
+#!/bin/bash
+# pw-eq-activate — Generate, install, and route the pw-eq parametric EQ sink.
+#
+# Wraps pw-eq-gen (config generation). On --install it also restarts the
+# PipeWire user services, points the default sink at eq_sink, and restarts
+# pw-loopback so the permanent line-in capture re-targets through the EQ.
+# On --off it removes the config, restarts, and restores combine_sink as
+# the default.
+#
+# Usage:
+#   pw-eq-activate [GEN_OPTIONS...] --install   Generate, install, restart, route
+#   pw-eq-activate --off                        Remove config, restart, restore default
+#   pw-eq-activate [GEN_OPTIONS...]             Generate config only (no install)
+
+set -euo pipefail
+
+CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pipewire/pipewire.conf.d"
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+CONF_NAME="pw-eq.conf"
+EQ_NODE="${PW_EQ_NODE:-eq_sink}"
+FALLBACK_NODE="combine_sink"
+LOOPBACK_SVC="pw-loopback.service"
+
+if [ "$#" -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+  echo "Usage: $(basename "$0") [GEN_OPTIONS...] [--install] [--off]"
+  echo ""
+  echo "Generate and optionally install the pw-eq filter-chain config."
+  echo "All generator options (--bands, --target, --node) pass through to pw-eq-gen.js."
+  echo ""
+  echo "Additional flags:"
+  echo "  --install    Write config, restart pipewire, set default sink, retarget loopback"
+  echo "  --off        Remove config, restart pipewire, restore combine_sink default"
+  echo ""
+  echo "Generator help:"
+  "$BIN_DIR/pw-eq-gen.js" --help
+  exit 0
+fi
+
+wait_for_sink() {
+  local sink="$1"
+  for _ in $(seq 1 20); do
+    if pactl list short sinks 2>/dev/null | awk '{print $2}' | grep -qx "$sink"; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "WARNING: sink $sink not seen after 10s" >&2
+  return 1
+}
+
+INSTALL=false
+OFF=false
+GEN_ARGS=()
+
+# Separate our flags from generator flags
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --install) INSTALL=true; shift ;;
+    --off) OFF=true; shift ;;
+    # Generator flags that take a value — consume next arg
+    --node|--target|--bands) GEN_ARGS+=("$1" "$2"); shift 2 ;;
+    *) GEN_ARGS+=("$1"); shift ;;
+  esac
+done
+
+if $OFF; then
+  rm -f "$CONF_DIR/$CONF_NAME"
+  echo "pw-eq disabled. Restarting PipeWire..."
+  systemctl --user restart pipewire pipewire-pulse wireplumber 2>/dev/null || true
+  sleep 3
+  wait_for_sink "$FALLBACK_NODE" || true
+  pactl set-default-sink "$FALLBACK_NODE" || true
+  systemctl --user restart "$LOOPBACK_SVC" || true
+  echo "Default sink restored to $FALLBACK_NODE; loopback retargeted."
+  exit 0
+fi
+
+mkdir -p "$CONF_DIR"
+echo "Generating pw-eq config..."
+# Track the node name the generator will actually use (CLI --node wins over env).
+# Scan pairs with a prev-variable walk; the bash array-length construct
+# (dollar-brace-hash) opens a Jinja comment in compfuzor templating and
+# breaks whole renders, even inside comments.
+prev=""
+for a in ${GEN_ARGS[@]+"${GEN_ARGS[@]}"}; do
+  if [ "$prev" = "--node" ]; then EQ_NODE="$a"; fi
+  prev="$a"
+done
+"$BIN_DIR/pw-eq-gen.js" ${GEN_ARGS[@]+"${GEN_ARGS[@]}"} > "$CONF_DIR/$CONF_NAME"
+
+if $INSTALL; then
+  echo "Restarting PipeWire..."
+  systemctl --user restart pipewire pipewire-pulse wireplumber 2>/dev/null || true
+  echo "Waiting for $EQ_NODE to appear..."
+  wait_for_sink "$EQ_NODE" || {
+    echo "Install aborted: $EQ_NODE did not come up; check $CONF_DIR/$CONF_NAME" >&2
+    exit 1
+  }
+  pactl set-default-sink "$EQ_NODE"
+  systemctl --user restart "$LOOPBACK_SVC"
+  echo "Default sink: $EQ_NODE; line-in loopback retargeted through the EQ."
+  echo "Curve: $("$BIN_DIR/pw-eq-gen.js" ${GEN_ARGS[@]+"${GEN_ARGS[@]}"} | grep node.description | head -1)"
+else
+  echo "Config written to $CONF_DIR/$CONF_NAME"
+  echo "Run with --install to restart pipewire and route the default sink through it."
+fi
