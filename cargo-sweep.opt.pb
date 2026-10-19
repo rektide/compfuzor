@@ -18,6 +18,10 @@
     CARGO_SWEEP_SRC_CALENDAR: Mon,Thu *-*-* 03:00:00
     CARGO_SWEEP_ARCHIVE_CALENDAR: '*-*-01 04:00:00'
     CARGO_SWEEP_LOCK: "{{XDG_STATE_HOME}}/compfuzor/cargo-sweep.lock"
+    # User-editable, render-surviving env file loaded by both services via
+    # systemd's optional ("-") EnvironmentFile. Not emitted by this playbook:
+    # create it to retune scheduled runs without re-rendering.
+    CARGO_SWEEP_ENV_FILE: "{{USERMODE_ETCS_DIR}}/{{NAME}}/sweep.env"
 
     README: |
       # cargo-sweep: age-based Rust artifact reclamation
@@ -31,6 +35,20 @@
       Preview `bin/sweep.sh src` or `bin/sweep.sh archive`; the default includes
       --dry-run --verbose. Only explicit `--apply` deletes. A missing requested
       root fails loudly. Roots/ages/calendars are configurable at render time.
+      Runtime overrides retune scheduled and ad-hoc sweeps without
+      re-rendering: `sweep.sh` accepts `--root PATH` and `--days N` (plus
+      `--apply`), and a third `custom` profile requires them. Environment
+      overrides resolve weakest to strongest: `CARGO_SWEEP_SRC_ROOT` /
+      `CARGO_SWEEP_SRC_DAYS` and `CARGO_SWEEP_ARCHIVE_ROOT` /
+      `CARGO_SWEEP_ARCHIVE_DAYS` (matching profile only), then
+      `CARGO_SWEEP_ROOT` / `CARGO_SWEEP_DAYS` (any profile); flags win over
+      all environment. Both services load `{{CARGO_SWEEP_ENV_FILE}}`
+      (systemd optional `-` prefix; the playbook never writes it): create
+      that file to retune scheduled runs, e.g. `CARGO_SWEEP_SRC_DAYS=7`,
+      then `systemctl --user start {{NAME}}-src.service` for an immediate
+      tuned pass. Ad-hoc single-project preview:
+      `bin/sweep.sh custom --root ~/src/someproject --days 14`.
+      Days must be >= 1; there is no everything-sweep escape hatch.
       Both profiles discover recursively with --hidden, including Cargo projects
       in nested hidden directories such as .test-agent; ages are unchanged.
       Defaults are `{{CARGO_SWEEP_SRC_ROOT}}` older than {{CARGO_SWEEP_SRC_DAYS}}
@@ -95,7 +113,7 @@
         Type: oneshot
         Restart: false
         RestartSec: false
-        EnvironmentFile: false
+        EnvironmentFile: "-{{CARGO_SWEEP_ENV_FILE}}"
         WorkingDirectory: '%h'
         ExecStart: "{{ (BINS_DIR ~ '/sweep.sh') | replace('%', '%%') | replace('$', '$$') | to_json }} src --apply"
       SYSTEMD_INSTALLS:
@@ -119,7 +137,7 @@
         Type: oneshot
         Restart: false
         RestartSec: false
-        EnvironmentFile: false
+        EnvironmentFile: "-{{CARGO_SWEEP_ENV_FILE}}"
         WorkingDirectory: '%h'
         ExecStart: "{{ (BINS_DIR ~ '/sweep.sh') | replace('%', '%%') | replace('$', '$$') | to_json }} archive --apply"
       SYSTEMD_INSTALLS:
