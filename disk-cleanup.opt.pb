@@ -97,6 +97,9 @@
         moving path; failures keep the source intact and leave a
         resumable dest (re-extraction replaces in place). Batch use:
         `--list <file>` + `--concurrency 3`.
+      - `watch-usage.sh` — the hourly timer's sampler (see below); not
+        much of an interactive tool, but `bin/watch-usage.sh` works
+        ad-hoc too.
       - `lib.ts` — shared helpers (imported by the bins; not a command).
 
       Status: `bin/status.sh` (subsystem) and, for the scheduled clean,
@@ -116,6 +119,24 @@
       so the weekly cadence holds without it. The service's ExecStart
       passes `--apply` (the schedule is the sanction; interactive runs
       stay dry-run).
+
+      ## Hourly / free-space sampler (systemd --user)
+
+      `{{NAME}}-watch-usage.{service,timer}` (added 2026-10-19, after the
+      ~165G reclamation found the fs at 100%): every hour, one line —
+      ISO timestamp + `df -m /` (1MiB blocks: source,size,used,avail,
+      use%,mount) — appended to
+      `${XDG_STATE_HOME:-~/.local/state}/disk-cleanup/usage.log` and
+      echoed to the journal. Timestamps use `TZ={{DISK_WATCH_TZ}}` pinned
+      on the unit (render-time var): this host's system-local zone is UTC,
+      which would otherwise log disjoint from operator-shell journalctl
+      rendering. Read-only, no `--apply`, no deletion path.
+      The log self-rotates at 10 MiB keeping one `.1` generation.
+      Persistent=true catches up missed hours after downtime.
+
+          systemctl --user enable --now disk-cleanup-main-watch-usage.timer
+          tail -n 5 ~/.local/state/disk-cleanup/usage.log
+          journalctl --user -u disk-cleanup-main-watch-usage.service
 
       ## etc/journald.conf.d/ — journald disk caps (LIVE since 2026-10-01)
 
@@ -193,6 +214,8 @@
     SYSTEMD_ROOTS:
       - pnpmPruneService
       - pnpmPruneTimer
+      - watchUsageService
+      - watchUsageTimer
     pnpmPruneService:
       SYSTEMD_SERVICE: "{{NAME}}-pnpm-prune"
       # the timer activates this unit; installing only links the file
@@ -212,6 +235,34 @@
         OnCalendar: weekly
         Persistent: true
         Unit: "{{NAME}}-pnpm-prune.service"
+      SYSTEMD_INSTALLS:
+        WantedBy: timers.target
+
+    # ---- hourly / free-space sampler: systemd USER units ----
+    # Read-only observability (operator ask 2026-10-19, day of the ~165G
+    # reclamation): one df -m sample an hour to catch the next creep early.
+    # This host's system-local timezone is UTC (/etc/localtime -> UTC)
+    # while the operator's shells run TZ=America/New_York — bare services
+    # would log UTC, disjoint from how the operator reads journalctl.
+    # Render-time TZ pin, not a shell dependency.
+    DISK_WATCH_TZ: America/New_York
+    watchUsageService:
+      SYSTEMD_SERVICE: "{{NAME}}-watch-usage"
+      SYSTEMD_ENABLE: false
+      SYSTEMD_UNITS:
+        Description: "{{NAME}} hourly / free-space sample"
+      SYSTEMD_SERVICES:
+        Type: oneshot
+        Environment: "TZ={{DISK_WATCH_TZ}}"
+        ExecStart: "{{DIR}}/bin/watch-usage.sh"
+    watchUsageTimer:
+      SYSTEMD_TIMER: "{{NAME}}-watch-usage"
+      SYSTEMD_UNITS:
+        Description: "Hourly {{NAME}} / free-space sample"
+      SYSTEMD_TIMERS:
+        OnCalendar: hourly
+        Persistent: true
+        Unit: "{{NAME}}-watch-usage.service"
       SYSTEMD_INSTALLS:
         WantedBy: timers.target
 
@@ -243,6 +294,9 @@
         raw: True
       - name: archive-move.ts
         src: archive-move.ts
+        raw: True
+      - name: watch-usage.sh
+        src: watch-usage.sh
         raw: True
 
     # All bins are operator tools that dry-run by default (the pnpm-prune
