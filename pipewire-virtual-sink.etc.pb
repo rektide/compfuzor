@@ -18,22 +18,23 @@
               }
               stream.props = {
               }
-              # Sinks excluded from the combine_sink fan-out, by node.name regex:
-              # - bluez_output.B0_C2_C7_FA_76_D7: Bluetooth. A2DP transport
-              #   failures caused by the CSR8510 adapter's firmware (missing
-              #   USB completion reports) corrupt audio for both the BT device
-              #   and any linked streams. Add more bluez_output.* alternatives
-              #   to the group as needed.
-              # - easyeffects_sink: EasyEffects' virtual sink (2026-10-18).
-              #   combine fed EasyEffects' own output back into its input
-              #   (apps -> easyeffects_sink -> effects -> combine ->
-              #   easyeffects_sink ...): a feedback loop, and a dead end while
-              #   EE's player stream was down (total silence). Effects/virtual
-              #   processing sinks must never be fan-out targets.
+              # Fan out to ALSA hardware sinks only, via a positive node.name
+              # regex. The 2026-10-18 EasyEffects integration first tried a
+              # negated alternation ("!~(bluez_output...|easyeffects_sink).*"):
+              # fan-out streams for all five hardware sinks vanished as soon
+              # as the excluded easyeffects_sink appeared, leaving combine_sink
+              # metering in pavucontrol but delivering to nothing (total
+              # silence). The positive alsa_output.* whitelist sidesteps that
+              # failure mode and excludes Bluetooth sinks (bluez_output.*)
+              # implicitly - the CSR8510 adapter's firmware (missing USB
+              # completion reports) corrupts audio for the BT device and any
+              # linked streams. Virtual sinks (easyeffects_sink, future
+              # surround) never match. Extend the regex if a non-alsa hardware
+              # sink ever needs fanning.
               stream.rules = [{
                 matches = [{
                   media.class = "Audio/Sink"
-                  node.name = "!~(bluez_output.B0_C2_C7_FA_76_D7|easyeffects_sink).*"
+                  node.name = "~alsa_output\\..*"
                 }]
                 actions = { create-stream = {}}
               }]
