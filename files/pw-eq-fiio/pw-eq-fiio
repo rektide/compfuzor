@@ -1,0 +1,23 @@
+#!/bin/bash
+# pw-eq-fiio — EQ scenario: FiiO branch.
+#
+# combine_sink -> eq_sink (whitelisted in the fan-out) -> EQ bands
+# -> WEILIANG (FiiO E10) sink. Raw WEILIANG fan stream stays; zero it
+# manually in pavucontrol to avoid double playback on the FiiO.
+# Default sink: combine_sink. Removes the pw-eq-global scenario conf.
+#
+# All args pass through to pw-eq-activate (e.g. --bands "..." --install,
+# --off, --install alone for the session-start idempotent assertion).
+set -euo pipefail
+
+# Shared toolkit DIR is deterministic (ETCS_DIR + name); the units
+# hardcode these paths too.
+SHARED="/etc/opt/pw-eq-main/bin"
+
+export PW_EQ_NODE="eq_sink"
+export PW_EQ_TARGET="alsa_output.usb-WEIL_WEILIANG_24BIT_USB-01.analog-stereo"
+export PW_EQ_DEFAULT_SINK="combine_sink"
+export PW_EQ_CONF="pw-eq-fiio.conf"
+export PW_EQ_RM_CONF="pw-eq-global.conf"
+
+exec "$SHARED/pw-eq-activate" "$@"

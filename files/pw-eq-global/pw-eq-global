@@ -1,0 +1,24 @@
+#!/bin/bash
+# pw-eq-global — EQ scenario: global.
+#
+# eq_global (NOT whitelisted in combine_sink's fan-out — the name
+# deliberately does not match the eq_sink pattern, avoiding a feedback
+# loop) -> EQ bands -> combine_sink -> all hardware sinks. Default sink:
+# eq_global, so apps and the line-in loopback pass through the EQ.
+# Removes the pw-eq-fiio scenario conf.
+#
+# All args pass through to pw-eq-activate (e.g. --bands "..." --install,
+# --off, --install alone for the session-start idempotent assertion).
+set -euo pipefail
+
+# Shared toolkit DIR is deterministic (ETCS_DIR + name); the units
+# hardcode these paths too.
+SHARED="/etc/opt/pw-eq-main/bin"
+
+export PW_EQ_NODE="eq_global"
+export PW_EQ_TARGET="combine_sink"
+export PW_EQ_DEFAULT_SINK="eq_global"
+export PW_EQ_CONF="pw-eq-global.conf"
+export PW_EQ_RM_CONF="pw-eq-fiio.conf"
+
+exec "$SHARED/pw-eq-activate" "$@"

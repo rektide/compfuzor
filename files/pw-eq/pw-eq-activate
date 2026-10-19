@@ -19,7 +19,8 @@ set -euo pipefail
 
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pipewire/pipewire.conf.d"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
-CONF_NAME="pw-eq.conf"
+CONF_NAME="${PW_EQ_CONF:-pw-eq.conf}"
+RM_CONF="${PW_EQ_RM_CONF:-}"
 EQ_NODE="${PW_EQ_NODE:-eq_sink}"
 EQ_TARGET="${PW_EQ_TARGET:-combine_sink}"
 EQ_DEFAULT_SINK="${PW_EQ_DEFAULT_SINK:-}"
@@ -102,7 +103,32 @@ if [ -z "$EQ_DEFAULT_SINK" ]; then
     EQ_DEFAULT_SINK="$FALLBACK_NODE"
   fi
 fi
-"$BIN_DIR/pw-eq-gen.js" ${GEN_ARGS[@]+"${GEN_ARGS[@]}"} > "$CONF_DIR/$CONF_NAME"
+
+# Idempotence for session-start assertion (systemd oneshot services call
+# this at every login): if the exact config is already installed, the
+# default sink already points where we want, and no sibling scenario conf
+# lingers, skip the graph restart entirely.
+NEW_CONF="$(mktemp)"
+trap 'rm -f "$NEW_CONF"' EXIT
+"$BIN_DIR/pw-eq-gen.js" ${GEN_ARGS[@]+"${GEN_ARGS[@]}"} > "$NEW_CONF"
+
+if $INSTALL; then
+  SIBLING_GONE=true
+  if [ -n "$RM_CONF" ] && [ -f "$CONF_DIR/$RM_CONF" ]; then SIBLING_GONE=false; fi
+  DEFAULT_OK=false
+  if pactl info 2>/dev/null | grep -q "Default Sink: $EQ_DEFAULT_SINK"; then DEFAULT_OK=true; fi
+  if [ -f "$CONF_DIR/$CONF_NAME" ] && cmp -s "$NEW_CONF" "$CONF_DIR/$CONF_NAME" \
+     && $SIBLING_GONE && $DEFAULT_OK; then
+    echo "Scenario already active ($CONF_NAME, default $EQ_DEFAULT_SINK); nothing to do."
+    exit 0
+  fi
+fi
+
+if [ -n "$RM_CONF" ]; then
+  rm -f "$CONF_DIR/$RM_CONF"
+fi
+mv "$NEW_CONF" "$CONF_DIR/$CONF_NAME"
+trap - EXIT
 
 if $INSTALL; then
   echo "Restarting PipeWire..."
