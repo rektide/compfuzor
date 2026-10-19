@@ -2,10 +2,13 @@
 # pw-eq-activate — Generate, install, and route the pw-eq parametric EQ sink.
 #
 # Wraps pw-eq-gen (config generation). On --install it also restarts the
-# PipeWire user services, points the default sink at eq_sink, and restarts
-# pw-loopback so the permanent line-in capture re-targets through the EQ.
-# On --off it removes the config, restarts, and restores combine_sink as
-# the default.
+# PipeWire user services, sets the default sink, and restarts pw-loopback so
+# the permanent line-in capture retargets. Default-sink policy: when the EQ
+# targets combine_sink (global EQ), the eq sink becomes the default; when it
+# targets a hardware sink (branch EQ, e.g. the FiiO), combine_sink stays the
+# default and the EQ is fed by combine_sink's fan-out. Override with
+# PW_EQ_DEFAULT_SINK. On --off it removes the config, restarts, and restores
+# combine_sink as the default.
 #
 # Usage:
 #   pw-eq-activate [GEN_OPTIONS...] --install   Generate, install, restart, route
@@ -18,6 +21,8 @@ CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/pipewire/pipewire.conf.d"
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONF_NAME="pw-eq.conf"
 EQ_NODE="${PW_EQ_NODE:-eq_sink}"
+EQ_TARGET="${PW_EQ_TARGET:-combine_sink}"
+EQ_DEFAULT_SINK="${PW_EQ_DEFAULT_SINK:-}"
 FALLBACK_NODE="combine_sink"
 LOOPBACK_SVC="pw-loopback.service"
 
@@ -77,15 +82,26 @@ fi
 
 mkdir -p "$CONF_DIR"
 echo "Generating pw-eq config..."
-# Track the node name the generator will actually use (CLI --node wins over env).
+# Track what the generator will actually use (CLI flags win over env).
 # Scan pairs with a prev-variable walk; the bash array-length construct
 # (dollar-brace-hash) opens a Jinja comment in compfuzor templating and
 # breaks whole renders, even inside comments.
 prev=""
 for a in ${GEN_ARGS[@]+"${GEN_ARGS[@]}"}; do
   if [ "$prev" = "--node" ]; then EQ_NODE="$a"; fi
+  if [ "$prev" = "--target" ]; then EQ_TARGET="$a"; fi
   prev="$a"
 done
+# Default-sink policy: global EQ (target combine_sink) -> default to the eq
+# sink; branch EQ (target a hardware sink) -> combine_sink stays default and
+# feeds the eq sink via fan-out. PW_EQ_DEFAULT_SINK overrides both.
+if [ -z "$EQ_DEFAULT_SINK" ]; then
+  if [ "$EQ_TARGET" = "$FALLBACK_NODE" ]; then
+    EQ_DEFAULT_SINK="$EQ_NODE"
+  else
+    EQ_DEFAULT_SINK="$FALLBACK_NODE"
+  fi
+fi
 "$BIN_DIR/pw-eq-gen.js" ${GEN_ARGS[@]+"${GEN_ARGS[@]}"} > "$CONF_DIR/$CONF_NAME"
 
 if $INSTALL; then
@@ -96,9 +112,12 @@ if $INSTALL; then
     echo "Install aborted: $EQ_NODE did not come up; check $CONF_DIR/$CONF_NAME" >&2
     exit 1
   }
-  pactl set-default-sink "$EQ_NODE"
+  # Give pipewire-pulse a moment to accept metadata after the sink appears;
+  # set-default-sink during the startup window can fail with a race.
+  sleep 2
+  pactl set-default-sink "$EQ_DEFAULT_SINK"
   systemctl --user restart "$LOOPBACK_SVC"
-  echo "Default sink: $EQ_NODE; line-in loopback retargeted through the EQ."
+  echo "Default sink: $EQ_DEFAULT_SINK; EQ: $EQ_NODE -> $EQ_TARGET; loopback retargeted."
   echo "Curve: $("$BIN_DIR/pw-eq-gen.js" ${GEN_ARGS[@]+"${GEN_ARGS[@]}"} | grep node.description | head -1)"
 else
   echo "Config written to $CONF_DIR/$CONF_NAME"

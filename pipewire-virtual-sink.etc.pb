@@ -18,9 +18,9 @@
               }
               stream.props = {
               }
-              # Fan out to ALSA hardware sinks only, via a positive node.name
-              # regex. The 2026-10-18 EasyEffects integration first tried a
-              # negated alternation ("!~(bluez_output...|easyeffects_sink).*"):
+              # Fan out to ALSA hardware sinks (plus eq_sink) via a positive
+              # node.name regex. The 2026-10-18 EasyEffects integration first
+              # tried a negated alternation ("!~(bluez_output...|easyeffects_sink).*"):
               # fan-out streams for all five hardware sinks vanished as soon
               # as the excluded easyeffects_sink appeared, leaving combine_sink
               # metering in pavucontrol but delivering to nothing (total
@@ -28,13 +28,19 @@
               # failure mode and excludes Bluetooth sinks (bluez_output.*)
               # implicitly - the CSR8510 adapter's firmware (missing USB
               # completion reports) corrupts audio for the BT device and any
-              # linked streams. Virtual sinks (easyeffects_sink, future
-              # surround) never match. Extend the regex if a non-alsa hardware
-              # sink ever needs fanning.
+              # linked streams. Other virtual sinks (easyeffects_sink, future
+              # surround) never match.
+              #
+              # eq_sink (pw-eq.etc.pb) is deliberately IN the fan set: it is
+              # the FiiO branch EQ insert. combine fans into eq_sink, whose
+              # filter-chain delivers to the WEILIANG (FiiO E10) sink. The raw
+              # WEILIANG fan stream stays too and is zeroed manually in
+              # pavucontrol to avoid double playback on the FiiO (see
+              # pw-eq.etc.pb).
               stream.rules = [{
                 matches = [{
                   media.class = "Audio/Sink"
-                  node.name = "~alsa_output\\..*"
+                  node.name = "~(alsa_output\\.|eq_sink).*"
                 }]
                 actions = { create-stream = {}}
               }]
