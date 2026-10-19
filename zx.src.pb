@@ -2,6 +2,13 @@
 - hosts: all
   vars:
     REPO: https://github.com/google/zx
+    GIT_REMOTES:
+      rektide: https://github.com/rektide/zx
+    # Standalone scripts share pnpm's installed dependencies without changing
+    # user manifests. Prefer our fork's feature branch; origin stays upstream.
+    # Cap: at://did:plc:zjbq26wybii5ojoypkso2mso/org.v-it.cap/3my6tv5zy622b
+    # https://explore.v-it.org/#cap/store-pnpm-dependencies
+    GIT_VERSION: store-pnpm@rektide
     NODEJS: True
     # pnpm 12 gates dependency build scripts and fails the install outright
     # when any were skipped. esbuild's postinstall only links the binary
